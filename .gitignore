@@ -22,7 +22,13 @@
 
 # misc
 .DS_Store
+Thumbs.db
 *.pem
+
+# uploads / generated assets
+/uploads
+/public/uploads
+/public/generated
 
 # debug
 npm-debug.log*
@@ -35,6 +41,12 @@ yarn-error.log*
 
 # vercel
 .vercel
+
+# supabase
+.supabase
+
+# mcp
+.mcp.json
 
 # typescript
 *.tsbuildinfo
