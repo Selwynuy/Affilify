@@ -1,7 +1,7 @@
 import { verifySession } from '@/lib/dal'
 import { createClient } from '@/lib/supabase/server'
 import { ProfileSettings } from '@/components/profile/ProfileSettings'
-import type { AvatarConfig, BackgroundConfig, OutfitConfig } from '@/lib/types/preferences'
+import type { AvatarConfig, BackgroundConfig } from '@/lib/types/preferences'
 
 export default async function ProfilePage() {
   const session = await verifySession()
@@ -9,7 +9,7 @@ export default async function ProfilePage() {
 
   const { data: prefs } = await supabase
     .from('user_preferences')
-    .select('avatar_config, background_config, defaults')
+    .select('avatar_config, background_config')
     .eq('user_id', session!.user.id)
     .single()
 
@@ -17,7 +17,6 @@ export default async function ProfilePage() {
     <ProfileSettings
       initialAvatarConfig={(prefs?.avatar_config as AvatarConfig) ?? null}
       initialBackgroundConfig={(prefs?.background_config as BackgroundConfig) ?? null}
-      initialOutfit={(prefs?.defaults as OutfitConfig) ?? null}
     />
   )
 }

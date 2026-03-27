@@ -10,11 +10,10 @@ const DEFAULT_TEMPLATE =
   `stands in a modern, neatly arranged and {{room_aesthetic}} aesthetic room. ` +
   `The camera is positioned {{camera_angle}}. ` +
   `Use a {{focal_length}} focal length and an aperture of f/4-f/5.6 to keep the room details gently in focus. ` +
-  `They are wearing {{outfit_top}} left loose outside their pants (untucked), paired with {{outfit_bottom}} and {{shoes}}. ` +
+  `They are wearing the exact clothing product shown in the product reference photo — it must be clearly and prominently visible, worn naturally. ` +
   `Their hands are in their pockets, gazing at the camera with an elegant and natural expression. ` +
   `The room interior is dominated by {{room_colors}}, creating a clean, modern impression. ` +
   `Room elements: {{room_elements}}. ` +
-  `The product from the product reference photo must be clearly visible — held, worn, or displayed naturally. ` +
   `{{product_note}}` +
   `Visual style: Ultra-realistic fashion lifestyle photography, natural-blend studio lighting, soft shadows, symmetrical interiors. ` +
   `Aspect ratio: 9:16 vertical portrait.`
@@ -36,9 +35,6 @@ function buildPrompt(avatar: Record<string, unknown>, productDescription: string
     room_aesthetic: String(avatar.roomAesthetic ?? 'masculine'),
     camera_angle:  String(avatar.cameraAngle ?? 'directly above the subject at 45° high-angle overhead'),
     focal_length:  String(avatar.focalLength ?? '35-50mm (natural, balanced)'),
-    outfit_top:    String(avatar.outfitTop ?? 'a plain white t-shirt'),
-    outfit_bottom: String(avatar.outfitBottom ?? 'dark slim-fit pants'),
-    shoes:         String(avatar.shoes ?? 'Adidas Samba OG white gum shoes'),
     room_colors:   String(avatar.roomColors ?? 'white and black'),
     room_elements: String(avatar.roomElements ?? 'a dark gray round shag rug, minimalist black-framed posters, warm LED strips'),
     product_note:  productDescription ? `Product being showcased: ${productDescription}. ` : '',

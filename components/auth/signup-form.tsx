@@ -1,15 +1,24 @@
 'use client'
 
-import { useActionState } from 'react'
+import { useActionState, useState } from 'react'
 import { signup } from '@/app/actions/auth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Eye, EyeOff } from 'lucide-react'
 
 export function SignupForm() {
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+
   const [state, action, pending] = useActionState(
     async (_prev: { error?: string } | null, formData: FormData) => {
-      return (await signup(formData)) ?? null
+      const result = await signup(formData)
+      if (result?.error) {
+        setPassword('')
+      }
+      return result ?? null
     },
     null
   )
@@ -24,22 +33,38 @@ export function SignupForm() {
           type="email"
           placeholder="you@example.com"
           required
-          className="bg-zinc-900 border-zinc-700 text-white placeholder:text-zinc-600 focus:border-violet-500 focus:ring-1 focus:ring-violet-500 h-11"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          className="bg-zinc-900 border-zinc-700 text-white placeholder:text-zinc-600 focus:border-violet-500 focus:ring-1 focus:ring-violet-500 h-11 [&:-webkit-autofill]:shadow-[inset_0_0_0_1000px_theme(colors.zinc.900)] [&:-webkit-autofill]:[-webkit-text-fill-color:theme(colors.white)]"
         />
       </div>
+
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <Label htmlFor="password" className="text-zinc-300 text-sm font-medium">Password</Label>
           <span className="text-xs text-zinc-600">At least 6 characters</span>
         </div>
-        <Input
-          id="password"
-          name="password"
-          type="password"
-          placeholder="••••••••"
-          required
-          className="bg-zinc-900 border-zinc-700 text-white placeholder:text-zinc-600 focus:border-violet-500 focus:ring-1 focus:ring-violet-500 h-11"
-        />
+        <div className="relative">
+          <Input
+            id="password"
+            name="password"
+            type={showPassword ? 'text' : 'password'}
+            placeholder="••••••••"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="bg-zinc-900 border-zinc-700 text-white placeholder:text-zinc-600 focus:border-violet-500 focus:ring-1 focus:ring-violet-500 h-11 pr-11 [&:-webkit-autofill]:shadow-[inset_0_0_0_1000px_theme(colors.zinc.900)] [&:-webkit-autofill]:[-webkit-text-fill-color:theme(colors.white)]"
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword((v) => !v)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors"
+            tabIndex={-1}
+            aria-label={showPassword ? 'Hide password' : 'Show password'}
+          >
+            {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+          </button>
+        </div>
       </div>
 
       {state?.error && (
