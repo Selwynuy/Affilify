@@ -20,10 +20,15 @@ import {
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { cn } from '@/lib/utils'
+import { NavbarUserMenu, NavbarGuestButtons } from './NavbarUserMenu'
 
 const CURRENT_YEAR = new Date().getFullYear()
 
-export default function LandingPage() {
+interface Props {
+  user?: { email: string } | null
+}
+
+export default function LandingPage({ user }: Props) {
   const [scrolled, setScrolled] = useState(false)
 
   useEffect(() => {
@@ -57,16 +62,11 @@ export default function LandingPage() {
           </nav>
 
           <div className="flex-1 flex items-center justify-end gap-3">
-            <Link href="/login" className="hidden md:inline-flex text-sm text-zinc-400 hover:text-white transition-colors px-4 py-2">
-              Sign in
-            </Link>
-            <Link
-              href="/signup"
-              className="inline-flex items-center gap-1.5 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-all duration-200"
-            >
-              Get started
-              <ChevronRight className="w-3.5 h-3.5" />
-            </Link>
+            {user ? (
+              <NavbarUserMenu email={user.email} />
+            ) : (
+              <NavbarGuestButtons />
+            )}
           </div>
         </div>
       </header>

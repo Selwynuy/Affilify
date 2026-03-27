@@ -18,15 +18,8 @@ export interface BackgroundConfig {
   thumbnailUrl?: string
 }
 
-export interface OutfitConfig {
-  outfitTop: string
-  outfitBottom: string
-  shoes: string
-}
-
 export interface UserPreferences {
   onboarding_completed: boolean
   avatar_config: AvatarConfig | null
   background_config: BackgroundConfig | null
-  defaults: OutfitConfig | null
 }

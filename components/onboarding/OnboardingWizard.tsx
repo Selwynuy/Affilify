@@ -16,6 +16,7 @@ export function OnboardingWizard() {
   const [avatarConfig, setAvatarConfig] = useState<PartialAvatar>({ gender: 'man', style: 'casual' })
   const [backgroundConfig, setBackgroundConfig] = useState<PartialBackground>({})
   const [saving, setSaving] = useState(false)
+  const [skipping, setSkipping] = useState(false)
   const [error, setError] = useState('')
 
   const step1Valid = avatarConfig.type === 'preset'
@@ -23,6 +24,23 @@ export function OnboardingWizard() {
     : avatarConfig.type === 'custom' && !!avatarConfig.faceB64
 
   const step2Valid = !!backgroundConfig.presetId || backgroundConfig.type === 'custom'
+
+  async function handleSkip() {
+    setSkipping(true)
+    setError('')
+    try {
+      const res = await fetch('/api/preferences', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ onboarding_completed: true }),
+      })
+      if (!res.ok) throw new Error('Failed to skip onboarding')
+      router.push('/dashboard')
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Something went wrong')
+      setSkipping(false)
+    }
+  }
 
   async function handleFinish() {
     setSaving(true)
@@ -74,25 +92,25 @@ export function OnboardingWizard() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 flex items-center justify-center px-4 py-10">
+    <div className="min-h-screen bg-[#0f0d1a] flex items-center justify-center px-4 py-10">
       <div className="w-full max-w-2xl space-y-8">
         {/* Header */}
         <div className="text-center space-y-1">
           <p className="text-white font-semibold text-lg">Affilify</p>
-          <p className="text-zinc-500 text-sm">Step {step} of 2</p>
+          <p className="text-white/40 text-sm">Step {step} of 2 — set up your defaults</p>
           {/* Step dots */}
           <div className="flex justify-center gap-2 pt-1">
             {[1, 2].map((s) => (
               <div
                 key={s}
-                className={`w-2 h-2 rounded-full transition-colors ${s <= step ? 'bg-white' : 'bg-zinc-700'}`}
+                className={`w-2 h-2 rounded-full transition-colors ${s <= step ? 'bg-violet-400' : 'bg-white/15'}`}
               />
             ))}
           </div>
         </div>
 
         {/* Step content */}
-        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 space-y-6">
+        <div className="bg-white/[0.03] border border-white/8 rounded-2xl p-6 space-y-6">
           {step === 1 && (
             <>
               <div>
@@ -123,12 +141,18 @@ export function OnboardingWizard() {
           {step === 2 ? (
             <button
               onClick={() => setStep(1)}
-              className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors"
+              className="text-sm text-white/40 hover:text-white/70 transition-colors"
             >
               ← Back
             </button>
           ) : (
-            <div />
+            <button
+              onClick={handleSkip}
+              disabled={skipping}
+              className="text-sm text-white/30 hover:text-white/60 transition-colors disabled:opacity-50"
+            >
+              {skipping ? 'Skipping…' : 'Skip for now'}
+            </button>
           )}
 
           <div className="flex flex-col items-end gap-2">
@@ -137,7 +161,7 @@ export function OnboardingWizard() {
               <Button
                 onClick={() => setStep(2)}
                 disabled={!step1Valid}
-                className="bg-white text-black hover:bg-zinc-200 disabled:opacity-40"
+                className="bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white disabled:opacity-40 shadow-lg shadow-violet-500/20"
               >
                 Continue →
               </Button>
@@ -145,7 +169,7 @@ export function OnboardingWizard() {
               <Button
                 onClick={handleFinish}
                 disabled={!step2Valid || saving}
-                className="bg-white text-black hover:bg-zinc-200 disabled:opacity-40"
+                className="bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white disabled:opacity-40 shadow-lg shadow-violet-500/20"
               >
                 {saving ? 'Saving…' : 'Finish setup →'}
               </Button>

@@ -4,16 +4,28 @@ import { useRef } from 'react'
 import { cn } from '@/lib/utils'
 import { AVATAR_PRESETS } from '@/lib/data/avatar-presets'
 import type { AvatarConfig } from '@/lib/types/preferences'
-
-const STYLES: AvatarConfig['style'][] = ['casual', 'streetwear', 'luxury', 'minimal']
-const GENDERS: { value: AvatarConfig['gender']; label: string }[] = [
-  { value: 'man', label: 'Man' },
-  { value: 'woman', label: 'Woman' },
-]
+import { Upload, Check } from 'lucide-react'
 
 interface Props {
   value: Partial<AvatarConfig> & { faceB64?: string; faceMime?: string }
   onChange: (v: Partial<AvatarConfig> & { faceB64?: string; faceMime?: string }) => void
+}
+
+// Gradient palette cycles through presets so each card looks distinct
+const CARD_GRADIENTS = [
+  'from-violet-900/60 to-indigo-900/60',
+  'from-fuchsia-900/60 to-violet-900/60',
+  'from-blue-900/60 to-violet-900/60',
+  'from-indigo-900/60 to-slate-900/60',
+  'from-pink-900/60 to-fuchsia-900/60',
+  'from-rose-900/60 to-pink-900/60',
+  'from-purple-900/60 to-pink-900/60',
+  'from-violet-900/60 to-purple-900/60',
+]
+
+const GENDER_EMOJI: Record<string, string> = {
+  man: '👤',
+  woman: '👤',
 }
 
 export function AvatarSetup({ value, onChange }: Props) {
@@ -22,7 +34,6 @@ export function AvatarSetup({ value, onChange }: Props) {
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-
     const reader = new FileReader()
     reader.onload = (ev) => {
       const dataUrl = ev.target?.result as string
@@ -56,119 +67,110 @@ export function AvatarSetup({ value, onChange }: Props) {
   }
 
   const isCustomActive = value.type === 'custom'
-  const isPresetActive = value.type === 'preset'
 
   return (
-    <div className="space-y-6">
-      {/* Two mode cards */}
-      <div className="grid grid-cols-2 gap-4">
-        {/* Upload face card */}
-        <div
-          className={cn(
-            'rounded-xl border-2 p-4 flex flex-col items-center gap-3 transition-colors cursor-pointer',
-            isCustomActive ? 'border-white bg-zinc-800' : 'border-zinc-700 hover:border-zinc-500',
-          )}
-          onClick={() => fileInputRef.current?.click()}
-        >
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={handleFileChange}
-          />
-          {isCustomActive && value.faceUrl ? (
-            <img
-              src={value.faceUrl}
-              alt="Your face"
-              className="w-20 h-20 rounded-full object-cover border-2 border-white"
-            />
-          ) : (
-            <div className="w-20 h-20 rounded-full bg-zinc-700 flex items-center justify-center text-2xl text-zinc-400">
-              +
-            </div>
-          )}
-          <div className="text-center">
-            <p className="text-sm font-medium text-white">Use your face</p>
-            <p className="text-xs text-zinc-500 mt-0.5">Upload a clear front-facing photo</p>
-          </div>
-          {isCustomActive && (
-            <button
-              onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click() }}
-              className="text-xs text-zinc-400 hover:text-white transition-colors"
-            >
-              Change photo
-            </button>
-          )}
-        </div>
+    <div className="space-y-5">
 
-        {/* Preset gallery card */}
-        <div
-          className={cn(
-            'rounded-xl border-2 p-4 flex flex-col gap-3 transition-colors',
-            isPresetActive ? 'border-white bg-zinc-800' : 'border-zinc-700',
-          )}
-        >
-          <div className="text-center">
-            <p className="text-sm font-medium text-white">Choose an AI model</p>
-            <p className="text-xs text-zinc-500 mt-0.5">Pick from our preset avatars</p>
-          </div>
-          <div className="grid grid-cols-4 gap-1.5 overflow-y-auto max-h-32">
-            {AVATAR_PRESETS.map((preset) => (
+      {/* Preset grid — full width, primary choice */}
+      <div className="space-y-2">
+        <p className="text-xs font-medium text-white/40 uppercase tracking-wider">Choose an AI avatar</p>
+        <div className="grid grid-cols-4 gap-2">
+          {AVATAR_PRESETS.map((preset, i) => {
+            const selected = value.presetId === preset.id
+            const gradient = CARD_GRADIENTS[i % CARD_GRADIENTS.length]
+            const hasThumbnail = !preset.thumbnailUrl.includes('placehold.co')
+
+            return (
               <button
                 key={preset.id}
                 onClick={() => handlePresetSelect(preset.id)}
                 className={cn(
-                  'rounded-lg overflow-hidden border-2 aspect-[2/3] transition-all',
-                  value.presetId === preset.id ? 'border-white ring-1 ring-white/30' : 'border-zinc-700 hover:border-zinc-500',
+                  'relative rounded-xl overflow-hidden aspect-[2/3] transition-all duration-200 group',
+                  selected
+                    ? 'ring-2 ring-violet-500 ring-offset-1 ring-offset-[#0f0d1a]'
+                    : 'ring-1 ring-white/8 hover:ring-white/20',
                 )}
-                title={preset.label}
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={preset.thumbnailUrl} alt={preset.label} className="w-full h-full object-cover" />
+                {hasThumbnail ? (
+                  <img
+                    src={preset.thumbnailUrl}
+                    alt={preset.label}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  // Placeholder until real images are added
+                  <div className={cn('w-full h-full bg-gradient-to-b flex flex-col items-center justify-end pb-3 px-1', gradient)}>
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <span className="text-3xl opacity-20 select-none">
+                        {preset.gender === 'woman' ? '♀' : '♂'}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Label overlay */}
+                <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent pt-6 pb-2 px-1.5">
+                  <p className="text-[11px] font-medium text-white leading-tight text-center">{preset.label}</p>
+                </div>
+
+                {/* Selected checkmark */}
+                {selected && (
+                  <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-violet-500 flex items-center justify-center">
+                    <Check className="w-3 h-3 text-white" strokeWidth={3} />
+                  </div>
+                )}
               </button>
-            ))}
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Divider with OR */}
+      <div className="flex items-center gap-3">
+        <div className="flex-1 h-px bg-white/8" />
+        <span className="text-xs text-white/25 font-medium">or</span>
+        <div className="flex-1 h-px bg-white/8" />
+      </div>
+
+      {/* Upload your own face — secondary option */}
+      <div
+        onClick={() => fileInputRef.current?.click()}
+        className={cn(
+          'flex items-center gap-4 rounded-xl border-2 border-dashed px-4 py-3.5 cursor-pointer transition-all duration-200',
+          isCustomActive
+            ? 'border-violet-500/60 bg-violet-500/5'
+            : 'border-white/10 hover:border-white/20 hover:bg-white/[0.02]',
+        )}
+      >
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleFileChange}
+        />
+        {isCustomActive && value.faceUrl ? (
+          <img
+            src={value.faceUrl}
+            alt="Your face"
+            className="w-12 h-12 rounded-full object-cover border-2 border-violet-500/60 shrink-0"
+          />
+        ) : (
+          <div className="w-12 h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
+            <Upload className="w-4 h-4 text-white/40" />
           </div>
+        )}
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-white">Use your own face</p>
+          <p className="text-xs text-white/40 mt-0.5">Upload a clear front-facing photo</p>
         </div>
+        {isCustomActive && (
+          <div className="w-5 h-5 rounded-full bg-violet-500 flex items-center justify-center shrink-0">
+            <Check className="w-3 h-3 text-white" strokeWidth={3} />
+          </div>
+        )}
       </div>
 
-      {/* Gender pills */}
-      <div className="space-y-2">
-        <p className="text-xs text-zinc-500 uppercase tracking-wider">Gender</p>
-        <div className="flex gap-2">
-          {GENDERS.map(({ value: g, label }) => (
-            <button
-              key={g}
-              onClick={() => onChange({ ...value, gender: g })}
-              className={cn(
-                'px-4 py-1.5 rounded-md text-sm transition-colors',
-                value.gender === g ? 'bg-white text-black' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700',
-              )}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Style pills */}
-      <div className="space-y-2">
-        <p className="text-xs text-zinc-500 uppercase tracking-wider">Style</p>
-        <div className="flex flex-wrap gap-2">
-          {STYLES.map((s) => (
-            <button
-              key={s}
-              onClick={() => onChange({ ...value, style: s })}
-              className={cn(
-                'px-4 py-1.5 rounded-md text-sm capitalize transition-colors',
-                value.style === s ? 'bg-white text-black' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700',
-              )}
-            >
-              {s}
-            </button>
-          ))}
-        </div>
-      </div>
     </div>
   )
 }
