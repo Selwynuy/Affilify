@@ -19,7 +19,8 @@
       "Bash(find /d/Projects/affilify -type f \\\\\\(-name *.sql -o -name *migration* -o -name *schema* \\\\\\))",
       "Bash(find /d/Projects/affilify -type f -name *.sql -o -name *migration*)",
       "Bash(find /d/Projects/affilify -type f \\\\\\(-name schema.json -o -name *.json \\\\\\) -path */supabase/*)",
-      "Bash(grep -r \"CREATE TABLE\\\\|user_preferences\\\\|projects\" /d/Projects/affilify --include=*.ts --include=*.tsx --include=*.sql)"
+      "Bash(grep -r \"CREATE TABLE\\\\|user_preferences\\\\|projects\" /d/Projects/affilify --include=*.ts --include=*.tsx --include=*.sql)",
+      "Bash(npx next:*)"
     ]
   }
 }
