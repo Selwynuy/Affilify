@@ -1,9 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 const GEMINI_MODEL = 'gemini-2.5-flash-image'
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`
+const IMAGE_COUNT = 1
 
 const DEFAULT_TEMPLATE =
   `A {{gender}} {{face_description}}, {{height}} cm tall and weighing {{weight}} kg, ` +
@@ -26,45 +27,47 @@ function fillTemplate(template: string, vars: Record<string, string | number>): 
 
 function buildPrompt(avatar: Record<string, unknown>, productDescription: string): string {
   const vars: Record<string, string | number> = {
-    gender:        String(avatar.gender ?? 'man'),
+    gender:           String(avatar.gender ?? 'man'),
     face_description: avatar.type === 'preset' && avatar.promptHint
       ? String(avatar.promptHint)
       : 'with a face like the one in the face reference photo',
-    height:        Number(avatar.height ?? 175),
-    weight:        Number(avatar.weight ?? 70),
-    room_aesthetic: String(avatar.roomAesthetic ?? 'masculine'),
-    camera_angle:  String(avatar.cameraAngle ?? 'directly above the subject at 45° high-angle overhead'),
-    focal_length:  String(avatar.focalLength ?? '35-50mm (natural, balanced)'),
-    room_colors:   String(avatar.roomColors ?? 'white and black'),
-    room_elements: String(avatar.roomElements ?? 'a dark gray round shag rug, minimalist black-framed posters, warm LED strips'),
-    product_note:  productDescription ? `Product being showcased: ${productDescription}. ` : '',
+    height:           Number(avatar.height ?? 175),
+    weight:           Number(avatar.weight ?? 70),
+    room_aesthetic:   String(avatar.roomAesthetic ?? 'masculine'),
+    camera_angle:     String(avatar.cameraAngle ?? 'directly above the subject at 45° high-angle overhead'),
+    focal_length:     String(avatar.focalLength ?? '35-50mm (natural, balanced)'),
+    room_colors:      String(avatar.roomColors ?? 'white and black'),
+    room_elements:    String(avatar.roomElements ?? 'a dark gray round shag rug, minimalist black-framed posters, warm LED strips'),
+    product_note:     productDescription ? `Product being showcased: ${productDescription}. ` : '',
   }
   return fillTemplate(DEFAULT_TEMPLATE, vars)
+}
+
+function encode(obj: unknown): Uint8Array {
+  return new TextEncoder().encode(JSON.stringify(obj) + '\n')
 }
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!user) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
 
   const { projectId, productDescription } = await req.json()
-  if (!projectId) return NextResponse.json({ error: 'projectId required' }, { status: 400 })
+  if (!projectId) return new Response(JSON.stringify({ error: 'projectId required' }), { status: 400 })
 
   const admin = createAdminClient()
 
-  // Fetch project avatar (includes face b64)
   const { data: project, error: projErr } = await admin
     .from('projects')
     .select('avatar')
     .eq('id', projectId)
     .eq('user_id', user.id)
     .single()
-  if (projErr || !project) return NextResponse.json({ error: 'Project not found' }, { status: 404 })
+  if (projErr || !project) return new Response(JSON.stringify({ error: 'Project not found' }), { status: 404 })
 
   const avatar: Record<string, unknown> = project.avatar ?? {}
   const { faceB64, faceMime } = avatar
 
-  // Fetch product images (with b64 data)
   const { data: productRows } = await admin
     .from('project_images')
     .select('b64_data, mime_type, position')
@@ -73,20 +76,16 @@ export async function POST(req: NextRequest) {
     .order('position')
 
   if (!productRows || productRows.length === 0) {
-    return NextResponse.json({ error: 'No product images found for this project' }, { status: 400 })
+    return new Response(JSON.stringify({ error: 'No product images found for this project' }), { status: 400 })
   }
 
   const prompt = buildPrompt(avatar, productDescription || '')
-
-  // Build multimodal parts: text prompt + face image (custom only) + product images
   const parts: unknown[] = [{ text: prompt }]
 
-  // Preset avatars use a promptHint injected into the text — no face image
   const isPreset = avatar.type === 'preset'
   if (!isPreset && faceB64 && faceMime) {
     parts.push({ inlineData: { mimeType: faceMime, data: faceB64 } })
   }
-
   for (const row of productRows) {
     if (row.b64_data && row.mime_type) {
       parts.push({ inlineData: { mimeType: row.mime_type, data: row.b64_data } })
@@ -96,65 +95,89 @@ export async function POST(req: NextRequest) {
   // Clear previous generated images
   await admin.from('project_images').delete().eq('project_id', projectId).eq('kind', 'generated')
 
-  const images: { id: string; url: string }[] = []
+  const stream = new ReadableStream({
+    async start(controller) {
+      let successCount = 0
 
-  // Generate 4 images one at a time (Gemini returns 1 image per call)
-  for (let i = 0; i < 4; i++) {
-    const res = await fetch(`${GEMINI_URL}?key=${process.env.GOOGLE_AI_STUDIO_KEY}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ role: 'user', parts }],
-        generationConfig: { responseModalities: ['IMAGE', 'TEXT'] },
-      }),
-    })
+      for (let i = 0; i < IMAGE_COUNT; i++) {
+        // Tell client we're starting this image
+        controller.enqueue(encode({ type: 'progress', index: i, total: IMAGE_COUNT }))
 
-    if (!res.ok) {
-      const err = await res.text()
-      console.error(`Gemini call ${i} failed:`, err)
-      continue
-    }
+        try {
+          const res = await fetch(`${GEMINI_URL}?key=${process.env.GOOGLE_AI_STUDIO_KEY}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ role: 'user', parts }],
+              generationConfig: { responseModalities: ['IMAGE', 'TEXT'] },
+            }),
+          })
 
-    const data = await res.json()
-    const candidate = data.candidates?.[0]
-    const imagePart = candidate?.content?.parts?.find(
-      (p: { inlineData?: { mimeType: string; data: string } }) => p.inlineData?.mimeType?.startsWith('image/')
-    )
+          if (!res.ok) {
+            const err = await res.text()
+            console.error(`Gemini call ${i} failed:`, err)
+            controller.enqueue(encode({ type: 'image_error', index: i, error: 'Generation failed for this image' }))
+            continue
+          }
 
-    if (!imagePart?.inlineData) {
-      console.error(`No image in candidate ${i}`, JSON.stringify(candidate).slice(0, 300))
-      continue
-    }
+          const data = await res.json()
+          const candidate = data.candidates?.[0]
+          const imagePart = candidate?.content?.parts?.find(
+            (p: { inlineData?: { mimeType: string; data: string } }) => p.inlineData?.mimeType?.startsWith('image/')
+          )
 
-    const { mimeType, data: b64 } = imagePart.inlineData
-    const ext = mimeType === 'image/png' ? 'png' : 'jpg'
-    const storagePath = `${user.id}/${projectId}/generated-${i}.${ext}`
+          if (!imagePart?.inlineData) {
+            console.error(`No image in candidate ${i}`, JSON.stringify(candidate).slice(0, 300))
+            controller.enqueue(encode({ type: 'image_error', index: i, error: 'No image returned' }))
+            continue
+          }
 
-    // Save to storage
-    const buffer = Buffer.from(b64, 'base64')
-    await admin.storage.from('generated').upload(storagePath, buffer, { contentType: mimeType, upsert: true })
+          const { mimeType, data: b64 } = imagePart.inlineData
+          const ext = mimeType === 'image/png' ? 'png' : 'jpg'
+          const storagePath = `${user.id}/${projectId}/generated-${i}.${ext}`
 
-    // Save to DB (store path, not signed URL)
-    const { data: imgRow } = await admin.from('project_images').insert({
-      project_id: projectId,
-      user_id: user.id,
-      kind: 'generated',
-      url: storagePath,
-      storage_path: storagePath,
-      position: i,
-    }).select('id').single()
+          const buffer = Buffer.from(b64, 'base64')
+          await admin.storage.from('generated').upload(storagePath, buffer, { contentType: mimeType, upsert: true })
 
-    if (imgRow) {
-      // Return as data URL — avoids COEP/CORP issues with Supabase signed URLs
-      images.push({ id: imgRow.id, url: `data:${mimeType};base64,${b64}` })
-    }
-  }
+          const { data: imgRow } = await admin.from('project_images').insert({
+            project_id: projectId,
+            user_id: user.id,
+            kind: 'generated',
+            url: storagePath,
+            storage_path: storagePath,
+            position: i,
+          }).select('id').single()
 
-  if (images.length === 0) {
-    return NextResponse.json({ error: 'No images could be generated. Check server logs for details.' }, { status: 500 })
-  }
+          if (imgRow) {
+            successCount++
+            // Stream the image immediately as a data URL so the client can show it right away
+            controller.enqueue(encode({
+              type: 'image',
+              index: i,
+              total: IMAGE_COUNT,
+              image: { id: imgRow.id, url: `data:${mimeType};base64,${b64}` },
+            }))
+          }
+        } catch (e) {
+          console.error(`Gemini call ${i} threw:`, e)
+          controller.enqueue(encode({ type: 'image_error', index: i, error: 'Unexpected error' }))
+        }
+      }
 
-  await admin.from('projects').update({ status: 'images_generated' }).eq('id', projectId)
+      if (successCount > 0) {
+        await admin.from('projects').update({ status: 'images_generated' }).eq('id', projectId)
+      }
 
-  return NextResponse.json({ images, prompt })
+      controller.enqueue(encode({ type: 'done', total: IMAGE_COUNT, success: successCount }))
+      controller.close()
+    },
+  })
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'application/x-ndjson',
+      'Cache-Control': 'no-cache',
+      'X-Accel-Buffering': 'no',
+    },
+  })
 }

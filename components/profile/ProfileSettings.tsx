@@ -4,18 +4,17 @@ import { useState } from 'react'
 import { AvatarSetup } from '@/components/onboarding/AvatarSetup'
 import { BackgroundSetup } from '@/components/onboarding/BackgroundSetup'
 import { Button } from '@/components/ui/button'
+import { usePreferences } from '@/lib/context/preferences-context'
 import type { AvatarConfig, BackgroundConfig } from '@/lib/types/preferences'
+import { Check } from 'lucide-react'
 
 type PartialAvatar = Partial<AvatarConfig> & { faceB64?: string; faceMime?: string }
 
-interface Props {
-  initialAvatarConfig: AvatarConfig | null
-  initialBackgroundConfig: BackgroundConfig | null
-}
+export function ProfileSettings() {
+  const { avatarConfig: ctxAvatar, backgroundConfig: ctxBg, setAvatarConfig, setBackgroundConfig } = usePreferences()
 
-export function ProfileSettings({ initialAvatarConfig, initialBackgroundConfig }: Props) {
-  const [avatarConfig, setAvatarConfig] = useState<PartialAvatar>(initialAvatarConfig ?? { gender: 'man', style: 'casual' })
-  const [backgroundConfig, setBackgroundConfig] = useState<Partial<BackgroundConfig>>(initialBackgroundConfig ?? {})
+  const [avatarDraft, setAvatarDraft] = useState<PartialAvatar>(ctxAvatar ?? { gender: 'man', style: 'casual' })
+  const [bgDraft, setBgDraft] = useState<Partial<BackgroundConfig>>(ctxBg ?? {})
 
   const [avatarSaving, setAvatarSaving] = useState(false)
   const [avatarSaved, setAvatarSaved] = useState(false)
@@ -27,19 +26,18 @@ export function ProfileSettings({ initialAvatarConfig, initialBackgroundConfig }
     setAvatarSaved(false)
 
     let finalAvatar: Partial<AvatarConfig> = {
-      type: avatarConfig.type,
-      presetId: avatarConfig.presetId,
-      gender: avatarConfig.gender ?? 'man',
-      style: avatarConfig.style ?? 'casual',
-      faceUrl: avatarConfig.faceUrl,
+      type: avatarDraft.type,
+      presetId: avatarDraft.presetId,
+      gender: avatarDraft.gender ?? 'man',
+      style: avatarDraft.style ?? 'casual',
+      faceUrl: avatarDraft.faceUrl,
     }
 
-    // Upload face if new custom upload
-    if (avatarConfig.type === 'custom' && avatarConfig.faceB64 && avatarConfig.faceMime) {
-      const byteString = atob(avatarConfig.faceB64)
+    if (avatarDraft.type === 'custom' && avatarDraft.faceB64 && avatarDraft.faceMime) {
+      const byteString = atob(avatarDraft.faceB64)
       const arr = new Uint8Array(byteString.length)
       for (let i = 0; i < byteString.length; i++) arr[i] = byteString.charCodeAt(i)
-      const blob = new Blob([arr], { type: avatarConfig.faceMime })
+      const blob = new Blob([arr], { type: avatarDraft.faceMime })
       const fd = new FormData()
       fd.append('face', blob, 'face.jpg')
       fd.append('onboardingFaceOnly', 'true')
@@ -56,6 +54,9 @@ export function ProfileSettings({ initialAvatarConfig, initialBackgroundConfig }
       body: JSON.stringify({ avatar_config: finalAvatar }),
     })
 
+    // Push to shared context so GeneratePanel updates live
+    setAvatarConfig(finalAvatar as AvatarConfig)
+
     setAvatarSaving(false)
     setAvatarSaved(true)
     setTimeout(() => setAvatarSaved(false), 2000)
@@ -64,11 +65,16 @@ export function ProfileSettings({ initialAvatarConfig, initialBackgroundConfig }
   async function saveBackground() {
     setBgSaving(true)
     setBgSaved(false)
+
     await fetch('/api/preferences', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ background_config: backgroundConfig }),
+      body: JSON.stringify({ background_config: bgDraft }),
     })
+
+    // Push to shared context so GeneratePanel updates live
+    setBackgroundConfig(bgDraft as BackgroundConfig)
+
     setBgSaving(false)
     setBgSaved(true)
     setTimeout(() => setBgSaved(false), 2000)
@@ -78,7 +84,7 @@ export function ProfileSettings({ initialAvatarConfig, initialBackgroundConfig }
     <div className="max-w-2xl space-y-10">
       <div>
         <h1 className="text-2xl font-semibold text-white">Profile</h1>
-        <p className="text-zinc-400 text-sm mt-1">Your default settings applied to every video.</p>
+        <p className="text-white/50 text-sm mt-1">Your default settings applied to every video.</p>
       </div>
 
       {/* Avatar section */}
@@ -86,39 +92,46 @@ export function ProfileSettings({ initialAvatarConfig, initialBackgroundConfig }
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-base font-medium text-white">Avatar</h2>
-            <p className="text-zinc-500 text-sm">Your model for AI image generation.</p>
+            <p className="text-white/40 text-sm">Your model for AI image generation.</p>
           </div>
           <Button
             onClick={saveAvatar}
             disabled={avatarSaving}
             className="bg-white text-black hover:bg-zinc-200 disabled:opacity-50 shrink-0"
           >
-            {avatarSaved ? '✓ Saved' : avatarSaving ? 'Saving…' : 'Save avatar'}
+            {avatarSaved ? (
+              <span className="flex items-center gap-1.5">
+                <Check className="w-3.5 h-3.5" /> Saved
+              </span>
+            ) : avatarSaving ? 'Saving…' : 'Save avatar'}
           </Button>
         </div>
-        <AvatarSetup value={avatarConfig} onChange={setAvatarConfig} />
+        <AvatarSetup value={avatarDraft} onChange={setAvatarDraft} />
       </section>
 
-      <div className="border-t border-zinc-800" />
+      <div className="border-t border-white/8" />
 
       {/* Background section */}
       <section className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-base font-medium text-white">Background</h2>
-            <p className="text-zinc-500 text-sm">The scene behind your avatar.</p>
+            <p className="text-white/40 text-sm">The scene behind your avatar.</p>
           </div>
           <Button
             onClick={saveBackground}
             disabled={bgSaving}
             className="bg-white text-black hover:bg-zinc-200 disabled:opacity-50 shrink-0"
           >
-            {bgSaved ? '✓ Saved' : bgSaving ? 'Saving…' : 'Save background'}
+            {bgSaved ? (
+              <span className="flex items-center gap-1.5">
+                <Check className="w-3.5 h-3.5" /> Saved
+              </span>
+            ) : bgSaving ? 'Saving…' : 'Save background'}
           </Button>
         </div>
-        <BackgroundSetup value={backgroundConfig} onChange={setBackgroundConfig} />
+        <BackgroundSetup value={bgDraft} onChange={setBgDraft} />
       </section>
-
     </div>
   )
 }
