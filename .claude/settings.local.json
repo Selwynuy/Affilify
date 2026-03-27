@@ -6,7 +6,20 @@
       "Bash(npx shadcn@latest add input label card separator badge)",
       "Bash(ls D:/Projects/affilify/.env*)",
       "Bash(npx tsc:*)",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "mcp__claude_ai_Supabase__list_projects",
+      "mcp__claude_ai_Supabase__apply_migration",
+      "mcp__claude_ai_Supabase__execute_sql",
+      "mcp__claude_ai_Supabase__list_tables",
+      "WebSearch",
+      "WebFetch(domain:ai.google.dev)",
+      "WebFetch(domain:docs.nananobanana.com)",
+      "WebFetch(domain:generativelanguage.googleapis.com)",
+      "Bash(find /d/Projects/affilify/supabase -type f -name *.sql)",
+      "Bash(find /d/Projects/affilify -type f \\\\\\(-name *.sql -o -name *migration* -o -name *schema* \\\\\\))",
+      "Bash(find /d/Projects/affilify -type f -name *.sql -o -name *migration*)",
+      "Bash(find /d/Projects/affilify -type f \\\\\\(-name schema.json -o -name *.json \\\\\\) -path */supabase/*)",
+      "Bash(grep -r \"CREATE TABLE\\\\|user_preferences\\\\|projects\" /d/Projects/affilify --include=*.ts --include=*.tsx --include=*.sql)"
     ]
   }
 }
