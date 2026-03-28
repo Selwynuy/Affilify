@@ -1,139 +1,192 @@
+/**
+ * POST /api/billing/webhook
+ *
+ * Handles PayMongo webhook events.
+ * Register this URL in PayMongo dashboard with events:
+ *   - subscription.invoice.paid
+ *   - subscription.invoice.payment_failed
+ *   - subscription.updated
+ *   - subscription.past_due
+ *   - subscription.unpaid
+ *   - payment.paid  (for one-time top-ups)
+ */
+
 import { NextRequest, NextResponse } from 'next/server'
-import { stripe } from '@/lib/billing/stripe'
+import { verifyWebhookSignature, getSubscription } from '@/lib/billing/paymongo'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { grantMonthlyTokens } from '@/lib/billing/tokens'
-import type { PlanId, BillingInterval } from '@/lib/types/billing'
+import type { PlanId } from '@/lib/types/billing'
 import { logger } from '@/lib/logger'
 
 const VALID_PLAN_IDS: readonly PlanId[] = ['starter', 'growth', 'pro', 'business']
-const VALID_INTERVALS: readonly BillingInterval[] = ['monthly', 'annual']
 
 function parsePlanId(value: string | undefined): PlanId | null {
   if (!value || !(VALID_PLAN_IDS as readonly string[]).includes(value)) return null
   return value as PlanId
 }
 
-function parseInterval(value: string | undefined): BillingInterval {
-  if (!value || !(VALID_INTERVALS as readonly string[]).includes(value)) return 'monthly'
-  return value as BillingInterval
-}
-
 export async function POST(req: NextRequest) {
-  const body = await req.text()
-  const sig = req.headers.get('stripe-signature')
+  const rawBody = await req.text()
+  const sig = req.headers.get('paymongo-signature')
 
-  if (!sig || !process.env.STRIPE_WEBHOOK_SECRET) {
+  if (!sig) {
     return NextResponse.json({ error: 'Missing signature' }, { status: 400 })
   }
 
-  let event
+  let valid: boolean
   try {
-    event = stripe.webhooks.constructEvent(body, sig, process.env.STRIPE_WEBHOOK_SECRET)
-  } catch {
+    valid = verifyWebhookSignature(rawBody, sig)
+  } catch (err) {
+    logger.error('Webhook signature verification threw', {}, err)
+    return NextResponse.json({ error: 'Signature error' }, { status: 400 })
+  }
+
+  if (!valid) {
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 })
   }
 
+  let event: { data: { attributes: { type: string; data: Record<string, unknown> } } }
+  try {
+    event = JSON.parse(rawBody)
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
+  }
+
+  const eventType = event.data.attributes.type
+  const eventData = event.data.attributes.data as Record<string, unknown>
   const admin = createAdminClient()
 
-  switch (event.type) {
-    // ── New subscription created / renewed ────────────────────────────────────
-    case 'invoice.payment_succeeded': {
-      const invoice = event.data.object
-      const subId = (() => {
-        const parent = invoice.parent
-        if (!parent || parent.type !== 'subscription_details') return null
-        const sub = parent.subscription_details?.subscription
-        return typeof sub === 'string' ? sub : sub?.id ?? null
-      })()
+  switch (eventType) {
+    // ── Subscription invoice paid (new sub activated or renewal) ──────────────
+    case 'subscription.invoice.paid': {
+      const invoice = eventData as {
+        id: string
+        attributes: {
+          subscription_id: string
+          amount: number
+          billing_date: string
+        }
+      }
+
+      const subId = invoice.attributes.subscription_id
       if (!subId) break
 
-      const stripeSub = await stripe.subscriptions.retrieve(subId)
-      const userId = stripeSub.metadata.userId
-      const planId = parsePlanId(stripeSub.metadata.planId)
-      const interval = parseInterval(stripeSub.metadata.interval)
-
-      if (!userId || !planId) {
-        logger.error('invoice.payment_succeeded: invalid metadata', { subId, metadata: JSON.stringify(stripeSub.metadata) })
+      // Fetch full subscription to get metadata / plan info
+      let pmSub
+      try {
+        pmSub = await getSubscription(subId)
+      } catch (err) {
+        logger.error('webhook: failed to fetch subscription', { subId }, err)
         break
       }
 
-      const item = stripeSub.items.data[0]
-      const periodStart = item?.current_period_start
-      const periodEnd = item?.current_period_end
+      // Resolve userId from our DB via paymongo_subscription_id
+      const { data: subRow } = await admin
+        .from('subscriptions')
+        .select('user_id, plan_id')
+        .eq('paymongo_subscription_id', subId)
+        .single()
 
-      // Upsert subscription record
+      if (!subRow?.user_id) {
+        logger.error('webhook: no subscription row found for paymongo sub', { subId })
+        break
+      }
+
+      const planId = parsePlanId(subRow.plan_id)
+      if (!planId) {
+        logger.error('webhook: invalid plan_id in subscription row', { subId, planId: subRow.plan_id })
+        break
+      }
+
+      const nextBilling = pmSub.attributes.next_billing_schedule
+
       await admin.from('subscriptions').upsert({
-        user_id: userId,
+        user_id: subRow.user_id,
         plan_id: planId,
         status: 'active',
-        stripe_subscription_id: stripeSub.id,
-        stripe_customer_id: typeof stripeSub.customer === 'string' ? stripeSub.customer : stripeSub.customer.id,
-        billing_interval: interval,
-        current_period_start: periodStart ? new Date(periodStart * 1000).toISOString() : null,
-        current_period_end: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
-        cancel_at_period_end: stripeSub.cancel_at_period_end,
+        paymongo_subscription_id: subId,
+        paymongo_customer_id: pmSub.attributes.customer_id,
+        billing_interval: 'monthly',
+        current_period_start: new Date().toISOString(),
+        current_period_end: nextBilling ?? null,
+        cancel_at_period_end: false,
         updated_at: new Date().toISOString(),
       }, { onConflict: 'user_id' })
 
-      // Grant monthly tokens
-      await grantMonthlyTokens(userId, planId)
+      await grantMonthlyTokens(subRow.user_id, planId)
+      logger.info('subscription.invoice.paid: tokens granted', { userId: subRow.user_id, planId })
       break
     }
 
-    // ── Subscription updated (upgrade/downgrade/cancel) ───────────────────────
-    case 'customer.subscription.updated': {
-      const stripeSub = event.data.object
-      const userId = stripeSub.metadata.userId
-      const planId = parsePlanId(stripeSub.metadata.planId)
-      const interval = parseInterval(stripeSub.metadata.interval)
+    // ── Invoice payment failed ─────────────────────────────────────────────────
+    case 'subscription.invoice.payment_failed': {
+      const invoice = eventData as { attributes: { subscription_id: string } }
+      const subId = invoice.attributes.subscription_id
+      if (!subId) break
 
-      if (!userId) break
-      if (!planId) {
-        logger.error('customer.subscription.updated: invalid planId in metadata', { subId: stripeSub.id, metadata: JSON.stringify(stripeSub.metadata) })
-        break
+      await admin
+        .from('subscriptions')
+        .update({ status: 'past_due', updated_at: new Date().toISOString() })
+        .eq('paymongo_subscription_id', subId)
+
+      logger.warn('subscription.invoice.payment_failed', { subId })
+      break
+    }
+
+    // ── Subscription updated (upgrade / downgrade / cancel scheduled) ──────────
+    case 'subscription.updated': {
+      const pmSub = eventData as {
+        id: string
+        attributes: { status: string; next_billing_schedule: string | null }
       }
 
-      const item = stripeSub.items.data[0]
-      const periodStart = item?.current_period_start
-      const periodEnd = item?.current_period_end
-
-      await admin.from('subscriptions').upsert({
-        user_id: userId,
-        plan_id: planId,
-        status: stripeSub.status as string,
-        stripe_subscription_id: stripeSub.id,
-        stripe_customer_id: typeof stripeSub.customer === 'string' ? stripeSub.customer : stripeSub.customer.id,
-        billing_interval: interval,
-        current_period_start: periodStart ? new Date(periodStart * 1000).toISOString() : null,
-        current_period_end: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
-        cancel_at_period_end: stripeSub.cancel_at_period_end,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'user_id' })
+      await admin
+        .from('subscriptions')
+        .update({
+          status: pmSub.attributes.status,
+          current_period_end: pmSub.attributes.next_billing_schedule ?? null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('paymongo_subscription_id', pmSub.id)
       break
     }
 
-    // ── Subscription canceled ─────────────────────────────────────────────────
-    case 'customer.subscription.deleted': {
-      const stripeSub = event.data.object
-      const userId = stripeSub.metadata.userId
-      if (!userId) break
+    // ── Subscription past_due / unpaid (all retries exhausted) ────────────────
+    case 'subscription.past_due':
+    case 'subscription.unpaid': {
+      const pmSub = eventData as { id: string }
+      const newStatus = eventType === 'subscription.unpaid' ? 'unpaid' : 'past_due'
 
-      await admin.from('subscriptions')
-        .update({ status: 'canceled', updated_at: new Date().toISOString() })
-        .eq('user_id', userId)
+      await admin
+        .from('subscriptions')
+        .update({ status: newStatus, updated_at: new Date().toISOString() })
+        .eq('paymongo_subscription_id', pmSub.id)
+
+      logger.warn(`webhook: ${eventType}`, { subId: pmSub.id })
       break
     }
 
-    // ── One-time top-up payment ───────────────────────────────────────────────
-    case 'checkout.session.completed': {
-      const session = event.data.object
-      if (session.metadata?.type !== 'topup') break
+    // ── One-time payment paid (top-up) ─────────────────────────────────────────
+    case 'payment.paid': {
+      const payment = eventData as {
+        id: string
+        attributes: {
+          status: string
+          metadata: Record<string, string>
+        }
+      }
 
-      const userId = session.metadata.userId
-      const tokens = parseInt(session.metadata.tokens ?? '0')
-      const planId = session.metadata.planId
+      const meta = payment.attributes.metadata ?? {}
+      if (meta.type !== 'topup') break
 
-      if (!userId || !tokens) break
+      const userId = meta.userId
+      const tokens = parseInt(meta.tokens ?? '0')
+      const planId = meta.planId
+
+      if (!userId || !tokens) {
+        logger.error('payment.paid topup: missing metadata', { paymentId: payment.id })
+        break
+      }
 
       await admin.from('token_ledger').insert({
         user_id: userId,
@@ -141,29 +194,14 @@ export async function POST(req: NextRequest) {
         type: 'topup',
         description: `Top-up — 1,000 tokens (${planId} rate)`,
       })
+
+      logger.info('payment.paid: top-up tokens granted', { userId, tokens })
       break
     }
 
-    // ── Payment failed ────────────────────────────────────────────────────────
-    case 'invoice.payment_failed': {
-      const invoice = event.data.object
-      const subId = (() => {
-        const parent = invoice.parent
-        if (!parent || parent.type !== 'subscription_details') return null
-        const sub = parent.subscription_details?.subscription
-        return typeof sub === 'string' ? sub : sub?.id ?? null
-      })()
-      if (!subId) break
-
-      const stripeSub = await stripe.subscriptions.retrieve(subId)
-      const userId = stripeSub.metadata.userId
-      if (!userId) break
-
-      await admin.from('subscriptions')
-        .update({ status: 'past_due', updated_at: new Date().toISOString() })
-        .eq('user_id', userId)
+    default:
+      // Unhandled event — acknowledge and move on
       break
-    }
   }
 
   return NextResponse.json({ received: true })

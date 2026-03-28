@@ -10,6 +10,8 @@ const REQUIRED_VARS = [
   'GOOGLE_AI_STUDIO_KEY',
   'REPLICATE_API_KEY',
   'NEXT_PUBLIC_APP_URL',
+  'PAYMONGO_SECRET_KEY',
+  'PAYMONGO_WEBHOOK_SECRET',
 ] as const
 
 export function validateEnv() {

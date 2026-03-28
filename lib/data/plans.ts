@@ -1,21 +1,18 @@
-import type { Plan, PlanId, VideoModel } from '@/lib/types/billing'
+import type { Plan, PlanId, TopupPack, VideoModel } from '@/lib/types/billing'
 
 export const PLANS: Plan[] = [
   {
     id: 'starter',
     name: 'Starter',
-    monthlyPriceCents: 1900,
-    annualPriceCents: 1500,
-    tokensPerMonth: 4500,
+    monthlyPriceCentavos: 109900,   // ₱1,099/mo
+    tokensPerMonth: 4250,
     storageGb: 3,
     rolloverDays: 0,
-    // Fill in real Stripe price IDs after creating products in Stripe dashboard
-    stripePriceMonthlyId: process.env.STRIPE_PRICE_STARTER_MONTHLY ?? '',
-    stripePriceAnnualId:  process.env.STRIPE_PRICE_STARTER_ANNUAL  ?? '',
+    paymongoMonthlyPlanId: process.env.PAYMONGO_PLAN_STARTER ?? '',
     features: [
-      '4,500 tokens/month',
-      '~51 full video runs',
-      'Standard model (Hailuo Fast)',
+      '4,250 tokens/month',
+      '~88 full video runs',
+      'Standard models (Hailuo Fast, Wan 2.1)',
       '3 GB storage',
       'No rollover',
     ],
@@ -23,55 +20,51 @@ export const PLANS: Plan[] = [
   {
     id: 'growth',
     name: 'Growth',
-    monthlyPriceCents: 3900,
-    annualPriceCents: 3100,
-    tokensPerMonth: 10000,
+    monthlyPriceCentavos: 219900,   // ₱2,199/mo
+    tokensPerMonth: 9500,
     storageGb: 10,
     rolloverDays: 30,
-    stripePriceMonthlyId: process.env.STRIPE_PRICE_GROWTH_MONTHLY ?? '',
-    stripePriceAnnualId:  process.env.STRIPE_PRICE_GROWTH_ANNUAL  ?? '',
+    paymongoMonthlyPlanId: process.env.PAYMONGO_PLAN_GROWTH ?? '',
     features: [
-      '10,000 tokens/month',
-      '~113 full video runs',
+      '9,500 tokens/month',
+      '~197 full video runs',
       'Standard + Pro models',
       '10 GB storage',
-      '30-day rollover',
+      '30-day token rollover',
+      'Everything in Starter',
     ],
   },
   {
     id: 'pro',
     name: 'Pro',
-    monthlyPriceCents: 8900,
-    annualPriceCents: 7100,
-    tokensPerMonth: 24000,
+    monthlyPriceCentavos: 499900,   // ₱4,999/mo
+    tokensPerMonth: 22000,
     storageGb: 15,
     rolloverDays: 30,
-    stripePriceMonthlyId: process.env.STRIPE_PRICE_PRO_MONTHLY ?? '',
-    stripePriceAnnualId:  process.env.STRIPE_PRICE_PRO_ANNUAL  ?? '',
+    paymongoMonthlyPlanId: process.env.PAYMONGO_PLAN_PRO ?? '',
     features: [
-      '24,000 tokens/month',
-      '~186 full video runs',
+      '22,000 tokens/month',
+      '~458 full video runs',
       'Standard + Pro models',
       '15 GB storage',
-      '30-day rollover',
+      '30-day token rollover',
+      'Everything in Growth',
     ],
   },
   {
     id: 'business',
     name: 'Business',
-    monthlyPriceCents: 19900,
-    annualPriceCents: 15900,
-    tokensPerMonth: 65000,
+    monthlyPriceCentavos: 1099900,  // ₱10,999/mo
+    tokensPerMonth: 60000,
     storageGb: 50,
     rolloverDays: 60,
-    stripePriceMonthlyId: process.env.STRIPE_PRICE_BUSINESS_MONTHLY ?? '',
-    stripePriceAnnualId:  process.env.STRIPE_PRICE_BUSINESS_ANNUAL  ?? '',
+    paymongoMonthlyPlanId: process.env.PAYMONGO_PLAN_BUSINESS ?? '',
     features: [
-      '65,000 tokens/month',
-      '~500 full video runs',
+      '60,000 tokens/month',
+      '~1,250 full video runs',
       'All models including Elite',
       '50 GB storage',
-      '60-day rollover',
+      '60-day token rollover',
       'Priority queue',
     ],
   },
@@ -92,12 +85,12 @@ export const TOKEN_COSTS = {
   image_gen: 8,    // Gemini image generation
 } as const
 
-// Top-up packs: tokens → price in cents
-export const TOPUP_PACKS = [
-  { tokens: 1000, priceCents: 900,  stripePriceId: process.env.STRIPE_PRICE_TOPUP_1000 ?? '', planId: 'starter'  as PlanId },
-  { tokens: 1000, priceCents: 800,  stripePriceId: process.env.STRIPE_PRICE_TOPUP_GROWTH ?? '', planId: 'growth'  as PlanId },
-  { tokens: 1000, priceCents: 700,  stripePriceId: process.env.STRIPE_PRICE_TOPUP_PRO   ?? '', planId: 'pro'      as PlanId },
-  { tokens: 1000, priceCents: 600,  stripePriceId: process.env.STRIPE_PRICE_TOPUP_BIZ   ?? '', planId: 'business' as PlanId },
+// Top-up packs — 1,000 tokens at plan-tiered PHP rates
+export const TOPUP_PACKS: TopupPack[] = [
+  { tokens: 1000, priceCentavos: 29900,  planId: 'starter'  },   // ₱299
+  { tokens: 1000, priceCentavos: 24900,  planId: 'growth'   },   // ₱249
+  { tokens: 1000, priceCentavos: 19900,  planId: 'pro'      },   // ₱199
+  { tokens: 1000, priceCentavos: 14900,  planId: 'business' },   // ₱149
 ]
 
 // Video models — ordered cheapest to most expensive
@@ -136,7 +129,7 @@ export const VIDEO_MODELS: VideoModel[] = [
     tokenCost: 120,
     qualityLabel: 'Pro',
     minPlanId: 'growth',
-    description: 'Top quality-per-dollar. Kling\'s best mid-tier model at 1080p.',
+    description: "Top quality-per-dollar. Kling's best mid-tier model at 1080p.",
   },
   {
     id: 'kling-v3',
@@ -154,7 +147,7 @@ export const VIDEO_MODELS: VideoModel[] = [
     tokenCost: 200,
     qualityLabel: 'Elite',
     minPlanId: 'business',
-    description: 'Google\'s cinematic model. Exceptional for lifestyle and editorial content.',
+    description: "Google's cinematic model. Exceptional for lifestyle and editorial content.",
   },
 ]
 

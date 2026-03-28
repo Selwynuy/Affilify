@@ -1,59 +1,105 @@
+/**
+ * POST /api/billing/checkout
+ *
+ * Two flows:
+ *
+ * 1. Subscription — creates/retrieves a PayMongo Customer, then creates a
+ *    SetupIntent to vault the user's card. Returns a `nextActionUrl` the
+ *    frontend redirects to for the card-entry / 3DS flow. Once the card is
+ *    vaulted, the frontend calls /api/billing/subscribe to create the actual
+ *    subscription with the vaulted payment method.
+ *
+ * 2. Top-up (one-time) — creates a PaymentIntent and returns the `clientKey`
+ *    for the frontend PayMongo.js checkout widget.
+ */
+
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { stripe } from '@/lib/billing/stripe'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { createCustomer, createSetupIntent, createPaymentIntent } from '@/lib/billing/paymongo'
 import { getPlan, TOPUP_PACKS } from '@/lib/data/plans'
-import type { PlanId, BillingInterval } from '@/lib/types/billing'
+import type { PlanId } from '@/lib/types/billing'
+import { logger } from '@/lib/logger'
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { planId, interval, topupPlanId } = await req.json()
-  const origin = req.headers.get('origin') ?? process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
+  const body = await req.json()
+  const { planId, topupPlanId } = body
 
-  // ── Top-up purchase (one-time) ─────────────────────────────────────────────
+  // ── Top-up purchase (one-time payment intent) ──────────────────────────────
   if (topupPlanId) {
     const pack = TOPUP_PACKS.find((p) => p.planId === topupPlanId)
-    if (!pack?.stripePriceId) {
-      return NextResponse.json({ error: 'Top-up not available' }, { status: 400 })
+    if (!pack) {
+      return NextResponse.json({ error: 'Top-up not available for this plan' }, { status: 400 })
     }
 
-    const session = await stripe.checkout.sessions.create({
-      mode: 'payment',
-      customer_email: user.email,
-      metadata: { userId: user.id, type: 'topup', planId: topupPlanId, tokens: String(pack.tokens) },
-      line_items: [{ price: pack.stripePriceId, quantity: 1 }],
-      success_url: `${origin}/billing?topup=success`,
-      cancel_url: `${origin}/billing`,
-    })
-
-    return NextResponse.json({ url: session.url })
+    try {
+      const intent = await createPaymentIntent(
+        pack.priceCentavos,
+        'Affilify token top-up — 1,000 tokens',
+        {
+          userId: user.id,
+          type: 'topup',
+          planId: topupPlanId,
+          tokens: String(pack.tokens),
+        },
+      )
+      return NextResponse.json({ clientKey: intent.attributes.client_key, intentId: intent.id })
+    } catch (err) {
+      logger.error('Failed to create top-up PaymentIntent', { userId: user.id }, err)
+      return NextResponse.json({ error: 'Failed to initiate payment' }, { status: 500 })
+    }
   }
 
-  // ── Subscription checkout ──────────────────────────────────────────────────
-  if (!planId || !interval) {
-    return NextResponse.json({ error: 'planId and interval required' }, { status: 400 })
+  // ── Subscription setup — vault card via SetupIntent ────────────────────────
+  if (!planId) {
+    return NextResponse.json({ error: 'planId required' }, { status: 400 })
   }
 
   const plan = getPlan(planId as PlanId)
-  const priceId = (interval as BillingInterval) === 'annual'
-    ? plan.stripePriceAnnualId
-    : plan.stripePriceMonthlyId
-
-  if (!priceId) {
-    return NextResponse.json({ error: 'Plan price not configured' }, { status: 400 })
+  if (!plan.paymongoMonthlyPlanId) {
+    return NextResponse.json({ error: 'Plan not yet configured' }, { status: 400 })
   }
 
-  const session = await stripe.checkout.sessions.create({
-    mode: 'subscription',
-    customer_email: user.email,
-    metadata: { userId: user.id, type: 'subscription', planId, interval },
-    subscription_data: { metadata: { userId: user.id, planId, interval } },
-    line_items: [{ price: priceId, quantity: 1 }],
-    success_url: `${origin}/billing?subscribed=success`,
-    cancel_url: `${origin}/billing`,
-  })
+  const admin = createAdminClient()
 
-  return NextResponse.json({ url: session.url })
+  // Retrieve or create PayMongo Customer for this user
+  let customerId: string
+  const { data: existing } = await admin
+    .from('subscriptions')
+    .select('paymongo_customer_id')
+    .eq('user_id', user.id)
+    .single()
+
+  if (existing?.paymongo_customer_id) {
+    customerId = existing.paymongo_customer_id
+  } else {
+    try {
+      const customer = await createCustomer(user.email!, user.id)
+      customerId = customer.id
+    } catch (err) {
+      logger.error('Failed to create PayMongo customer', { userId: user.id }, err)
+      return NextResponse.json({ error: 'Failed to create customer' }, { status: 500 })
+    }
+  }
+
+  // Create a SetupIntent to vault the user's card
+  try {
+    const setupIntent = await createSetupIntent(customerId)
+    const nextActionUrl = setupIntent.attributes.next_action?.redirect?.url ?? null
+
+    return NextResponse.json({
+      setupIntentId: setupIntent.id,
+      clientKey: setupIntent.attributes.client_key,
+      nextActionUrl,
+      customerId,
+      planId,
+    })
+  } catch (err) {
+    logger.error('Failed to create SetupIntent', { userId: user.id }, err)
+    return NextResponse.json({ error: 'Failed to initiate card setup' }, { status: 500 })
+  }
 }

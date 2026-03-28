@@ -1,12 +1,12 @@
 'use client'
 
 import { useEffect, useState, useTransition } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { PLANS, TOPUP_PACKS } from '@/lib/data/plans'
 import { Button } from '@/components/ui/button'
 import {
-  Zap, CheckCircle2, ArrowRight, CreditCard, RefreshCw, AlertTriangle, Sparkles,
+  Zap, CheckCircle2, ArrowRight, RefreshCw, AlertTriangle, Sparkles, XCircle,
 } from 'lucide-react'
 import type { Plan, PlanId, Subscription } from '@/lib/types/billing'
 
@@ -17,15 +17,18 @@ interface BalanceData {
   subscription: Subscription | null
 }
 
-const INTERVAL_LABELS = { monthly: 'Monthly', annual: 'Annual (2 months free)' } as const
+/** Format PHP centavos → "₱1,099" */
+function phpFormat(centavos: number): string {
+  return '₱' + (centavos / 100).toLocaleString('en-PH', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+}
 
 export default function BillingPage() {
-  const router = useRouter()
   const searchParams = useSearchParams()
   const [data, setData] = useState<BalanceData | null>(null)
-  const [interval, setInterval] = useState<'monthly' | 'annual'>('monthly')
   const [isPending, startTransition] = useTransition()
   const [actionPending, setActionPending] = useState<string | null>(null)
+  const [cancelConfirm, setCancelConfirm] = useState(false)
+  const [cancelDone, setCancelDone] = useState(false)
 
   const successMsg = searchParams.get('subscribed') === 'success'
     ? 'Subscription activated! Your tokens have been credited.'
@@ -45,20 +48,15 @@ export default function BillingPage() {
       const res = await fetch('/api/billing/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ planId, interval }),
+        body: JSON.stringify({ planId }),
       })
-      const { url } = await res.json()
-      if (url) window.location.href = url
-      setActionPending(null)
-    })
-  }
-
-  function handlePortal() {
-    setActionPending('portal')
-    startTransition(async () => {
-      const res = await fetch('/api/billing/portal', { method: 'POST' })
-      const { url } = await res.json()
-      if (url) window.location.href = url
+      const json = await res.json()
+      // Redirect to PayMongo card-entry / 3DS page
+      if (json.nextActionUrl) {
+        window.location.href = json.nextActionUrl
+      } else if (json.error) {
+        alert(json.error)
+      }
       setActionPending(null)
     })
   }
@@ -71,8 +69,30 @@ export default function BillingPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ topupPlanId: planId }),
       })
-      const { url } = await res.json()
-      if (url) window.location.href = url
+      const json = await res.json()
+      // Top-up uses PayMongo.js client_key — for now open PayMongo checkout URL
+      if (json.nextActionUrl) {
+        window.location.href = json.nextActionUrl
+      } else if (json.error) {
+        alert(json.error)
+      }
+      setActionPending(null)
+    })
+  }
+
+  function handleCancel() {
+    setActionPending('cancel')
+    startTransition(async () => {
+      const res = await fetch('/api/billing/portal', { method: 'POST' })
+      const json = await res.json()
+      if (res.ok) {
+        setCancelDone(true)
+        setCancelConfirm(false)
+        // Refresh balance data
+        fetch('/api/billing/balance').then((r) => r.json()).then(setData)
+      } else {
+        alert(json.error ?? 'Failed to cancel subscription')
+      }
       setActionPending(null)
     })
   }
@@ -99,6 +119,14 @@ export default function BillingPage() {
         </div>
       )}
 
+      {/* Cancel success banner */}
+      {cancelDone && (
+        <div className="flex items-center gap-3 rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3">
+          <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+          <p className="text-sm text-amber-400">Subscription will cancel at the end of the current billing period.</p>
+        </div>
+      )}
+
       {/* Current plan + token balance */}
       {data && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -106,41 +134,64 @@ export default function BillingPage() {
           <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-5 space-y-4">
             <div className="flex items-center justify-between">
               <p className="text-xs font-medium text-white/40 uppercase tracking-wider">Current Plan</p>
-              {currentPlanId && (
+              {currentPlanId && !cancelDone && (
                 <button
-                  onClick={handlePortal}
-                  disabled={isPending}
-                  className="flex items-center gap-1 text-xs text-white/40 hover:text-white transition-colors"
+                  onClick={() => setCancelConfirm(true)}
+                  className="text-xs text-white/30 hover:text-red-400 transition-colors"
                 >
-                  <CreditCard className="w-3 h-3" />
-                  Manage
+                  Cancel plan
                 </button>
               )}
             </div>
             <div className="space-y-1">
-              <p className="text-2xl font-bold text-white">
-                {plan?.name ?? 'No plan'}
-              </p>
+              <p className="text-2xl font-bold text-white">{plan?.name ?? 'No plan'}</p>
               {plan && (
                 <p className="text-sm text-white/40">
-                  ${((interval === 'annual' ? plan.annualPriceCents : plan.monthlyPriceCents) / 100).toFixed(0)}/mo
-                  {data.subscription?.billingInterval === 'annual' ? ' · billed annually' : ' · billed monthly'}
+                  {phpFormat(plan.monthlyPriceCentavos)}/mo · billed monthly
                 </p>
               )}
               {data.subscription?.cancelAtPeriodEnd && (
                 <div className="flex items-center gap-1.5 text-xs text-amber-400 mt-2">
                   <AlertTriangle className="w-3 h-3" />
-                  Cancels at end of period
+                  Cancels at end of billing period
                 </div>
               )}
               {data.subscription?.currentPeriodEnd && (
                 <p className="text-xs text-white/30 mt-1">
-                  Renews {new Date(data.subscription.currentPeriodEnd).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                  {data.subscription.cancelAtPeriodEnd ? 'Access until' : 'Renews'}{' '}
+                  {new Date(data.subscription.currentPeriodEnd).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                 </p>
               )}
             </div>
             {!currentPlanId && (
               <p className="text-xs text-white/40">Subscribe below to start generating.</p>
+            )}
+
+            {/* Cancel confirmation inline */}
+            {cancelConfirm && (
+              <div className="mt-3 rounded-xl border border-red-500/20 bg-red-500/[0.07] p-4 space-y-3">
+                <div className="flex items-start gap-2">
+                  <XCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                  <p className="text-xs text-red-300 leading-relaxed">
+                    Your subscription will remain active until the end of the current period. No refunds are issued for partial months.
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={handleCancel}
+                    disabled={isPending}
+                    className="h-8 px-3 text-xs bg-red-600/80 hover:bg-red-600 text-white rounded-lg"
+                  >
+                    {actionPending === 'cancel' ? <RefreshCw className="w-3 h-3 animate-spin" /> : 'Confirm cancel'}
+                  </Button>
+                  <Button
+                    onClick={() => setCancelConfirm(false)}
+                    className="h-8 px-3 text-xs bg-white/5 hover:bg-white/10 text-white/60 rounded-lg"
+                  >
+                    Keep plan
+                  </Button>
+                </div>
+              </div>
             )}
           </div>
 
@@ -189,7 +240,7 @@ export default function BillingPage() {
                   <Zap className="w-4 h-4 text-violet-400 shrink-0" />
                   <div className="text-left">
                     <p className="text-sm font-medium text-white">+1,000 tokens</p>
-                    <p className="text-xs text-white/40">${(pack.priceCents / 100).toFixed(0)} one-time</p>
+                    <p className="text-xs text-white/40">{phpFormat(pack.priceCentavos)} one-time</p>
                   </div>
                   <ArrowRight className="w-3.5 h-3.5 text-white/30 ml-2" />
                 </button>
@@ -205,27 +256,12 @@ export default function BillingPage() {
           <p className="text-xs font-medium text-white/40 uppercase tracking-wider">
             {currentPlanId ? 'Change Plan' : 'Choose a Plan'}
           </p>
-          {/* Billing interval toggle */}
-          <div className="flex gap-1 p-1 bg-white/5 border border-white/8 rounded-lg">
-            {(['monthly', 'annual'] as const).map((i) => (
-              <button
-                key={i}
-                onClick={() => setInterval(i)}
-                className={cn(
-                  'px-3 py-1 rounded-md text-xs font-medium transition-all',
-                  interval === i ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white',
-                )}
-              >
-                {INTERVAL_LABELS[i]}
-              </button>
-            ))}
-          </div>
+          <p className="text-xs text-white/30">Billed monthly · PHP pricing</p>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {PLANS.map((plan) => {
             const isCurrent = plan.id === currentPlanId
-            const price = interval === 'annual' ? plan.annualPriceCents : plan.monthlyPriceCents
             const isPopular = plan.id === 'growth'
 
             return (
@@ -240,7 +276,7 @@ export default function BillingPage() {
                     : 'border-white/8 bg-white/[0.03]',
                 )}
               >
-                {isPopular && (
+                {isPopular && !isCurrent && (
                   <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-600 text-[10px] font-semibold text-white whitespace-nowrap">
                     Most Popular
                   </div>
@@ -254,12 +290,9 @@ export default function BillingPage() {
                 <div className="space-y-1">
                   <p className="text-sm font-semibold text-white">{plan.name}</p>
                   <p className="text-2xl font-bold text-white">
-                    ${(price / 100).toFixed(0)}
+                    {phpFormat(plan.monthlyPriceCentavos)}
                     <span className="text-sm font-normal text-white/40">/mo</span>
                   </p>
-                  {interval === 'annual' && (
-                    <p className="text-[10px] text-emerald-400">2 months free</p>
-                  )}
                 </div>
 
                 <ul className="space-y-2 flex-1">
@@ -292,6 +325,10 @@ export default function BillingPage() {
             )
           })}
         </div>
+
+        <p className="text-xs text-white/20 text-center">
+          Payments processed securely by PayMongo · Card and Maya accepted · Cancel anytime
+        </p>
       </div>
     </div>
   )

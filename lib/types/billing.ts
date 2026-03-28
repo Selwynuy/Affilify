@@ -1,19 +1,26 @@
 export type PlanId = 'starter' | 'growth' | 'pro' | 'business'
-export type BillingInterval = 'monthly' | 'annual'
-export type SubscriptionStatus = 'active' | 'past_due' | 'canceled' | 'trialing' | 'incomplete'
+export type BillingInterval = 'monthly'
+export type SubscriptionStatus = 'active' | 'past_due' | 'canceled' | 'unpaid' | 'incomplete' | 'incomplete_cancelled'
 export type LedgerType = 'grant' | 'topup' | 'image_gen' | 'video_gen' | 'refund' | 'rollover'
 
 export interface Plan {
   id: PlanId
   name: string
-  monthlyPriceCents: number
-  annualPriceCents: number
+  /** Price in PHP centavos (e.g. 109900 = ₱1,099) */
+  monthlyPriceCentavos: number
   tokensPerMonth: number
   storageGb: number
   rolloverDays: number
-  stripePriceMonthlyId: string
-  stripePriceAnnualId: string
+  /** PayMongo Plan ID — set after creating plans in PayMongo dashboard/API */
+  paymongoMonthlyPlanId: string
   features: string[]
+}
+
+export interface TopupPack {
+  tokens: number
+  /** Price in PHP centavos */
+  priceCentavos: number
+  planId: PlanId
 }
 
 export interface Subscription {
@@ -21,8 +28,8 @@ export interface Subscription {
   userId: string
   planId: PlanId
   status: SubscriptionStatus
-  stripeSubscriptionId: string | null
-  stripeCustomerId: string | null
+  paymongoSubscriptionId: string | null
+  paymongoCustomerId: string | null
   billingInterval: BillingInterval
   currentPeriodStart: string | null
   currentPeriodEnd: string | null
@@ -30,16 +37,16 @@ export interface Subscription {
 }
 
 export interface TokenBalance {
-  total: number        // tokens ever granted this period
-  used: number         // tokens consumed
-  remaining: number    // total - used
+  total: number
+  used: number
+  remaining: number
 }
 
 export interface VideoModel {
   id: string
   name: string
   replicateSlug: string
-  tokenCost: number       // tokens per 5s generation
+  tokenCost: number
   qualityLabel: string
   minPlanId: PlanId
   description: string
