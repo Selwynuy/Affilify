@@ -1,16 +1,60 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { logout } from '@/app/actions/auth'
 import { cn } from '@/lib/utils'
-import { Video, LayoutDashboard, Settings, LogOut, PanelLeftClose, PanelLeftOpen, Menu, X } from 'lucide-react'
+import { Video, LayoutDashboard, Settings, LogOut, PanelLeftClose, PanelLeftOpen, Menu, X, Wand2, CreditCard, Zap, HardDrive, MessageCircle } from 'lucide-react'
 
 const NAV_LINKS = [
   { href: '/dashboard', label: 'Studio', icon: LayoutDashboard },
+  { href: '/templates', label: 'Templates', icon: Wand2 },
+  { href: '/storage', label: 'Storage', icon: HardDrive },
   { href: '/profile', label: 'Settings', icon: Settings },
+  { href: '/billing', label: 'Billing', icon: CreditCard },
+  { href: '/support', label: 'Support', icon: MessageCircle },
 ]
+
+function TokenWidget({ collapsed }: { collapsed?: boolean }) {
+  const [balance, setBalance] = useState<number | null>(null)
+
+  useEffect(() => {
+    fetch('/api/billing/balance')
+      .then((r) => r.json())
+      .then((d) => setBalance(d.balance ?? 0))
+      .catch(() => {})
+  }, [])
+
+  if (balance === null) return null
+
+  if (collapsed) {
+    return (
+      <Link
+        href="/billing"
+        title={`${balance.toLocaleString()} tokens`}
+        className="flex items-center justify-center rounded-lg px-2 py-2 text-white/40 hover:text-white hover:bg-white/5 transition-all duration-150"
+      >
+        <Zap className="w-4 h-4 shrink-0 text-violet-400" />
+      </Link>
+    )
+  }
+
+  return (
+    <Link
+      href="/billing"
+      className="flex items-center gap-2 rounded-lg px-2.5 py-2 border border-white/8 bg-white/[0.03] hover:border-white/15 hover:bg-white/5 transition-all duration-150 group"
+    >
+      <Zap className="w-3.5 h-3.5 text-violet-400 shrink-0" />
+      <div className="min-w-0 flex-1">
+        <p className="text-xs font-medium text-white/70 group-hover:text-white transition-colors truncate">
+          {balance.toLocaleString()} tokens
+        </p>
+        <p className="text-[10px] text-white/30">remaining</p>
+      </div>
+    </Link>
+  )
+}
 
 function NavLinks({ collapsed, onNav }: { collapsed?: boolean; onNav?: () => void }) {
   const pathname = usePathname()
@@ -92,7 +136,7 @@ export function Sidebar() {
             aria-label="Close menu"
             className="text-white/50 hover:text-white transition-colors p-1"
           >
-            <X className="w-4.5 h-4.5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
         <div className="flex flex-col h-[calc(100%-3.5rem)] px-3 py-5 gap-1">
@@ -138,6 +182,10 @@ export function Sidebar() {
         {/* Nav */}
         <div className="flex flex-col flex-1 px-2 py-4 gap-1">
           <NavLinks collapsed={collapsed} />
+
+          <div className="mt-auto mb-1">
+            <TokenWidget collapsed={collapsed} />
+          </div>
 
           {/* Sign out */}
           <form action={logout}>

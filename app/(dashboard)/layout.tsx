@@ -4,6 +4,7 @@ import { Sidebar } from '@/components/dashboard/sidebar'
 import { createClient } from '@/lib/supabase/server'
 import { PreferencesProvider } from '@/lib/context/preferences-context'
 import type { AvatarConfig, BackgroundConfig } from '@/lib/types/preferences'
+import { DEFAULT_CAMERA_TEMPLATE_ID, DEFAULT_MOVEMENT_TEMPLATE_ID } from '@/lib/data/templates'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await verifySession()
@@ -12,7 +13,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const supabase = await createClient()
   const { data: prefs } = await supabase
     .from('user_preferences')
-    .select('onboarding_completed, avatar_config, background_config')
+    .select('onboarding_completed, avatar_config, background_config, camera_template_id, movement_template_id')
     .eq('user_id', session.user.id)
     .single()
 
@@ -24,11 +25,15 @@ export default async function DashboardLayout({ children }: { children: React.Re
     <PreferencesProvider
       initialAvatarConfig={(prefs.avatar_config as AvatarConfig) ?? null}
       initialBackgroundConfig={(prefs.background_config as BackgroundConfig) ?? null}
+      initialCameraTemplateId={(prefs.camera_template_id as string) ?? DEFAULT_CAMERA_TEMPLATE_ID}
+      initialMovementTemplateId={(prefs.movement_template_id as string) ?? DEFAULT_MOVEMENT_TEMPLATE_ID}
     >
       <div className="flex min-h-screen bg-[#0f0d1a]">
         <Sidebar />
         <main className="flex-1 overflow-y-auto pt-20 lg:pt-10 px-6 pb-10 md:px-10 md:pt-10">
-          {children}
+          <div className="mx-auto w-full max-w-5xl">
+            {children}
+          </div>
         </main>
       </div>
     </PreferencesProvider>

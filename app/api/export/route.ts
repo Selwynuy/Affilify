@@ -1,13 +1,15 @@
 import { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { deductTokens, getTokenBalance, getUserPlanId } from '@/lib/billing/tokens'
+import { getVideoModel, getAvailableModels, VIDEO_MODELS } from '@/lib/data/plans'
 
 const REPLICATE_API_KEY = process.env.REPLICATE_API_KEY
 
-async function generateVideo(imageUrl: string, prompt: string): Promise<string> {
+async function generateVideo(imageUrl: string, prompt: string, replicateSlug: string): Promise<string> {
   if (!REPLICATE_API_KEY) throw new Error('REPLICATE_API_KEY is not configured')
 
-  const submitRes = await fetch('https://api.replicate.com/v1/models/kwaivgi/kling-v3-video/predictions', {
+  const submitRes = await fetch(`https://api.replicate.com/v1/models/${replicateSlug}/predictions`, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${REPLICATE_API_KEY}`,
@@ -68,12 +70,27 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
 
-  const { projectId, imageIds, imageUrls, motionPrompt } = await req.json()
+  const { projectId, imageIds, imageUrls, motionPrompt, videoModelId } = await req.json()
   if (!projectId || !imageUrls?.length) {
     return new Response(JSON.stringify({ error: 'projectId and imageUrls required' }), { status: 400 })
   }
   if (!motionPrompt) {
     return new Response(JSON.stringify({ error: 'motionPrompt required' }), { status: 400 })
+  }
+
+  // Resolve video model — validate plan access
+  const planId = await getUserPlanId(user.id)
+  const availableModels = planId ? getAvailableModels(planId) : [VIDEO_MODELS[0]]
+  const videoModel = availableModels.find((m) => m.id === videoModelId) ?? availableModels[0]
+  const tokenCostPerVideo = videoModel.tokenCost
+
+  // Token check (for all videos in this batch)
+  const totalTokensNeeded = tokenCostPerVideo * imageUrls.length
+  const balance = await getTokenBalance(user.id)
+  if (balance < totalTokensNeeded) {
+    return new Response(JSON.stringify({
+      error: `Insufficient tokens. This generation costs ${totalTokensNeeded} tokens but you only have ${balance}.`,
+    }), { status: 402 })
   }
 
   const admin = createAdminClient()
@@ -102,7 +119,7 @@ export async function POST(req: NextRequest) {
             resolvedUrl = signed.signedUrl
           }
 
-          const videoUrl = await generateVideo(resolvedUrl, motionPrompt)
+          const videoUrl = await generateVideo(resolvedUrl, motionPrompt, videoModel.replicateSlug)
 
           await admin.from('project_videos').insert({
             project_id: projectId,
@@ -113,6 +130,17 @@ export async function POST(req: NextRequest) {
           })
 
           successCount++
+          await deductTokens(user.id, tokenCostPerVideo, 'video_gen', `Video generation — ${videoModel.name}`, projectId)
+          // Track in storage_files (external URL, size unknown — use 0 as placeholder)
+          await admin.from('storage_files').insert({
+            user_id: user.id,
+            project_id: projectId,
+            file_name: `affilify-video-${i + 1}.mp4`,
+            file_type: 'generated_video',
+            storage_path: videoUrl,
+            public_url: videoUrl,
+            size_bytes: 0,
+          })
           controller.enqueue(encode({
             type: 'video',
             index: i,

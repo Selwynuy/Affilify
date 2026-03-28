@@ -2,6 +2,36 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { AVATAR_PRESETS } from '@/lib/data/avatar-presets'
+import { getPlan } from '@/lib/data/plans'
+import type { PlanId } from '@/lib/types/billing'
+
+async function checkStorageLimit(userId: string, additionalBytes: number): Promise<{ ok: boolean; message?: string }> {
+  const admin = createAdminClient()
+
+  const { data: sub } = await admin
+    .from('subscriptions')
+    .select('plan_id, status')
+    .eq('user_id', userId)
+    .single()
+
+  const planId = (sub?.status === 'active' ? sub.plan_id : null) as PlanId | null
+  if (!planId) return { ok: true } // no plan = no limit enforced (onboarding uploads allowed)
+
+  const plan = getPlan(planId)
+  const limitBytes = plan.storageGb * 1024 * 1024 * 1024
+
+  const { data: usage } = await admin
+    .from('user_storage_usage')
+    .select('total_bytes')
+    .eq('user_id', userId)
+    .single()
+
+  const usedBytes = Number(usage?.total_bytes ?? 0)
+  if (usedBytes + additionalBytes > limitBytes) {
+    return { ok: false, message: `Storage limit reached (${plan.storageGb} GB). Delete files or upgrade your plan.` }
+  }
+  return { ok: true }
+}
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
@@ -42,7 +72,7 @@ export async function POST(req: NextRequest) {
     // Load avatar + background from user_preferences
     const { data: prefs } = await supabase
       .from('user_preferences')
-      .select('avatar_config, background_config, defaults')
+      .select('avatar_config, background_config')
       .eq('user_id', user.id)
       .single()
 
@@ -52,7 +82,6 @@ export async function POST(req: NextRequest) {
 
     const ac = prefs.avatar_config as Record<string, unknown>
     const bc = (prefs.background_config ?? {}) as Record<string, unknown>
-    const defaults = (prefs.defaults ?? {}) as Record<string, unknown>
 
     // Re-read face file from storage to get base64 for Gemini (never stored in prefs)
     let faceB64: string | undefined
@@ -94,11 +123,10 @@ export async function POST(req: NextRequest) {
       roomAesthetic: String(bc.roomAesthetic ?? 'masculine'),
       roomColors: String(bc.roomColors ?? 'white and black'),
       roomElements: String(bc.roomElements ?? ''),
-      cameraAngle: 'at eye level, straight on',
       focalLength: '35-50mm (natural, balanced)',
-      outfitTop: String(defaults.outfitTop ?? styleDefaults.outfitTop),
-      outfitBottom: String(defaults.outfitBottom ?? styleDefaults.outfitBottom),
-      shoes: String(defaults.shoes ?? styleDefaults.shoes),
+      outfitTop: String(styleDefaults.outfitTop),
+      outfitBottom: String(styleDefaults.outfitBottom),
+      shoes: String(styleDefaults.shoes),
       height: 175,
       weight: 70,
     }
@@ -110,7 +138,6 @@ export async function POST(req: NextRequest) {
       height:        Number(formData.get('height'))             || 175,
       weight:        Number(formData.get('weight'))             || 70,
       roomAesthetic: (formData.get('roomAesthetic') as string) ?? 'masculine',
-      cameraAngle:   (formData.get('cameraAngle') as string)   ?? 'at eye level, straight on',
       focalLength:   (formData.get('focalLength') as string)   ?? '35-50mm (natural, balanced)',
       outfitTop:     (formData.get('outfitTop') as string)     ?? 'a plain white t-shirt',
       outfitBottom:  (formData.get('outfitBottom') as string)  ?? 'dark slim-fit pants',
@@ -152,6 +179,11 @@ export async function POST(req: NextRequest) {
   // Upload product images
   const results: { kind: string; url: string; path: string }[] = []
   if (productFiles.length > 0) {
+    // Check storage limit before uploading
+    const totalNewBytes = productFiles.reduce((sum, f) => sum + f.size, 0)
+    const storageCheck = await checkStorageLimit(user.id, totalNewBytes)
+    if (!storageCheck.ok) return NextResponse.json({ error: storageCheck.message }, { status: 413 })
+
     await admin.from('project_images').delete().eq('project_id', pid).eq('kind', 'product')
 
     for (let i = 0; i < productFiles.length; i++) {
@@ -179,6 +211,18 @@ export async function POST(req: NextRequest) {
         b64_data: b64,
         mime_type: file.type,
       })
+
+      // Track in storage_files
+      await admin.from('storage_files').upsert({
+        user_id: user.id,
+        project_id: pid,
+        file_name: file.name || `product-${i}.${ext}`,
+        file_type: 'product_image',
+        storage_path: path,
+        public_url: url,
+        size_bytes: file.size,
+      }, { onConflict: 'storage_path' })
+
       results.push({ kind: 'product', url, path })
     }
   }

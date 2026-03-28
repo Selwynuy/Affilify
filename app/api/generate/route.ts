@@ -1,6 +1,9 @@
 import { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getCameraAnglePrompt, DEFAULT_CAMERA_TEMPLATE_ID } from '@/lib/data/templates'
+import { deductTokens, getTokenBalance } from '@/lib/billing/tokens'
+import { TOKEN_COSTS } from '@/lib/data/plans'
 
 const GEMINI_MODEL = 'gemini-2.5-flash-image'
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`
@@ -25,7 +28,7 @@ function fillTemplate(template: string, vars: Record<string, string | number>): 
   )
 }
 
-function buildPrompt(avatar: Record<string, unknown>, productDescription: string): string {
+function buildPrompt(avatar: Record<string, unknown>, productDescription: string, cameraTemplateId: string): string {
   const vars: Record<string, string | number> = {
     gender:           String(avatar.gender ?? 'man'),
     face_description: avatar.type === 'preset' && avatar.promptHint
@@ -34,7 +37,7 @@ function buildPrompt(avatar: Record<string, unknown>, productDescription: string
     height:           Number(avatar.height ?? 175),
     weight:           Number(avatar.weight ?? 70),
     room_aesthetic:   String(avatar.roomAesthetic ?? 'masculine'),
-    camera_angle:     String(avatar.cameraAngle ?? 'directly above the subject at 45° high-angle overhead'),
+    camera_angle:     getCameraAnglePrompt(cameraTemplateId),
     focal_length:     String(avatar.focalLength ?? '35-50mm (natural, balanced)'),
     room_colors:      String(avatar.roomColors ?? 'white and black'),
     room_elements:    String(avatar.roomElements ?? 'a dark gray round shag rug, minimalist black-framed posters, warm LED strips'),
@@ -52,8 +55,14 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
 
-  const { projectId, productDescription } = await req.json()
+  const { projectId, productDescription, cameraTemplateId } = await req.json()
   if (!projectId) return new Response(JSON.stringify({ error: 'projectId required' }), { status: 400 })
+
+  // Token check
+  const balance = await getTokenBalance(user.id)
+  if (balance < TOKEN_COSTS.image_gen) {
+    return new Response(JSON.stringify({ error: 'Insufficient tokens. Top up your balance to continue.' }), { status: 402 })
+  }
 
   const admin = createAdminClient()
 
@@ -79,7 +88,7 @@ export async function POST(req: NextRequest) {
     return new Response(JSON.stringify({ error: 'No product images found for this project' }), { status: 400 })
   }
 
-  const prompt = buildPrompt(avatar, productDescription || '')
+  const prompt = buildPrompt(avatar, productDescription || '', cameraTemplateId || DEFAULT_CAMERA_TEMPLATE_ID)
   const parts: unknown[] = [{ text: prompt }]
 
   const isPreset = avatar.type === 'preset'
@@ -150,6 +159,20 @@ export async function POST(req: NextRequest) {
 
           if (imgRow) {
             successCount++
+            await deductTokens(user.id, TOKEN_COSTS.image_gen, 'image_gen', 'Image generation', projectId)
+            // Generate a long-lived signed URL for storage/download (7 days)
+            const { data: signed } = await admin.storage.from('generated').createSignedUrl(storagePath, 60 * 60 * 24 * 7)
+            const signedUrl = signed?.signedUrl ?? null
+            // Track in storage_files with signed URL and descriptive name
+            await admin.from('storage_files').upsert({
+              user_id: user.id,
+              project_id: projectId,
+              file_name: `ai-image-${projectId.slice(0, 6)}-${i + 1}.${ext}`,
+              file_type: 'generated_image',
+              storage_path: storagePath,
+              public_url: signedUrl,
+              size_bytes: buffer.byteLength,
+            }, { onConflict: 'storage_path' })
             // Stream the image immediately as a data URL so the client can show it right away
             controller.enqueue(encode({
               type: 'image',

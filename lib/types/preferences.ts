@@ -22,4 +22,6 @@ export interface UserPreferences {
   onboarding_completed: boolean
   avatar_config: AvatarConfig | null
   background_config: BackgroundConfig | null
+  camera_template_id: string | null
+  movement_template_id: string | null
 }
