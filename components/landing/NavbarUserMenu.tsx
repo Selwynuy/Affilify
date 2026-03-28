@@ -80,16 +80,15 @@ export function NavbarGuestButtons() {
     <>
       <Link
         href="/login"
-        className="hidden md:inline-flex text-sm text-zinc-400 hover:text-white transition-colors px-4 py-2"
+        className="hidden md:inline-flex text-[13px] text-zinc-400 hover:text-white transition-colors px-3 py-1.5"
       >
         Sign in
       </Link>
       <Link
         href="/signup"
-        className="inline-flex items-center gap-1.5 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-all duration-200"
+        className="inline-flex items-center gap-1.5 bg-white text-[#0a0a0a] hover:bg-zinc-100 text-[13px] font-semibold px-4 py-1.5 rounded-full transition-all duration-200"
       >
         Get started
-        <ChevronRight className="w-3.5 h-3.5" />
       </Link>
     </>
   )

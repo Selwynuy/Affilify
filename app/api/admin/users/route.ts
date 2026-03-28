@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
   // Paginated auth user list
   const { data: authData } = await admin.auth.admin.listUsers({ page, perPage: PAGE_SIZE })
   const users = authData?.users ?? []
-  const total = authData?.total ?? 0
+  const total = (authData && 'total' in authData ? authData.total : null) ?? 0
 
   // Get subscriptions for all users
   const { data: subs } = await admin

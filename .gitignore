@@ -44,6 +44,7 @@ yarn-error.log*
 
 # supabase
 .supabase
+/supabase/*
 
 # mcp
 .mcp.json

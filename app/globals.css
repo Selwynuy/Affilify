@@ -128,3 +128,14 @@
     @apply font-sans;
   }
 }
+
+/* Hero grid node line animation */
+@keyframes node-line-draw {
+  from { stroke-dashoffset: 800; opacity: 0; }
+  to { stroke-dashoffset: 0; opacity: 1; }
+}
+.hero-node-line {
+  stroke-dasharray: 800;
+  stroke-dashoffset: 800;
+  animation: node-line-draw 2s ease-out 0.5s forwards;
+}
