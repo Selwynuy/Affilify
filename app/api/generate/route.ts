@@ -4,6 +4,8 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { getCameraAnglePrompt, DEFAULT_CAMERA_TEMPLATE_ID } from '@/lib/data/templates'
 import { deductTokens, getTokenBalance } from '@/lib/billing/tokens'
 import { TOKEN_COSTS } from '@/lib/data/plans'
+import { logger } from '@/lib/logger'
+import { rateLimit } from '@/lib/rate-limit'
 
 const GEMINI_MODEL = 'gemini-2.5-flash-image'
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`
@@ -54,6 +56,16 @@ export async function POST(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
+
+  // Rate limit: 10 generations per user per minute
+  const rl = rateLimit(`generate:${user.id}`, { limit: 10, windowMs: 60_000 })
+  if (!rl.allowed) {
+    logger.warn('Rate limit hit on /api/generate', { userId: user.id })
+    return new Response(JSON.stringify({ error: 'Too many requests. Please wait before generating again.' }), {
+      status: 429,
+      headers: { 'Retry-After': String(Math.ceil((rl.resetAt - Date.now()) / 1000)) },
+    })
+  }
 
   const { projectId, productDescription, cameraTemplateId } = await req.json()
   if (!projectId) return new Response(JSON.stringify({ error: 'projectId required' }), { status: 400 })
@@ -124,7 +136,7 @@ export async function POST(req: NextRequest) {
 
           if (!res.ok) {
             const err = await res.text()
-            console.error(`Gemini call ${i} failed:`, err)
+            logger.error('Gemini call failed', { userId: user.id, projectId, index: i }, new Error(err))
             controller.enqueue(encode({ type: 'image_error', index: i, error: 'Generation failed for this image' }))
             continue
           }
@@ -136,7 +148,7 @@ export async function POST(req: NextRequest) {
           )
 
           if (!imagePart?.inlineData) {
-            console.error(`No image in candidate ${i}`, JSON.stringify(candidate).slice(0, 300))
+            logger.error('No image in Gemini candidate', { userId: user.id, projectId, index: i, candidate: JSON.stringify(candidate).slice(0, 300) })
             controller.enqueue(encode({ type: 'image_error', index: i, error: 'No image returned' }))
             continue
           }
@@ -182,7 +194,7 @@ export async function POST(req: NextRequest) {
             }))
           }
         } catch (e) {
-          console.error(`Gemini call ${i} threw:`, e)
+          logger.error('Gemini call threw', { userId: user.id, projectId, index: i }, e)
           controller.enqueue(encode({ type: 'image_error', index: i, error: 'Unexpected error' }))
         }
       }

@@ -1,16 +1,22 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { verifyAdmin } from '@/lib/admin/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 
-export async function GET() {
+const PAGE_SIZE = 100
+
+export async function GET(req: NextRequest) {
   const user = await verifyAdmin()
   if (!user) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
+  const { searchParams } = new URL(req.url)
+  const page = Math.max(1, parseInt(searchParams.get('page') ?? '1'))
+
   const admin = createAdminClient()
 
-  // Get all auth users
-  const { data: authData } = await admin.auth.admin.listUsers({ perPage: 500 })
+  // Paginated auth user list
+  const { data: authData } = await admin.auth.admin.listUsers({ page, perPage: PAGE_SIZE })
   const users = authData?.users ?? []
+  const total = authData?.total ?? 0
 
   // Get subscriptions for all users
   const { data: subs } = await admin
@@ -38,5 +44,13 @@ export async function GET() {
     token_balance: tokenMap.get(u.id) ?? 0,
   }))
 
-  return NextResponse.json({ users: result })
+  return NextResponse.json({
+    users: result,
+    pagination: {
+      page,
+      pageSize: PAGE_SIZE,
+      total,
+      totalPages: Math.ceil(total / PAGE_SIZE),
+    },
+  })
 }

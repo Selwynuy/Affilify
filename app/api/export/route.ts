@@ -3,6 +3,8 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { deductTokens, getTokenBalance, getUserPlanId } from '@/lib/billing/tokens'
 import { getVideoModel, getAvailableModels, VIDEO_MODELS } from '@/lib/data/plans'
+import { logger } from '@/lib/logger'
+import { rateLimit } from '@/lib/rate-limit'
 
 const REPLICATE_API_KEY = process.env.REPLICATE_API_KEY
 
@@ -69,6 +71,16 @@ export async function POST(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
+
+  // Rate limit: 5 export batches per user per minute (video gen is expensive)
+  const rl = rateLimit(`export:${user.id}`, { limit: 5, windowMs: 60_000 })
+  if (!rl.allowed) {
+    logger.warn('Rate limit hit on /api/export', { userId: user.id })
+    return new Response(JSON.stringify({ error: 'Too many requests. Please wait before exporting again.' }), {
+      status: 429,
+      headers: { 'Retry-After': String(Math.ceil((rl.resetAt - Date.now()) / 1000)) },
+    })
+  }
 
   const { projectId, imageIds, imageUrls, motionPrompt, videoModelId } = await req.json()
   if (!projectId || !imageUrls?.length) {
@@ -148,7 +160,7 @@ export async function POST(req: NextRequest) {
             video: { videoUrl, imageId, filename: `affilify-video-${i + 1}.mp4` },
           }))
         } catch (e) {
-          console.error(`Video generation ${i} failed:`, e)
+          logger.error('Video generation failed', { userId: user.id, projectId, index: i }, e)
           controller.enqueue(encode({
             type: 'video_error',
             index: i,

@@ -3,6 +3,20 @@ import { stripe } from '@/lib/billing/stripe'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { grantMonthlyTokens } from '@/lib/billing/tokens'
 import type { PlanId, BillingInterval } from '@/lib/types/billing'
+import { logger } from '@/lib/logger'
+
+const VALID_PLAN_IDS: readonly PlanId[] = ['starter', 'growth', 'pro', 'business']
+const VALID_INTERVALS: readonly BillingInterval[] = ['monthly', 'annual']
+
+function parsePlanId(value: string | undefined): PlanId | null {
+  if (!value || !(VALID_PLAN_IDS as readonly string[]).includes(value)) return null
+  return value as PlanId
+}
+
+function parseInterval(value: string | undefined): BillingInterval {
+  if (!value || !(VALID_INTERVALS as readonly string[]).includes(value)) return 'monthly'
+  return value as BillingInterval
+}
 
 export async function POST(req: NextRequest) {
   const body = await req.text()
@@ -35,10 +49,13 @@ export async function POST(req: NextRequest) {
 
       const stripeSub = await stripe.subscriptions.retrieve(subId)
       const userId = stripeSub.metadata.userId
-      const planId = stripeSub.metadata.planId as PlanId
-      const interval = stripeSub.metadata.interval as BillingInterval
+      const planId = parsePlanId(stripeSub.metadata.planId)
+      const interval = parseInterval(stripeSub.metadata.interval)
 
-      if (!userId || !planId) break
+      if (!userId || !planId) {
+        logger.error('invoice.payment_succeeded: invalid metadata', { subId, metadata: JSON.stringify(stripeSub.metadata) })
+        break
+      }
 
       const item = stripeSub.items.data[0]
       const periodStart = item?.current_period_start
@@ -51,7 +68,7 @@ export async function POST(req: NextRequest) {
         status: 'active',
         stripe_subscription_id: stripeSub.id,
         stripe_customer_id: typeof stripeSub.customer === 'string' ? stripeSub.customer : stripeSub.customer.id,
-        billing_interval: interval ?? 'monthly',
+        billing_interval: interval,
         current_period_start: periodStart ? new Date(periodStart * 1000).toISOString() : null,
         current_period_end: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
         cancel_at_period_end: stripeSub.cancel_at_period_end,
@@ -67,10 +84,14 @@ export async function POST(req: NextRequest) {
     case 'customer.subscription.updated': {
       const stripeSub = event.data.object
       const userId = stripeSub.metadata.userId
-      const planId = stripeSub.metadata.planId as PlanId
-      const interval = stripeSub.metadata.interval as BillingInterval
+      const planId = parsePlanId(stripeSub.metadata.planId)
+      const interval = parseInterval(stripeSub.metadata.interval)
 
       if (!userId) break
+      if (!planId) {
+        logger.error('customer.subscription.updated: invalid planId in metadata', { subId: stripeSub.id, metadata: JSON.stringify(stripeSub.metadata) })
+        break
+      }
 
       const item = stripeSub.items.data[0]
       const periodStart = item?.current_period_start
@@ -82,7 +103,7 @@ export async function POST(req: NextRequest) {
         status: stripeSub.status as string,
         stripe_subscription_id: stripeSub.id,
         stripe_customer_id: typeof stripeSub.customer === 'string' ? stripeSub.customer : stripeSub.customer.id,
-        billing_interval: interval ?? 'monthly',
+        billing_interval: interval,
         current_period_start: periodStart ? new Date(periodStart * 1000).toISOString() : null,
         current_period_end: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
         cancel_at_period_end: stripeSub.cancel_at_period_end,
