@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Affilify — AI Affiliate Video Generator",
+  title: "Genetrify — AI Affiliate Video Generator",
   description: "Generate TikTok-style affiliate videos in under 2 minutes.",
 };
 

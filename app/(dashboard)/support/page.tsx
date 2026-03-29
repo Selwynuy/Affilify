@@ -42,8 +42,8 @@ function NewTicketModal({ onClose, onCreated }: { onClose: () => void; onCreated
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-      <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#0f0d1a] p-6 space-y-5">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/70 backdrop-blur-sm">
+      <div className="w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl border border-white/10 bg-brand-bg p-4 sm:p-6 space-y-5 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold text-white">New Support Ticket</h2>
           <button onClick={onClose} className="text-white/40 hover:text-white transition-colors">
@@ -67,7 +67,7 @@ function NewTicketModal({ onClose, onCreated }: { onClose: () => void; onCreated
               placeholder="Briefly describe your issue"
               required
               maxLength={160}
-              className="w-full rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-violet-500/50 focus:bg-white/5 transition-colors"
+              className="w-full rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-brand-accent/50 focus:bg-white/5 transition-colors"
             />
           </div>
 
@@ -76,10 +76,10 @@ function NewTicketModal({ onClose, onCreated }: { onClose: () => void; onCreated
             <select
               value={category}
               onChange={(e) => setCategory(e.target.value as TicketCategory)}
-              className="w-full rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5 text-sm text-white focus:outline-none focus:border-violet-500/50 transition-colors appearance-none"
+              className="w-full rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5 text-sm text-white focus:outline-none focus:border-brand-accent/50 transition-colors appearance-none"
             >
               {CATEGORIES.map((c) => (
-                <option key={c.value} value={c.value} className="bg-[#0f0d1a]">{c.label}</option>
+                <option key={c.value} value={c.value} className="bg-brand-bg">{c.label}</option>
               ))}
             </select>
           </div>
@@ -92,7 +92,7 @@ function NewTicketModal({ onClose, onCreated }: { onClose: () => void; onCreated
               placeholder="Please describe your issue in detail…"
               required
               rows={5}
-              className="w-full rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-violet-500/50 focus:bg-white/5 transition-colors resize-none"
+              className="w-full rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-brand-accent/50 focus:bg-white/5 transition-colors resize-none"
             />
           </div>
 
@@ -107,7 +107,7 @@ function NewTicketModal({ onClose, onCreated }: { onClose: () => void; onCreated
             <Button
               type="submit"
               disabled={isPending || !subject.trim() || !body.trim()}
-              className="flex-1 h-10 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white text-sm font-semibold shadow-lg shadow-violet-500/20 disabled:opacity-50"
+              className="flex-1 h-10 rounded-xl bg-brand-accent hover:bg-brand-accent-hover text-brand-bg text-sm font-bold shadow-lg shadow-brand-accent/20 disabled:opacity-50"
             >
               {isPending ? 'Submitting…' : 'Submit Ticket'}
             </Button>
@@ -146,12 +146,13 @@ export default function SupportPage() {
       <div className="space-y-8 max-w-4xl">
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-1">
-            <h1 className="text-2xl font-semibold text-white">Support</h1>
-            <p className="text-sm text-white/50">Create and track your support requests.</p>
+            <p className="text-[11px] font-black uppercase tracking-[0.2em] text-brand-text/30">Help</p>
+            <h1 className="text-[32px] font-black uppercase text-brand-text leading-[0.85]" style={{ fontFamily: "'Bebas Neue', 'Arial Black', sans-serif", letterSpacing: '-0.01em' }}>Support</h1>
+            <p className="text-sm text-brand-text/40">Create and track your support requests.</p>
           </div>
           <Button
             onClick={() => setShowNew(true)}
-            className="flex items-center gap-2 h-9 px-4 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white text-sm font-semibold shadow-lg shadow-violet-500/20 shrink-0"
+            className="flex items-center gap-2 h-9 px-4 rounded-xl bg-brand-accent hover:bg-brand-accent-hover text-brand-bg text-sm font-bold shadow-lg shadow-brand-accent/20 shrink-0"
           >
             <Plus className="w-3.5 h-3.5" />
             New Ticket
@@ -161,7 +162,14 @@ export default function SupportPage() {
         {loading ? (
           <div className="space-y-3">
             {[1,2,3].map((i) => (
-              <div key={i} className="h-20 rounded-2xl border border-white/8 bg-white/[0.02] animate-pulse" />
+              <div key={i} className="rounded-2xl border border-white/8 bg-white/[0.02] p-5 animate-pulse">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="h-5 w-16 rounded-full bg-white/5" />
+                  <div className="h-5 w-24 rounded-full bg-white/5" />
+                </div>
+                <div className="h-4 w-2/3 rounded bg-white/5 mb-2" />
+                <div className="h-3 w-24 rounded bg-white/5" />
+              </div>
             ))}
           </div>
         ) : tickets.length === 0 ? (

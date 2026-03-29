@@ -103,17 +103,17 @@ export default function TicketDetailPage() {
             className={cn(
               'rounded-2xl border p-4 space-y-2',
               msg.is_staff
-                ? 'border-violet-500/20 bg-violet-500/[0.04]'
+                ? 'border-brand-accent/20 bg-brand-accent/[0.04]'
                 : 'border-white/8 bg-white/[0.02]',
             )}
           >
             <div className="flex items-center gap-2">
               {msg.is_staff ? (
                 <>
-                  <div className="w-6 h-6 rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-600 flex items-center justify-center">
-                    <Shield className="w-3 h-3 text-white" />
+                  <div className="w-6 h-6 rounded-full bg-brand-accent/20 border border-brand-accent/30 flex items-center justify-center">
+                    <Shield className="w-3 h-3 text-brand-accent" />
                   </div>
-                  <span className="text-xs font-medium text-violet-400">Support Team</span>
+                  <span className="text-xs font-medium text-brand-accent">Support Team</span>
                 </>
               ) : (
                 <>
@@ -147,13 +147,13 @@ export default function TicketDetailPage() {
             onChange={(e) => setReply(e.target.value)}
             placeholder="Write a reply…"
             rows={4}
-            className="w-full rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-violet-500/50 focus:bg-white/5 transition-colors resize-none"
+            className="w-full rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-brand-accent/50 focus:bg-white/5 transition-colors resize-none"
           />
           <div className="flex justify-end">
             <Button
               type="submit"
               disabled={isPending || !reply.trim()}
-              className="flex items-center gap-2 h-9 px-4 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white text-sm font-semibold shadow-lg shadow-violet-500/20 disabled:opacity-50"
+              className="flex items-center gap-2 h-9 px-4 rounded-xl bg-brand-accent hover:bg-brand-accent-hover text-brand-bg text-sm font-bold shadow-lg shadow-brand-accent/20 disabled:opacity-50"
             >
               <Send className="w-3.5 h-3.5" />
               {isPending ? 'Sending…' : 'Send Reply'}

@@ -5,6 +5,13 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  /* ── Brand palette ── change these 5 values to retheme the entire app */
+  --color-brand-bg: #222831;
+  --color-brand-surface: #393E46;
+  --color-brand-accent: #00ADB5;
+  --color-brand-accent-hover: #00c4cc;
+  --color-brand-text: #EEEEEE;
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-sans);
@@ -131,8 +138,14 @@
 
 /* Hero grid node line animation */
 @keyframes node-line-draw {
-  from { stroke-dashoffset: 800; opacity: 0; }
-  to { stroke-dashoffset: 0; opacity: 1; }
+  from {
+    stroke-dashoffset: 800;
+    opacity: 0;
+  }
+  to {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
 }
 .hero-node-line {
   stroke-dasharray: 800;

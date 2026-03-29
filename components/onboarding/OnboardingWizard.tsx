@@ -92,30 +92,30 @@ export function OnboardingWizard() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0f0d1a] flex items-center justify-center px-4 py-10">
+    <div className="min-h-screen flex items-center justify-center px-4 py-10" style={{ background: 'var(--color-brand-bg)' }}>
       <div className="w-full max-w-2xl space-y-8">
         {/* Header */}
         <div className="text-center space-y-1">
-          <p className="text-white font-semibold text-lg">Affilify</p>
-          <p className="text-white/40 text-sm">Step {step} of 2 — set up your defaults</p>
+          <p className="text-brand-text font-black text-xl uppercase tracking-widest" style={{ fontFamily: "'Bebas Neue', 'Arial Black', sans-serif" }}>Genetrify</p>
+          <p className="text-brand-text/40 text-sm">Step {step} of 2 — set up your defaults</p>
           {/* Step dots */}
           <div className="flex justify-center gap-2 pt-1">
             {[1, 2].map((s) => (
               <div
                 key={s}
-                className={`w-2 h-2 rounded-full transition-colors ${s <= step ? 'bg-violet-400' : 'bg-white/15'}`}
+                className={`w-2 h-2 rounded-full transition-colors ${s <= step ? 'bg-brand-accent' : 'bg-white/15'}`}
               />
             ))}
           </div>
         </div>
 
         {/* Step content */}
-        <div className="bg-white/[0.03] border border-white/8 rounded-2xl p-6 space-y-6">
+        <div className="border border-white/[0.07] rounded-2xl p-6 space-y-6" style={{ background: 'var(--color-brand-surface)' }}>
           {step === 1 && (
             <>
               <div>
-                <h1 className="text-xl font-semibold text-white">Set up your avatar</h1>
-                <p className="text-zinc-400 text-sm mt-1">
+                <h1 className="text-xl font-black text-brand-text uppercase leading-[0.85]" style={{ fontFamily: "'Bebas Neue', 'Arial Black', sans-serif", letterSpacing: '-0.01em' }}>Set up your avatar</h1>
+                <p className="text-brand-text/40 text-sm mt-1">
                   Upload your face or pick an AI model. This becomes your default for every video.
                 </p>
               </div>
@@ -126,8 +126,8 @@ export function OnboardingWizard() {
           {step === 2 && (
             <>
               <div>
-                <h1 className="text-xl font-semibold text-white">Choose your background</h1>
-                <p className="text-zinc-400 text-sm mt-1">
+                <h1 className="text-xl font-black text-brand-text uppercase leading-[0.85]" style={{ fontFamily: "'Bebas Neue', 'Arial Black', sans-serif", letterSpacing: '-0.01em' }}>Choose your background</h1>
+                <p className="text-brand-text/40 text-sm mt-1">
                   This sets the scene for your AI-generated images. You can change it anytime.
                 </p>
               </div>
@@ -141,7 +141,7 @@ export function OnboardingWizard() {
           {step === 2 ? (
             <button
               onClick={() => setStep(1)}
-              className="text-sm text-white/40 hover:text-white/70 transition-colors"
+              className="text-sm text-brand-text/40 hover:text-brand-text/70 transition-colors"
             >
               ← Back
             </button>
@@ -149,7 +149,7 @@ export function OnboardingWizard() {
             <button
               onClick={handleSkip}
               disabled={skipping}
-              className="text-sm text-white/30 hover:text-white/60 transition-colors disabled:opacity-50"
+              className="text-sm text-brand-text/30 hover:text-brand-text/60 transition-colors disabled:opacity-50"
             >
               {skipping ? 'Skipping…' : 'Skip for now'}
             </button>
@@ -161,7 +161,7 @@ export function OnboardingWizard() {
               <Button
                 onClick={() => setStep(2)}
                 disabled={!step1Valid}
-                className="bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white disabled:opacity-40 shadow-lg shadow-violet-500/20"
+                className="bg-brand-accent hover:bg-brand-accent-hover text-brand-bg font-bold disabled:opacity-40 shadow-lg shadow-brand-accent/20"
               >
                 Continue →
               </Button>
@@ -169,7 +169,7 @@ export function OnboardingWizard() {
               <Button
                 onClick={handleFinish}
                 disabled={!step2Valid || saving}
-                className="bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white disabled:opacity-40 shadow-lg shadow-violet-500/20"
+                className="bg-brand-accent hover:bg-brand-accent-hover text-brand-bg font-bold disabled:opacity-40 shadow-lg shadow-brand-accent/20"
               >
                 {saving ? 'Saving…' : 'Finish setup →'}
               </Button>

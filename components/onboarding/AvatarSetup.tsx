@@ -11,16 +11,16 @@ interface Props {
   onChange: (v: Partial<AvatarConfig> & { faceB64?: string; faceMime?: string }) => void
 }
 
-// Gradient palette cycles through presets so each card looks distinct
+// Warm-dark gradient palette aligned to design system
 const CARD_GRADIENTS = [
-  'from-violet-900/60 to-indigo-900/60',
-  'from-fuchsia-900/60 to-violet-900/60',
-  'from-blue-900/60 to-violet-900/60',
-  'from-indigo-900/60 to-slate-900/60',
-  'from-pink-900/60 to-fuchsia-900/60',
-  'from-rose-900/60 to-pink-900/60',
-  'from-purple-900/60 to-pink-900/60',
-  'from-violet-900/60 to-purple-900/60',
+  'from-[#1a1f27] to-[#222831]',
+  'from-[#1c2228] to-[#1a1f27]',
+  'from-[#1f2329] to-[#222831]',
+  'from-[#182025] to-[#1a1f27]',
+  'from-[#1e2530] to-[#222831]',
+  'from-[#1a2028] to-[#1f2530]',
+  'from-[#1c2230] to-[#222831]',
+  'from-[#182028] to-[#1a1f27]',
 ]
 
 const GENDER_EMOJI: Record<string, string> = {
@@ -74,7 +74,7 @@ export function AvatarSetup({ value, onChange }: Props) {
       {/* Preset grid — full width, primary choice */}
       <div className="space-y-2">
         <p className="text-xs font-medium text-white/40 uppercase tracking-wider">Choose an AI avatar</p>
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
           {AVATAR_PRESETS.map((preset, i) => {
             const selected = value.presetId === preset.id
             const gradient = CARD_GRADIENTS[i % CARD_GRADIENTS.length]
@@ -87,7 +87,7 @@ export function AvatarSetup({ value, onChange }: Props) {
                 className={cn(
                   'relative rounded-xl overflow-hidden aspect-[2/3] transition-all duration-200 group',
                   selected
-                    ? 'ring-2 ring-violet-500 ring-offset-1 ring-offset-[#0f0d1a]'
+                    ? 'ring-2 ring-brand-accent ring-offset-1 ring-offset-brand-surface'
                     : 'ring-1 ring-white/8 hover:ring-white/20',
                 )}
               >
@@ -101,21 +101,23 @@ export function AvatarSetup({ value, onChange }: Props) {
                   // Placeholder until real images are added
                   <div className={cn('w-full h-full bg-gradient-to-b flex flex-col items-center justify-end pb-3 px-1', gradient)}>
                     <div className="absolute inset-0 flex items-center justify-center">
-                      <span className="text-3xl opacity-20 select-none">
-                        {preset.gender === 'woman' ? '♀' : '♂'}
-                      </span>
+                      <div className="w-14 h-14 rounded-full bg-brand-accent/10 border border-brand-accent/20 flex items-center justify-center">
+                        <svg className="w-7 h-7 text-brand-accent/40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
+                        </svg>
+                      </div>
                     </div>
                   </div>
                 )}
 
                 {/* Label overlay */}
                 <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent pt-6 pb-2 px-1.5">
-                  <p className="text-[11px] font-medium text-white leading-tight text-center">{preset.label}</p>
+                  <p className="text-[12px] font-semibold text-white leading-tight text-center">{preset.label}</p>
                 </div>
 
                 {/* Selected checkmark */}
                 {selected && (
-                  <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-violet-500 flex items-center justify-center">
+                  <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-brand-accent flex items-center justify-center">
                     <Check className="w-3 h-3 text-white" strokeWidth={3} />
                   </div>
                 )}
@@ -138,7 +140,7 @@ export function AvatarSetup({ value, onChange }: Props) {
         className={cn(
           'flex items-center gap-4 rounded-xl border-2 border-dashed px-4 py-3.5 cursor-pointer transition-all duration-200',
           isCustomActive
-            ? 'border-violet-500/60 bg-violet-500/5'
+            ? 'border-brand-accent/60 bg-brand-accent/5'
             : 'border-white/10 hover:border-white/20 hover:bg-white/[0.02]',
         )}
       >
@@ -153,7 +155,7 @@ export function AvatarSetup({ value, onChange }: Props) {
           <img
             src={value.faceUrl}
             alt="Your face"
-            className="w-12 h-12 rounded-full object-cover border-2 border-violet-500/60 shrink-0"
+            className="w-12 h-12 rounded-full object-cover border-2 border-brand-accent/60 shrink-0"
           />
         ) : (
           <div className="w-12 h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
@@ -165,7 +167,7 @@ export function AvatarSetup({ value, onChange }: Props) {
           <p className="text-xs text-white/40 mt-0.5">Upload a clear front-facing photo</p>
         </div>
         {isCustomActive && (
-          <div className="w-5 h-5 rounded-full bg-violet-500 flex items-center justify-center shrink-0">
+          <div className="w-5 h-5 rounded-full bg-brand-accent flex items-center justify-center shrink-0">
             <Check className="w-3 h-3 text-white" strokeWidth={3} />
           </div>
         )}

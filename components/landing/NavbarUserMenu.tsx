@@ -3,7 +3,6 @@
 import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import { logout } from '@/app/actions/auth'
-import { ChevronRight } from 'lucide-react'
 
 interface Props {
   email: string
@@ -33,37 +32,37 @@ export function NavbarUserMenu({ email }: Props) {
         aria-label="User menu"
         aria-expanded={open}
       >
-        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-600 flex items-center justify-center text-white text-xs font-semibold select-none">
+        <div className="w-8 h-8 rounded-full bg-brand-accent/20 border border-brand-accent/40 flex items-center justify-center text-brand-accent text-xs font-bold select-none">
           {initials}
         </div>
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-52 rounded-xl border border-white/10 bg-[#0f0d1a]/95 backdrop-blur-md shadow-xl shadow-black/40 overflow-hidden z-50">
-          <div className="px-4 py-3 border-b border-white/10">
-            <p className="text-xs text-zinc-500 truncate">{email}</p>
+        <div className="absolute right-0 mt-2 w-52 rounded-xl border border-white/10 bg-brand-bg/95 backdrop-blur-md shadow-xl shadow-black/40 overflow-hidden z-50">
+          <div className="px-4 py-3 border-b border-white/[0.07]">
+            <p className="text-xs text-brand-text/40 truncate">{email}</p>
           </div>
           <div className="py-1">
             <Link
               href="/dashboard"
               onClick={() => setOpen(false)}
-              className="flex items-center gap-2 px-4 py-2.5 text-sm text-zinc-300 hover:text-white hover:bg-white/5 transition-colors"
+              className="flex items-center gap-2 px-4 py-2.5 text-sm text-brand-text/60 hover:text-brand-text hover:bg-white/5 transition-colors"
             >
               Dashboard
             </Link>
             <Link
-              href="/profile"
+              href="/templates"
               onClick={() => setOpen(false)}
-              className="flex items-center gap-2 px-4 py-2.5 text-sm text-zinc-300 hover:text-white hover:bg-white/5 transition-colors"
+              className="flex items-center gap-2 px-4 py-2.5 text-sm text-brand-text/60 hover:text-brand-text hover:bg-white/5 transition-colors"
             >
-              Profile
+              Marketplace
             </Link>
           </div>
-          <div className="border-t border-white/10 py-1">
+          <div className="border-t border-white/[0.07] py-1">
             <form action={logout}>
               <button
                 type="submit"
-                className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-zinc-400 hover:text-white hover:bg-white/5 transition-colors text-left"
+                className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-brand-text/40 hover:text-brand-text hover:bg-white/5 transition-colors text-left"
               >
                 Sign out
               </button>
@@ -80,13 +79,13 @@ export function NavbarGuestButtons() {
     <>
       <Link
         href="/login"
-        className="hidden md:inline-flex text-[13px] text-zinc-400 hover:text-white transition-colors px-3 py-1.5"
+        className="hidden md:inline-flex text-[13px] text-brand-text/50 hover:text-brand-text transition-colors px-3 py-1.5"
       >
         Sign in
       </Link>
       <Link
         href="/signup"
-        className="inline-flex items-center gap-1.5 bg-white text-[#0a0a0a] hover:bg-zinc-100 text-[13px] font-semibold px-4 py-1.5 rounded-full transition-all duration-200"
+        className="inline-flex items-center gap-1.5 bg-brand-accent hover:bg-brand-accent-hover text-brand-bg text-[13px] font-bold px-4 py-1.5 rounded-full transition-all duration-200 shadow-lg shadow-brand-accent/20"
       >
         Get started
       </Link>

@@ -45,10 +45,10 @@ async function* readNDJSON(res: Response): AsyncGenerator<Record<string, unknown
 // ─── Step indicator ───────────────────────────────────────────────────────────
 
 const STEPS = [
-  { id: 'upload', label: 'Upload products' },
-  { id: 'image', label: 'Generate image' },
-  { id: 'review', label: 'Review image' },
-  { id: 'video', label: 'Create video' },
+  { id: 'upload', label: 'Upload' },
+  { id: 'image', label: 'Generate' },
+  { id: 'review', label: 'Review' },
+  { id: 'video', label: 'Video' },
 ]
 
 function StepIndicator({ stage }: { stage: Stage }) {
@@ -62,28 +62,49 @@ function StepIndicator({ stage }: { stage: Stage }) {
     : 0
 
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex items-center w-full">
       {STEPS.map((step, i) => {
         const done = i < activeIndex
         const active = i === activeIndex
         return (
-          <div key={step.id} className="flex items-center gap-1">
-            <div className={cn(
-              'flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-medium transition-all',
-              done ? 'bg-emerald-500/15 text-emerald-400'
-              : active ? 'bg-violet-500/15 text-violet-300'
-              : 'text-white/20',
-            )}>
-              {done ? <CheckCircle2 className="w-3 h-3" /> : (
-                <span className={cn(
-                  'w-3.5 h-3.5 rounded-full border flex items-center justify-center text-[8px] font-bold',
-                  active ? 'border-violet-500 text-violet-400' : 'border-white/15 text-white/25',
-                )}>{i + 1}</span>
-              )}
-              <span className="hidden sm:block">{step.label}</span>
+          <div key={step.id} className="flex items-center flex-1 last:flex-none">
+            <div className="flex items-center gap-2">
+              {/* Circle */}
+              <div className={cn(
+                'w-7 h-7 rounded-full flex items-center justify-center shrink-0 transition-all',
+                done
+                  ? 'bg-brand-accent text-brand-bg'
+                  : active
+                  ? 'border-2 border-brand-accent text-brand-text bg-transparent relative'
+                  : 'border border-white/15 text-brand-text/25 bg-transparent',
+              )}>
+                {done ? (
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                ) : (
+                  <>
+                    <span className="text-[10px] font-bold">{i + 1}</span>
+                    {active && (
+                      <span className="absolute inset-0 rounded-full border-2 border-brand-accent animate-ping opacity-30" />
+                    )}
+                  </>
+                )}
+              </div>
+              {/* Label */}
+              <span className={cn(
+                'text-[11px] font-semibold hidden sm:block',
+                done ? 'text-brand-accent'
+                : active ? 'text-brand-text'
+                : 'text-brand-text/25',
+              )}>
+                {step.label}
+              </span>
             </div>
+            {/* Connector line */}
             {i < STEPS.length - 1 && (
-              <div className={cn('w-4 h-px', done ? 'bg-emerald-500/40' : 'bg-white/8')} />
+              <div className={cn(
+                'flex-1 h-px mx-3',
+                done ? 'bg-brand-accent/50' : 'bg-white/8',
+              )} />
             )}
           </div>
         )
@@ -109,29 +130,29 @@ function InlineSelector({
     <div className="relative">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-2 rounded-lg border border-white/8 bg-white/[0.03] px-3 py-2 hover:border-white/15 transition-all w-full text-left"
+        className="flex items-center gap-2 rounded-lg border border-white/8 bg-white/[0.03] px-3 py-2 hover:border-brand-accent/30 transition-all w-full text-left"
       >
         <div className="flex-1 min-w-0">
-          <p className="text-[10px] text-white/35 leading-none mb-0.5">{label}</p>
-          <p className="text-xs font-medium text-white truncate">{current.name}</p>
+          <p className="text-[10px] text-brand-text/35 leading-none mb-0.5 uppercase tracking-wider">{label}</p>
+          <p className="text-xs font-medium text-brand-text truncate">{current.name}</p>
         </div>
-        <ChevronDown className={cn('w-3.5 h-3.5 text-white/30 shrink-0 transition-transform', open && 'rotate-180')} />
+        <ChevronDown className={cn('w-3.5 h-3.5 text-brand-text/30 shrink-0 transition-transform', open && 'rotate-180')} />
       </button>
 
       {open && (
-        <div className="absolute z-20 top-full mt-1 left-0 right-0 rounded-xl border border-white/10 bg-[#0f0d1a] shadow-xl shadow-black/40 overflow-hidden">
+        <div className="absolute z-20 top-full mt-1 left-0 right-0 rounded-xl border border-white/10 bg-brand-bg shadow-xl shadow-black/40 overflow-hidden">
           {options.map((opt) => (
             <button
               key={opt.id}
               onClick={() => { onChange(opt.id); setOpen(false) }}
               className={cn(
                 'w-full flex items-center justify-between px-3 py-2.5 text-left hover:bg-white/5 transition-colors text-xs',
-                opt.id === value ? 'text-violet-300 bg-violet-500/5' : 'text-white/60',
+                opt.id === value ? 'text-brand-accent bg-brand-accent/5' : 'text-brand-text/60',
               )}
             >
               {opt.name}
               {opt.badge && (
-                <span className="text-[9px] font-medium text-white/30 border border-white/10 rounded-full px-1.5 py-0.5">{opt.badge}</span>
+                <span className="text-[9px] font-medium text-brand-text/30 border border-white/10 rounded-full px-1.5 py-0.5">{opt.badge}</span>
               )}
             </button>
           ))}
@@ -144,48 +165,37 @@ function InlineSelector({
 // ─── History ──────────────────────────────────────────────────────────────────
 
 function HistorySection({ runs }: { runs: HistoryRun[] }) {
-  const [open, setOpen] = useState(false)
   if (runs.length === 0) return null
 
   return (
-    <div className="border-t border-white/8 pt-6 space-y-3">
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-2 text-sm text-white/40 hover:text-white transition-colors"
-      >
-        <Clock className="w-4 h-4" />
-        Past runs ({runs.length})
-        <ChevronDown className={cn('w-3.5 h-3.5 transition-transform', open && 'rotate-180')} />
-      </button>
-
-      {open && (
-        <div className="space-y-6">
-          {runs.map((run) => (
-            <div key={run.projectId} className="space-y-2">
-              <p className="text-xs text-white/30">
-                {new Date(run.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-              </p>
-              <div className="flex flex-wrap gap-3">
-                {run.videos.map((v, i) => (
-                  <div key={v.imageId} className="space-y-1.5 w-32">
-                    <div className="relative rounded-xl overflow-hidden border border-white/10 aspect-[9/16] bg-white/5">
-                      <video src={v.videoUrl} controls playsInline className="w-full h-full object-cover" />
-                    </div>
-                    <a
-                      href={v.videoUrl}
-                      download={v.filename}
-                      className="flex items-center justify-center gap-1 w-full text-[10px] text-white/50 hover:text-white transition-colors border border-white/8 hover:border-white/20 rounded-md py-1"
-                    >
-                      <Download className="w-2.5 h-2.5" />
-                      Video {i + 1}
-                    </a>
+    <div className="space-y-3">
+      <p className="text-[11px] font-black uppercase tracking-[0.2em] text-brand-text/30">Past Runs</p>
+      <div className="flex overflow-x-auto gap-4 pb-2">
+        {runs.map((run) => (
+          <div key={run.projectId} className="shrink-0 space-y-2">
+            <p className="text-[10px] text-brand-text/30 whitespace-nowrap">
+              {new Date(run.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+            </p>
+            <div className="flex gap-3">
+              {run.videos.map((v, i) => (
+                <div key={v.imageId} className="space-y-1.5 w-28">
+                  <div className="relative rounded-xl overflow-hidden border border-white/10 aspect-[9/16] bg-white/5">
+                    <video src={v.videoUrl} controls playsInline className="w-full h-full object-cover" />
                   </div>
-                ))}
-              </div>
+                  <a
+                    href={v.videoUrl}
+                    download={v.filename}
+                    className="flex items-center justify-center gap-1 w-full text-[10px] text-brand-text/50 hover:text-brand-accent transition-colors border border-white/8 hover:border-brand-accent/30 rounded-md py-1"
+                  >
+                    <Download className="w-2.5 h-2.5" />
+                    Video {i + 1}
+                  </a>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      )}
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -382,388 +392,492 @@ export function GeneratePanel() {
   const movementOptions = MOTION_TEMPLATES.filter((t) => t.category === 'movement').map((t) => ({ id: t.id, name: t.name, badge: t.badge }))
 
   return (
-    <div className="space-y-5 max-w-6xl">
+    <div className="flex flex-col gap-6 max-w-6xl">
 
-      {/* Header + step indicator */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold text-white">Studio</h1>
-          <p className="text-sm text-white/40 mt-0.5">Generate AI product videos in 4 steps.</p>
-        </div>
-        {stage !== 'idle' && <StepIndicator stage={stage} />}
+      {/* 1. PAGE HEADER */}
+      <div>
+        <p className="text-[11px] font-black uppercase tracking-[0.2em] text-brand-text/30">Studio</p>
+        <h1
+          className="text-[32px] font-black uppercase text-brand-text leading-[0.85]"
+          style={{ fontFamily: "'Bebas Neue', 'Arial Black', sans-serif", letterSpacing: '-0.01em' }}
+        >
+          AI Product Studio
+        </h1>
       </div>
 
-      {/* Avatar / background warning */}
+      {/* 2. PROGRESS TRACK */}
+      <StepIndicator stage={stage} />
+
+      {/* MAIN TWO-COLUMN LAYOUT */}
+      <div className="flex gap-4 items-start">
+
+      {/* LEFT COLUMN */}
+      <div className="flex flex-col gap-4 flex-1 min-w-0">
+
+      {/* 3. AVATAR / BACKGROUND WARNING */}
       {!avatarConfig && (
         <div className="flex items-center gap-2 text-sm text-amber-400 bg-amber-500/8 border border-amber-500/20 rounded-xl px-4 py-3">
           <AlertCircle className="w-4 h-4 shrink-0" />
           <span>
-            <Link href="/profile" className="underline underline-offset-2 hover:text-amber-300">Set up your avatar and background</Link> before generating.
+            <Link href="/templates" className="underline underline-offset-2 hover:text-amber-300">Set up your avatar and background</Link> before generating.
           </span>
         </div>
       )}
 
-      {/* Main grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-5">
+      {/* 4. MAIN AREA */}
 
-        {/* ── Left: inputs ──────────────────────────────────────────────────── */}
-        <div className="space-y-4">
+      {/* 4a. CANVAS */}
+      <div
+        className="rounded-2xl border border-white/[0.07] overflow-hidden flex flex-col min-h-[320px] sm:min-h-[520px]"
+        style={{ background: '#1a1f27' }}
+      >
 
-          {/* Avatar + background summary */}
-          <div className="grid grid-cols-2 gap-2">
-            <Link href="/profile" className="flex items-center gap-2.5 rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5 hover:border-white/15 hover:bg-white/5 transition-all">
-              {avatarThumb ? (
-                <img src={avatarThumb} alt="Avatar" onError={() => setAvatarImgError(true)} className="w-8 h-8 rounded-full object-cover border border-white/10 shrink-0" />
-              ) : (
-                <div className="w-8 h-8 rounded-full bg-white/8 border border-white/8 flex items-center justify-center shrink-0">
-                  <GenderIcon className="w-4 h-4 text-white/40" />
-                </div>
-              )}
-              <div className="min-w-0">
-                <p className="text-[10px] text-white/30 leading-none">Avatar</p>
-                <p className="text-xs font-medium text-white/80 truncate mt-0.5 capitalize">
-                  {avatarConfig ? (avatarConfig.type === 'preset' ? 'AI model' : 'Custom face') : 'Not set'}
-                </p>
+        {/* IDLE */}
+        {stage === 'idle' && (
+          <div className="flex-1 flex items-center justify-center p-8">
+            <div className="w-full max-w-lg space-y-8">
+              {/* Tagline */}
+              <div className="text-center">
+                <h2
+                  className="text-[36px] sm:text-[44px] font-black uppercase text-brand-text leading-[0.85]"
+                  style={{ fontFamily: "'Bebas Neue', 'Arial Black', sans-serif", letterSpacing: '-0.01em' }}
+                >
+                  YOUR MODEL.{' '}
+                  <span className="text-brand-accent">YOUR VIDEO.</span>
+                </h2>
               </div>
-            </Link>
-
-            <Link href="/profile" className="flex items-center gap-2.5 rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5 hover:border-white/15 hover:bg-white/5 transition-all">
-              {backgroundConfig?.thumbnailUrl ? (
-                <img src={backgroundConfig.thumbnailUrl} alt="Background" className="w-8 h-8 rounded-md object-cover border border-white/10 shrink-0" />
-              ) : (
-                <div className="w-8 h-8 rounded-md bg-white/8 border border-white/8 flex items-center justify-center shrink-0 text-[9px] text-white/30 font-medium">BG</div>
-              )}
-              <div className="min-w-0">
-                <p className="text-[10px] text-white/30 leading-none">Background</p>
-                <p className="text-xs font-medium text-white/80 truncate mt-0.5 capitalize">
-                  {backgroundConfig?.roomAesthetic ?? 'Not set'}
-                </p>
-              </div>
-            </Link>
-          </div>
-
-          {/* Product images */}
-          <div className="space-y-2">
-            <p className="text-xs font-medium text-white/40 uppercase tracking-wider">
-              Product images {productFiles.length > 0 && <span className="normal-case text-white/25 font-normal">({productFiles.length}/5)</span>}
-            </p>
-
-            {productFiles.length === 0 ? (
-              <label className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-white/10 hover:border-violet-500/40 hover:bg-violet-500/5 px-4 py-8 cursor-pointer transition-colors">
-                <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFileChange} />
-                <ImagePlus className="w-6 h-6 text-white/25" />
-                <span className="text-sm text-white/40">Drop images here or click to browse</span>
-                <span className="text-xs text-white/20">Up to 5 images per run</span>
-              </label>
-            ) : (
-              <div className="flex flex-wrap gap-2 p-3 rounded-xl border border-white/8 bg-white/[0.02]">
-                {productFiles.map(({ file, previewUrl }) => (
-                  <div key={file.name} className="relative group">
-                    <img src={previewUrl} alt={file.name} className="w-16 h-16 rounded-lg object-cover border border-white/10" />
-                    <button
-                      onClick={() => removeFile(file.name)}
-                      className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-black/70 border border-white/15 hover:bg-red-500/80 text-white flex items-center justify-center transition-colors opacity-0 group-hover:opacity-100"
-                    >
-                      <X className="w-2.5 h-2.5" />
-                    </button>
+              {/* Steps */}
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { n: '1', label: 'Upload product', sub: 'Add 1–5 product images below' },
+                  { n: '2', label: 'Generate image', sub: 'AI dresses your model in the product' },
+                  { n: '3', label: 'Create video', sub: 'Approve the image to make a video' },
+                ].map(({ n, label, sub }) => (
+                  <div key={n} className="rounded-xl border border-white/[0.06] p-3 space-y-2" style={{ background: 'var(--color-brand-bg)' }}>
+                    <div className="w-6 h-6 rounded-md bg-brand-accent/15 border border-brand-accent/25 flex items-center justify-center">
+                      <span className="text-[11px] font-black text-brand-accent">{n}</span>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-brand-text/80">{label}</p>
+                      <p className="text-[10px] text-brand-text/35 mt-0.5 leading-snug">{sub}</p>
+                    </div>
                   </div>
                 ))}
-                {productFiles.length < 5 && (
-                  <label className="w-16 h-16 rounded-lg border-2 border-dashed border-white/10 hover:border-violet-500/40 flex items-center justify-center cursor-pointer transition-colors">
-                    <input type="file" accept="image/*" multiple className="hidden" onChange={handleFileChange} />
-                    <ImagePlus className="w-4 h-4 text-white/25" />
-                  </label>
-                )}
               </div>
-            )}
+              <p className="text-center text-xs text-brand-text/25">Start by uploading product images below ↓</p>
+            </div>
           </div>
+        )}
 
-          {/* Description */}
-          <div className="space-y-2">
-            <p className="text-xs font-medium text-white/40 uppercase tracking-wider">
-              Product hint <span className="normal-case text-white/25 font-normal">(optional)</span>
-            </p>
-            <input
-              type="text"
-              value={productDescription}
-              onChange={(e) => setProductDescription(e.target.value)}
-              placeholder="e.g. wireless earbuds, face serum…"
-              className="w-full bg-white/[0.03] border border-white/8 rounded-xl px-3.5 py-2.5 text-sm text-white/80 placeholder:text-white/20 focus:outline-none focus:border-violet-500/50 transition-colors"
-            />
-          </div>
-
-          {/* Camera + movement inline selectors */}
-          <div className="grid grid-cols-2 gap-2">
-            <InlineSelector
-              label="Camera angle"
-              options={cameraOptions}
-              value={localCameraId}
-              onChange={setLocalCameraId}
-            />
-            <InlineSelector
-              label="Movement"
-              options={movementOptions}
-              value={localMovementId}
-              onChange={setLocalMovementId}
-            />
-          </div>
-
-          {/* Generate image CTA */}
-          <div className="space-y-2 pt-1">
-            <Button
-              onClick={handleGenerate}
-              disabled={!canGenerate}
-              className="w-full h-11 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white disabled:opacity-30 font-semibold rounded-xl transition-all shadow-lg shadow-violet-500/20"
+        {/* UPLOADING */}
+        {stage === 'uploading' && (
+          <div className="flex-1 flex flex-col items-center justify-center gap-5 p-10">
+            <div className="w-14 h-14 rounded-full border-2 border-white/10 border-t-brand-accent animate-spin" />
+            <p
+              className="text-2xl font-black uppercase text-brand-text leading-[0.85]"
+              style={{ fontFamily: "'Bebas Neue', 'Arial Black', sans-serif", letterSpacing: '-0.01em' }}
             >
-              {stage === 'uploading' ? (
-                <span className="flex items-center gap-2"><span className="w-3.5 h-3.5 rounded-full border-2 border-white/20 border-t-white animate-spin" />Uploading…</span>
-              ) : stage === 'generating' ? (
-                <span className="flex items-center gap-2"><span className="w-3.5 h-3.5 rounded-full border-2 border-white/20 border-t-white animate-spin" />Generating image…</span>
-              ) : (
-                <span className="flex items-center gap-2">
-                  <Sparkles className="w-4 h-4" />
-                  Generate image
-                  <span className="flex items-center gap-0.5 text-white/60 text-[10px] font-normal border border-white/20 rounded px-1.5 py-0.5 ml-1">
+              UPLOADING...
+            </p>
+            <div className="w-48 h-1 rounded-full bg-white/5 overflow-hidden">
+              <div className="h-full bg-brand-accent rounded-full animate-pulse w-2/3" />
+            </div>
+          </div>
+        )}
+
+        {/* GENERATING */}
+        {stage === 'generating' && (
+          <div className="flex-1 flex flex-col items-center justify-center gap-5 p-10">
+            <div className="relative w-16 h-16">
+              <div className="absolute inset-0 rounded-full border-2 border-brand-accent/20 animate-ping" />
+              <div className="absolute inset-0 rounded-full border-2 border-white/10 border-t-brand-accent animate-spin" />
+            </div>
+            <div className="text-center space-y-2">
+              <p
+                className="text-3xl font-black uppercase text-brand-text leading-[0.85]"
+                style={{ fontFamily: "'Bebas Neue', 'Arial Black', sans-serif", letterSpacing: '-0.01em' }}
+              >
+                BUILDING YOUR SHOT
+              </p>
+              <p className="text-sm text-brand-text/40">AI is compositing your model onto the product</p>
+            </div>
+            <div className="w-48 h-1 rounded-full bg-white/5 overflow-hidden">
+              <div className="h-full bg-brand-accent rounded-full animate-pulse w-3/4" />
+            </div>
+          </div>
+        )}
+
+        {/* REVIEWING */}
+        {stage === 'reviewing' && pendingImage && (
+          <div className="flex-1 flex flex-col sm:flex-row overflow-hidden">
+            {/* Image top (mobile) / left (desktop) */}
+            <div className="sm:w-[45%] shrink-0 bg-black/30 flex items-stretch">
+              <img
+                src={pendingImage.url}
+                alt="Generated"
+                className="w-full object-cover max-h-72 sm:max-h-none sm:h-full"
+                style={{ minHeight: undefined }}
+              />
+            </div>
+
+            {/* Actions right */}
+            <div className="flex-1 p-6 flex flex-col justify-center space-y-4 bg-[#1a1f27]">
+              <div>
+                <h2
+                  className="text-2xl font-black uppercase text-brand-text"
+                  style={{ fontFamily: "'Bebas Neue', 'Arial Black', sans-serif" }}
+                >
+                  REVIEW YOUR IMAGE
+                </h2>
+                <p className="text-xs text-brand-text/40 mt-1">
+                  Happy with it? Approve to create the video. Not happy? Regenerate free of charge.
+                </p>
+              </div>
+
+              <div className="space-y-2.5">
+                {/* Video model selector */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] font-bold text-brand-text/35 uppercase tracking-wider">Video model</p>
+                    {tokenBalance !== null && (
+                      <span className="flex items-center gap-1 text-[10px] text-brand-text/30">
+                        <Zap className="w-2.5 h-2.5 text-brand-accent" />
+                        {tokenBalance.toLocaleString()} left
+                      </span>
+                    )}
+                  </div>
+                  <div className="space-y-1">
+                    {availableModels.map((model) => (
+                      <button
+                        key={model.id}
+                        onClick={() => setSelectedModelId(model.id)}
+                        className={cn(
+                          'w-full flex items-center gap-2.5 rounded-lg border px-3 py-2 text-left transition-all',
+                          selectedModelId === model.id
+                            ? 'border-brand-accent/50 bg-brand-accent/10'
+                            : 'border-white/8 bg-white/[0.02] hover:border-white/15',
+                        )}
+                      >
+                        <div className={cn('w-1.5 h-1.5 rounded-full shrink-0', selectedModelId === model.id ? 'bg-brand-accent' : 'bg-white/15')} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium text-brand-text leading-tight">{model.name}</p>
+                          <p className="text-[10px] text-brand-text/30">{model.qualityLabel}</p>
+                        </div>
+                        <span className="flex items-center gap-0.5 text-[10px] text-brand-text/40 border border-white/8 rounded px-1.5 py-0.5 shrink-0">
+                          <Zap className="w-2.5 h-2.5" />{model.tokenCost}
+                        </span>
+                      </button>
+                    ))}
+                    {availableModels.length < VIDEO_MODELS.length && (
+                      <p className="text-[10px] text-brand-text/25 px-1">
+                        <Link href="/billing" className="underline underline-offset-2 hover:text-brand-text/50">Upgrade</Link> to unlock more models
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Approve button */}
+                <Button
+                  onClick={handleApproveImage}
+                  className="w-full h-12 bg-brand-accent hover:bg-brand-accent-hover text-brand-bg font-black uppercase rounded-xl shadow-lg shadow-brand-accent/20 transition-all"
+                >
+                  <span className="flex items-center gap-2">
+                    <Video className="w-4 h-4" />
+                    APPROVE — CREATE VIDEO
+                    <span className="flex items-center gap-0.5 text-brand-bg/60 text-[10px] font-normal border border-brand-bg/20 rounded px-1.5 py-0.5 ml-1">
+                      <Zap className="w-2.5 h-2.5" />{selectedModel?.tokenCost}
+                    </span>
+                  </span>
+                </Button>
+
+                {/* Regenerate */}
+                <button
+                  onClick={handleRegenerateImage}
+                  className="w-full h-10 rounded-xl border border-white/10 hover:border-brand-accent/40 bg-transparent hover:bg-brand-accent/5 text-sm text-brand-text/60 hover:text-brand-text transition-all flex items-center justify-center gap-2"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  Regenerate free
+                  <span className="flex items-center gap-0.5 text-[10px] text-brand-text/30 border border-white/8 rounded px-1.5 py-0.5 ml-1">
                     <Zap className="w-2.5 h-2.5" />{TOKEN_COSTS.image_gen}
                   </span>
-                </span>
-              )}
-            </Button>
-            <p className="text-[10px] text-center text-white/20">
-              After approval you'll pick a video model and confirm
-            </p>
+                </button>
+
+                {/* Download image only */}
+                <button
+                  onClick={() => {
+                    const a = document.createElement('a')
+                    a.href = pendingImage.url
+                    a.download = `genetrify-image.jpg`
+                    a.click()
+                  }}
+                  className="w-full h-9 rounded-xl text-xs text-brand-text/35 hover:text-brand-text/60 transition-colors flex items-center justify-center gap-1.5"
+                >
+                  <Download className="w-3 h-3" />
+                  Download image only
+                </button>
+              </div>
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* ── Right: results ─────────────────────────────────────────────────── */}
-        <div className="rounded-2xl border border-white/8 bg-white/[0.02] min-h-[400px] overflow-hidden flex flex-col">
-
-          {/* Empty state */}
-          {stage === 'idle' && (
-            <div className="flex-1 flex items-center justify-center p-10">
-              <div className="text-center space-y-5 max-w-xs">
-                <div className="w-14 h-14 rounded-2xl bg-white/[0.03] border border-white/8 flex items-center justify-center mx-auto">
-                  <Clapperboard className="w-6 h-6 text-violet-400/60" />
-                </div>
-                <div className="space-y-3">
-                  {[
-                    { n: 1, icon: <ImagePlus className="w-3.5 h-3.5" />, text: 'Upload product photos (up to 5)', cost: null },
-                    { n: 2, icon: <Sparkles className="w-3.5 h-3.5" />, text: 'Generate image', cost: `${TOKEN_COSTS.image_gen} tokens` },
-                    { n: 3, icon: <CheckCircle2 className="w-3.5 h-3.5" />, text: 'Review & approve the image', cost: null },
-                    { n: 4, icon: <Video className="w-3.5 h-3.5" />, text: 'Create video', cost: `${selectedModel?.tokenCost ?? '—'} tokens` },
-                  ].map(({ n, icon, text, cost }) => (
-                    <div key={n} className="flex items-center gap-3 text-left">
-                      <span className="w-6 h-6 rounded-full bg-white/5 border border-white/10 text-white/50 text-[10px] font-bold flex items-center justify-center shrink-0">{n}</span>
-                      <div className="flex items-center gap-2 flex-1 min-w-0">
-                        <span className="text-white/30">{icon}</span>
-                        <p className="text-sm text-white/60">{text}</p>
-                        {cost && (
-                          <span className="ml-auto flex items-center gap-0.5 text-[10px] text-white/25 shrink-0">
-                            <Zap className="w-2.5 h-2.5" />{cost}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
+        {/* MAKING VIDEOS */}
+        {stage === 'making-videos' && (
+          <div className="flex-1 flex flex-col items-center justify-center gap-5 p-10">
+            <div className="relative w-16 h-16">
+              <div className="absolute inset-0 rounded-full border-2 border-brand-accent/20 animate-ping" style={{ animationDuration: '1.5s' }} />
+              <div className="absolute inset-[-6px] rounded-full border border-brand-accent/10 animate-ping" style={{ animationDuration: '2s' }} />
+              <div className="absolute inset-0 rounded-full border-2 border-white/10 border-t-brand-accent animate-spin" />
             </div>
-          )}
-
-          {/* Generating image */}
-          {stage === 'generating' && (
-            <div className="flex-1 flex flex-col items-center justify-center gap-4 p-10">
-              <div className="w-12 h-12 rounded-full border-2 border-white/10 border-t-violet-400 animate-spin" />
-              <div className="text-center space-y-1">
-                <p className="text-sm font-medium text-white">Generating your image…</p>
-                <p className="text-xs text-white/35">AI is compositing your face onto the product shot</p>
-              </div>
-              <div className="w-48 h-1 rounded-full bg-white/5 overflow-hidden">
-                <div className="h-full bg-gradient-to-r from-violet-500 to-fuchsia-500 rounded-full animate-pulse w-3/4" />
-              </div>
+            <div className="text-center space-y-2">
+              <p
+                className="text-3xl font-black uppercase text-brand-text leading-[0.85]"
+                style={{ fontFamily: "'Bebas Neue', 'Arial Black', sans-serif", letterSpacing: '-0.01em' }}
+              >
+                CREATING YOUR VIDEO
+              </p>
+              <p className="text-sm text-brand-text/40">This usually takes 1–3 minutes</p>
+              {videoProgress && (
+                <p className="text-xs text-brand-accent">{videoProgress.current} / {videoProgress.total} complete</p>
+              )}
             </div>
-          )}
+            <div className="w-48 h-1 rounded-full bg-white/5 overflow-hidden">
+              <div className="h-full bg-brand-accent rounded-full animate-pulse w-1/2" />
+            </div>
+          </div>
+        )}
 
-          {/* Review panel */}
-          {stage === 'reviewing' && pendingImage && (
-            <div className="flex-1 flex flex-col sm:flex-row gap-0 overflow-hidden">
-              {/* Image */}
-              <div className="sm:w-56 shrink-0 bg-black/20 flex items-center justify-center p-4">
-                <div className="relative rounded-xl overflow-hidden border border-white/10 w-full max-w-[160px] aspect-[9/16] mx-auto">
-                  <img src={pendingImage.url} alt="Generated" className="w-full h-full object-cover" />
-                </div>
+        {/* DONE */}
+        {stage === 'done' && videos.length > 0 && (
+          <div className="flex-1 p-6 space-y-5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-5 h-5 text-brand-accent" />
+                <p
+                  className="text-xl font-black uppercase text-brand-text leading-[0.85]"
+                  style={{ fontFamily: "'Bebas Neue', 'Arial Black', sans-serif", letterSpacing: '-0.01em' }}
+                >
+                  VIDEO READY
+                </p>
               </div>
+              <button
+                onClick={handleReset}
+                className="flex items-center gap-1.5 text-xs text-brand-text/35 hover:text-brand-text/70 transition-colors border border-white/8 hover:border-brand-accent/30 rounded-lg px-3 py-1.5"
+              >
+                New run
+                <ArrowRight className="w-3 h-3" />
+              </button>
+            </div>
 
-              {/* Actions */}
-              <div className="flex-1 p-6 flex flex-col justify-center space-y-4">
-                <div>
-                  <h2 className="text-base font-semibold text-white">Review your image</h2>
-                  <p className="text-xs text-white/40 mt-1">Happy with it? Approve to create the video. Not happy? Regenerate free of charge.</p>
-                </div>
-
-                <div className="space-y-2.5">
-                  {/* Video model — shown here, only when it matters */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <p className="text-[10px] font-medium text-white/35 uppercase tracking-wider">Video model</p>
-                      {tokenBalance !== null && (
-                        <span className="flex items-center gap-1 text-[10px] text-white/30">
-                          <Zap className="w-2.5 h-2.5 text-violet-400" />
-                          {tokenBalance.toLocaleString()} left
-                        </span>
-                      )}
-                    </div>
-                    <div className="space-y-1">
-                      {availableModels.map((model) => (
-                        <button
-                          key={model.id}
-                          onClick={() => setSelectedModelId(model.id)}
-                          className={cn(
-                            'w-full flex items-center gap-2.5 rounded-lg border px-3 py-2 text-left transition-all',
-                            selectedModelId === model.id
-                              ? 'border-violet-500/50 bg-violet-500/8'
-                              : 'border-white/8 bg-white/[0.02] hover:border-white/15',
-                          )}
-                        >
-                          <div className={cn('w-1.5 h-1.5 rounded-full shrink-0', selectedModelId === model.id ? 'bg-violet-400' : 'bg-white/15')} />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-medium text-white leading-tight">{model.name}</p>
-                            <p className="text-[10px] text-white/30">{model.qualityLabel}</p>
-                          </div>
-                          <span className="flex items-center gap-0.5 text-[10px] text-white/40 border border-white/8 rounded px-1.5 py-0.5 shrink-0">
-                            <Zap className="w-2.5 h-2.5" />{model.tokenCost}
-                          </span>
-                        </button>
-                      ))}
-                      {availableModels.length < VIDEO_MODELS.length && (
-                        <p className="text-[10px] text-white/25 px-1">
-                          <Link href="/billing" className="underline underline-offset-2 hover:text-white/50">Upgrade</Link> to unlock more models
-                        </p>
-                      )}
-                    </div>
+            <div className={cn(
+              'flex gap-4',
+              videos.length === 1 ? 'justify-center' : 'flex-wrap justify-center',
+            )}>
+              {videos.map((v, i) => (
+                <div key={v.imageId} className={cn('space-y-2', videos.length === 1 ? 'w-48' : 'w-48')}>
+                  <div className="relative rounded-xl overflow-hidden border border-white/10 aspect-[9/16] bg-black">
+                    <video src={v.videoUrl} controls playsInline className="w-full h-full object-cover" />
                   </div>
-
-                  <Button
-                    onClick={handleApproveImage}
-                    className="w-full h-11 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white font-semibold rounded-xl shadow-lg shadow-violet-500/20"
-                  >
-                    <span className="flex items-center gap-2">
-                      <Video className="w-4 h-4" />
-                      Approve — create video
-                      <span className="flex items-center gap-0.5 text-white/60 text-[10px] font-normal border border-white/20 rounded px-1.5 py-0.5 ml-1">
-                        <Zap className="w-2.5 h-2.5" />{selectedModel?.tokenCost}
-                      </span>
-                    </span>
-                  </Button>
-
-                  <button
-                    onClick={handleRegenerateImage}
-                    className="w-full h-10 rounded-xl border border-white/10 bg-white/[0.03] hover:bg-white/8 text-sm text-white/60 hover:text-white transition-colors flex items-center justify-center gap-2"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                    Regenerate image
-                    <span className="flex items-center gap-0.5 text-[10px] text-white/30 border border-white/8 rounded px-1.5 py-0.5 ml-1">
-                      <Zap className="w-2.5 h-2.5" />{TOKEN_COSTS.image_gen}
-                    </span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      const a = document.createElement('a')
-                      a.href = pendingImage.url
-                      a.download = `affilify-image.jpg`
-                      a.click()
-                    }}
-                    className="w-full h-9 rounded-xl text-xs text-white/35 hover:text-white/60 transition-colors flex items-center justify-center gap-1.5"
+                  <a
+                    href={v.videoUrl}
+                    download={v.filename}
+                    className="flex items-center justify-center gap-1.5 w-full text-xs text-brand-text/60 hover:text-brand-accent transition-colors border border-white/10 hover:border-brand-accent/30 rounded-lg py-2 bg-white/[0.02] hover:bg-brand-accent/5"
                   >
                     <Download className="w-3 h-3" />
-                    Download image only
+                    Download video {i + 1}
+                  </a>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ERROR */}
+        {stage === 'error' && (
+          <div className="flex-1 flex flex-col justify-center p-6 space-y-4">
+            <div className="flex items-start gap-3 rounded-xl bg-red-500/8 border border-red-500/20 px-4 py-3">
+              <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+              <p className="text-sm text-red-400">{errorMsg}</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <Button
+                onClick={handleGenerate}
+                disabled={!canGenerate}
+                className="bg-brand-accent hover:bg-brand-accent-hover text-brand-bg disabled:opacity-30 rounded-xl h-9 text-sm font-bold"
+              >
+                Try again
+              </Button>
+              <button onClick={handleReset} className="text-xs text-brand-text/35 hover:text-brand-text/60 transition-colors">
+                Start over
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 4b. CONTROLS ROW */}
+      <div className="flex flex-wrap items-end gap-3">
+
+        {/* Product upload */}
+        <div className="space-y-1.5 shrink-0">
+          <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-brand-text/35">
+            Product Images {productFiles.length > 0 && <span className="normal-case font-normal text-brand-text/20">({productFiles.length}/5)</span>}
+          </p>
+          {productFiles.length === 0 ? (
+            <label className="flex items-center gap-2 rounded-lg border border-dashed border-white/10 hover:border-brand-accent/40 hover:bg-brand-accent/5 px-3 py-2.5 cursor-pointer transition-colors">
+              <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFileChange} />
+              <ImagePlus className="w-4 h-4 text-brand-text/30 shrink-0" />
+              <span className="text-xs text-brand-text/40">Drop or click to upload</span>
+            </label>
+          ) : (
+            <div className="flex items-center gap-2 flex-wrap p-2 rounded-lg border border-white/8 bg-white/[0.02]">
+              {productFiles.map(({ file, previewUrl }) => (
+                <div key={file.name} className="relative group">
+                  <img src={previewUrl} alt={file.name} className="w-10 h-10 rounded-md object-cover border border-white/10" />
+                  <button
+                    onClick={() => removeFile(file.name)}
+                    className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-black/70 border border-white/15 hover:bg-red-500/80 text-white flex items-center justify-center transition-colors opacity-0 group-hover:opacity-100"
+                  >
+                    <X className="w-2 h-2" />
                   </button>
                 </div>
-              </div>
-            </div>
-          )}
-
-          {/* Making video */}
-          {stage === 'making-videos' && (
-            <div className="flex-1 flex flex-col items-center justify-center gap-4 p-10">
-              <div className="w-12 h-12 rounded-full border-2 border-white/10 border-t-fuchsia-400 animate-spin" />
-              <div className="text-center space-y-1">
-                <p className="text-sm font-medium text-white">Creating your video…</p>
-                <p className="text-xs text-white/35">This usually takes 1–3 minutes</p>
-              </div>
-              <div className="w-48 h-1 rounded-full bg-white/5 overflow-hidden">
-                <div className="h-full bg-gradient-to-r from-fuchsia-500 to-pink-500 rounded-full animate-pulse w-1/2" />
-              </div>
-            </div>
-          )}
-
-          {/* Done */}
-          {stage === 'done' && videos.length > 0 && (
-            <div className="flex-1 p-6 space-y-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-semibold text-white flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                    Video ready
-                  </p>
-                  <p className="text-xs text-white/35 mt-0.5">Download and post to TikTok</p>
-                </div>
-                <button
-                  onClick={handleReset}
-                  className="flex items-center gap-1.5 text-xs text-white/35 hover:text-white/70 transition-colors border border-white/8 rounded-lg px-3 py-1.5"
-                >
-                  <ArrowRight className="w-3 h-3" />
-                  New run
-                </button>
-              </div>
-
-              <div className="flex flex-wrap gap-4">
-                {videos.map((v, i) => (
-                  <div key={v.imageId} className="space-y-2 w-44">
-                    <div className="relative rounded-xl overflow-hidden border border-white/10 aspect-[9/16] bg-black">
-                      <video src={v.videoUrl} controls playsInline className="w-full h-full object-cover" />
-                    </div>
-                    <a
-                      href={v.videoUrl}
-                      download={v.filename}
-                      className="flex items-center justify-center gap-1.5 w-full text-xs text-white/60 hover:text-white transition-colors border border-white/10 hover:border-white/20 rounded-lg py-2 bg-white/[0.02] hover:bg-white/5"
-                    >
-                      <Download className="w-3 h-3" />
-                      Download video {i + 1}
-                    </a>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Error */}
-          {stage === 'error' && (
-            <div className="flex-1 flex flex-col justify-center p-6 space-y-4">
-              <div className="flex items-start gap-3 rounded-xl bg-red-500/8 border border-red-500/20 px-4 py-3">
-                <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
-                <p className="text-sm text-red-400">{errorMsg}</p>
-              </div>
-              <div className="flex items-center gap-3">
-                <Button
-                  onClick={handleGenerate}
-                  disabled={!canGenerate}
-                  className="bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white disabled:opacity-30 rounded-xl h-9 text-sm"
-                >
-                  Try again
-                </Button>
-                <button onClick={handleReset} className="text-xs text-white/35 hover:text-white/60 transition-colors">
-                  Start over
-                </button>
-              </div>
+              ))}
+              {productFiles.length < 5 && (
+                <label className="w-10 h-10 rounded-md border border-dashed border-white/10 hover:border-brand-accent/40 flex items-center justify-center cursor-pointer transition-colors">
+                  <input type="file" accept="image/*" multiple className="hidden" onChange={handleFileChange} />
+                  <ImagePlus className="w-3.5 h-3.5 text-brand-text/25" />
+                </label>
+              )}
             </div>
           )}
         </div>
+
+        {/* Product hint — grows to fill space */}
+        <div className="space-y-1.5 flex-1 min-w-[160px]">
+          <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-brand-text/35">
+            Product Hint <span className="normal-case font-normal text-brand-text/20">(optional)</span>
+          </p>
+          <input
+            type="text"
+            value={productDescription}
+            onChange={(e) => setProductDescription(e.target.value)}
+            placeholder="e.g. wireless earbuds, face serum…"
+            className="w-full bg-white/[0.03] border border-white/8 rounded-lg px-3 py-2.5 text-sm text-brand-text/80 placeholder:text-brand-text/20 focus:outline-none focus:border-brand-accent/50 transition-colors"
+          />
+        </div>
+
+        {/* Generate button */}
+        <Button
+          onClick={handleGenerate}
+          disabled={!canGenerate}
+          className="h-12 px-6 w-full sm:w-auto bg-brand-accent hover:bg-brand-accent-hover text-brand-bg font-black uppercase rounded-xl disabled:opacity-30 transition-all shadow-lg shadow-brand-accent/20 shrink-0"
+        >
+          {stage === 'uploading' ? (
+            <span className="flex items-center gap-2">
+              <span className="w-3.5 h-3.5 rounded-full border-2 border-brand-bg/20 border-t-brand-bg animate-spin" />
+              UPLOADING...
+            </span>
+          ) : stage === 'generating' ? (
+            <span className="flex items-center gap-2">
+              <span className="w-3.5 h-3.5 rounded-full border-2 border-brand-bg/20 border-t-brand-bg animate-spin" />
+              GENERATING...
+            </span>
+          ) : (
+            <span className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4" />
+              GENERATE IMAGE
+              <span className="flex items-center gap-0.5 text-brand-bg/60 text-[10px] font-normal border border-brand-bg/20 rounded px-1.5 py-0.5 ml-1">
+                <Zap className="w-2.5 h-2.5" />{TOKEN_COSTS.image_gen}
+              </span>
+            </span>
+          )}
+        </Button>
       </div>
 
-      {/* History */}
-      {historyLoaded && <HistorySection runs={historyRuns} />}
+      {/* 5. HISTORY */}
+      {historyLoaded && historyRuns.length > 0 && (
+        <HistorySection runs={historyRuns} />
+      )}
+
+      </div>{/* end LEFT COLUMN */}
+
+      {/* RIGHT SIDEBAR — settings */}
+      <div className="w-52 shrink-0 hidden lg:flex flex-col gap-2">
+        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-text/30 px-1 mb-1">Settings</p>
+
+        {/* Avatar */}
+        <Link
+          href="/templates"
+          className="flex items-center gap-3 rounded-xl border border-white/8 bg-white/[0.02] px-3 py-2.5 hover:border-brand-accent/40 hover:bg-brand-accent/5 transition-all group"
+        >
+          {avatarConfig?.type === 'custom' && avatarConfig.faceUrl ? (
+            <img src={avatarConfig.faceUrl} alt="Avatar" className="w-8 h-8 rounded-full object-cover border border-white/10 shrink-0" />
+          ) : (
+            <div className="w-8 h-8 rounded-full bg-white/5 border border-white/8 flex items-center justify-center shrink-0">
+              <User className="w-3.5 h-3.5 text-brand-text/30" />
+            </div>
+          )}
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] text-brand-text/30 leading-none mb-0.5">Avatar</p>
+            <p className="text-xs font-medium text-brand-text/70 truncate group-hover:text-brand-text transition-colors">
+              {avatarConfig ? (avatarConfig.type === 'preset' ? 'AI Model' : 'Custom Face') : 'Not set'}
+            </p>
+          </div>
+        </Link>
+
+        {/* Background */}
+        <Link
+          href="/templates?tab=background"
+          className="flex items-center gap-3 rounded-xl border border-white/8 bg-white/[0.02] px-3 py-2.5 hover:border-brand-accent/40 hover:bg-brand-accent/5 transition-all group"
+        >
+          {backgroundConfig?.thumbnailUrl ? (
+            <img src={backgroundConfig.thumbnailUrl} alt="Background" className="w-8 h-8 rounded-md object-cover border border-white/10 shrink-0" />
+          ) : (
+            <div className="w-8 h-8 rounded-md bg-white/5 border border-white/8 flex items-center justify-center shrink-0 text-[9px] text-brand-text/30 font-bold">BG</div>
+          )}
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] text-brand-text/30 leading-none mb-0.5">Background</p>
+            <p className="text-xs font-medium text-brand-text/70 truncate group-hover:text-brand-text transition-colors capitalize">
+              {backgroundConfig?.roomAesthetic ?? 'Not set'}
+            </p>
+          </div>
+        </Link>
+
+        <div className="border-t border-white/[0.06] my-1" />
+
+        {/* Camera */}
+        <div>
+          <InlineSelector
+            label="Camera Angle"
+            options={cameraOptions}
+            value={localCameraId}
+            onChange={setLocalCameraId}
+          />
+        </div>
+
+        {/* Movement */}
+        <div>
+          <InlineSelector
+            label="Movement"
+            options={movementOptions}
+            value={localMovementId}
+            onChange={setLocalMovementId}
+          />
+        </div>
+
+        <div className="border-t border-white/[0.06] my-1" />
+
+        {/* Marketplace link */}
+        <Link
+          href="/templates"
+          className="flex items-center justify-center gap-1.5 text-[11px] text-brand-text/30 hover:text-brand-accent transition-colors py-1"
+        >
+          <Sparkles className="w-3 h-3" />
+          Browse Marketplace
+        </Link>
+      </div>
+
+    </div>{/* end TWO-COLUMN */}
+
     </div>
   )
 }

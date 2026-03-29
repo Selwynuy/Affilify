@@ -82,22 +82,29 @@ export function ProfileSettings() {
 
   return (
     <div className="max-w-2xl space-y-10">
-      <div>
-        <h1 className="text-2xl font-semibold text-white">Profile</h1>
-        <p className="text-white/50 text-sm mt-1">Your default settings applied to every video.</p>
+      {/* Header */}
+      <div className="space-y-1">
+        <p className="text-[11px] font-black uppercase tracking-[0.2em] text-brand-text/30">Settings</p>
+        <h1
+          className="text-[32px] font-black uppercase text-brand-text leading-[0.85]"
+          style={{ fontFamily: "'Bebas Neue', 'Arial Black', sans-serif", letterSpacing: '-0.01em' }}
+        >
+          Profile
+        </h1>
+        <p className="text-sm text-brand-text/40">Your default settings applied to every video.</p>
       </div>
 
       {/* Avatar section */}
       <section className="space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-base font-medium text-white">Avatar</h2>
-            <p className="text-white/40 text-sm">Your model for AI image generation.</p>
+            <h2 className="text-sm font-semibold text-brand-text">Avatar</h2>
+            <p className="text-brand-text/40 text-xs mt-0.5">Your model for AI image generation.</p>
           </div>
           <Button
             onClick={saveAvatar}
             disabled={avatarSaving}
-            className="bg-white text-black hover:bg-zinc-200 disabled:opacity-50 shrink-0"
+            className="h-9 px-4 rounded-xl bg-brand-accent hover:bg-brand-accent-hover text-brand-bg font-bold text-sm shadow-lg shadow-brand-accent/20 disabled:opacity-50 shrink-0"
           >
             {avatarSaved ? (
               <span className="flex items-center gap-1.5">
@@ -113,15 +120,15 @@ export function ProfileSettings() {
 
       {/* Background section */}
       <section className="space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-base font-medium text-white">Background</h2>
-            <p className="text-white/40 text-sm">The scene behind your avatar.</p>
+            <h2 className="text-sm font-semibold text-brand-text">Background</h2>
+            <p className="text-brand-text/40 text-xs mt-0.5">The scene behind your avatar.</p>
           </div>
           <Button
             onClick={saveBackground}
             disabled={bgSaving}
-            className="bg-white text-black hover:bg-zinc-200 disabled:opacity-50 shrink-0"
+            className="h-9 px-4 rounded-xl bg-brand-accent hover:bg-brand-accent-hover text-brand-bg font-bold text-sm shadow-lg shadow-brand-accent/20 disabled:opacity-50 shrink-0"
           >
             {bgSaved ? (
               <span className="flex items-center gap-1.5">

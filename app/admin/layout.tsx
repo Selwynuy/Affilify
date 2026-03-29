@@ -23,7 +23,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             <Video className="w-3.5 h-3.5 text-white" />
           </div>
           <div>
-            <span className="font-bold text-sm text-white">Affilify</span>
+            <span className="font-bold text-sm text-white">Genetrify</span>
             <span className="block text-[10px] text-violet-400 font-medium -mt-0.5">Admin</span>
           </div>
         </div>

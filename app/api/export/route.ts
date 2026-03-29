@@ -147,7 +147,7 @@ export async function POST(req: NextRequest) {
           await admin.from('storage_files').insert({
             user_id: user.id,
             project_id: projectId,
-            file_name: `affilify-video-${i + 1}.mp4`,
+            file_name: `genetrify-video-${i + 1}.mp4`,
             file_type: 'generated_video',
             storage_path: videoUrl,
             public_url: videoUrl,
@@ -157,7 +157,7 @@ export async function POST(req: NextRequest) {
             type: 'video',
             index: i,
             total: imageUrls.length,
-            video: { videoUrl, imageId, filename: `affilify-video-${i + 1}.mp4` },
+            video: { videoUrl, imageId, filename: `genetrify-video-${i + 1}.mp4` },
           }))
         } catch (e) {
           logger.error('Video generation failed', { userId: user.id, projectId, index: i }, e)

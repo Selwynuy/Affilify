@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
     try {
       const intent = await createPaymentIntent(
         pack.priceCentavos,
-        'Affilify token top-up — 1,000 tokens',
+        'Genetrify token top-up — 1,000 tokens',
         {
           userId: user.id,
           type: 'topup',

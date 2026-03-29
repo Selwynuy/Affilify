@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from 'react'
 import { cn } from '@/lib/utils'
-import { HardDrive, Trash2, Download, ImageIcon, Video, AlertTriangle, X, ExternalLink } from 'lucide-react'
+import { HardDrive, Trash2, Download, ImageIcon, Video, AlertTriangle, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 
@@ -19,7 +19,6 @@ function Lightbox({ file, onClose }: { file: StorageFile; onClose: () => void })
         className="relative max-w-2xl w-full max-h-[90vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
         <div className="flex items-center justify-between mb-3">
           <p className="text-sm font-medium text-white/80 truncate pr-4">{file.file_name}</p>
           <div className="flex items-center gap-2 shrink-0">
@@ -37,34 +36,62 @@ function Lightbox({ file, onClose }: { file: StorageFile; onClose: () => void })
             )}
             <button
               onClick={onClose}
-              className="p-1.5 rounded-lg text-white/40 hover:text-white hover:bg-white/10 transition-all"
+              className="p-2 rounded-lg text-white/40 hover:text-white hover:bg-white/10 transition-all"
             >
               <X className="w-4 h-4" />
             </button>
           </div>
         </div>
-
-        {/* Media */}
         <div className="rounded-2xl overflow-hidden border border-white/10 bg-black flex items-center justify-center max-h-[80vh]">
           {isImage && file.public_url && (
-            <img
-              src={file.public_url}
-              alt={file.file_name}
-              className="max-w-full max-h-[80vh] object-contain"
-            />
+            <img src={file.public_url} alt={file.file_name} className="max-w-full max-h-[80vh] object-contain" />
           )}
           {isVideo && file.public_url && (
-            <video
-              src={file.public_url}
-              controls
-              autoPlay
-              playsInline
-              className="max-w-full max-h-[80vh]"
-            />
+            <video src={file.public_url} controls autoPlay playsInline className="max-w-full max-h-[80vh]" />
           )}
           {!file.public_url && (
             <div className="p-16 text-center text-white/30 text-sm">No preview available</div>
           )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function DeleteConfirmModal({ fileName, onConfirm, onCancel, isPending }: {
+  fileName: string
+  onConfirm: () => void
+  onCancel: () => void
+  isPending: boolean
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+      <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-brand-bg p-6 space-y-5">
+        <div className="flex items-start gap-3">
+          <div className="w-9 h-9 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center shrink-0">
+            <Trash2 className="w-4 h-4 text-red-400" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-white">Delete file?</p>
+            <p className="text-xs text-white/40 mt-1 leading-relaxed">
+              <span className="text-white/60">{fileName}</span> will be permanently deleted. This cannot be undone.
+            </p>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <Button
+            onClick={onCancel}
+            className="flex-1 h-9 rounded-xl bg-white/5 hover:bg-white/10 text-white/60 hover:text-white border border-white/8 text-sm"
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={onConfirm}
+            disabled={isPending}
+            className="flex-1 h-9 rounded-xl bg-red-600/80 hover:bg-red-600 text-white text-sm font-semibold disabled:opacity-50"
+          >
+            {isPending ? 'Deleting…' : 'Delete'}
+          </Button>
         </div>
       </div>
     </div>
@@ -97,10 +124,10 @@ const FILE_TYPE_LABELS: Record<StorageFile['file_type'], string> = {
 }
 
 const FILE_TYPE_ICONS: Record<StorageFile['file_type'], React.ReactNode> = {
-  product_image: <ImageIcon className="w-4 h-4 text-blue-400" />,
-  generated_image: <ImageIcon className="w-4 h-4 text-fuchsia-400" />,
-  generated_video: <Video className="w-4 h-4 text-violet-400" />,
-  face_upload: <ImageIcon className="w-4 h-4 text-pink-400" />,
+  product_image: <ImageIcon className="w-4 h-4 text-brand-accent" />,
+  generated_image: <ImageIcon className="w-4 h-4 text-brand-accent/70" />,
+  generated_video: <Video className="w-4 h-4 text-brand-accent" />,
+  face_upload: <ImageIcon className="w-4 h-4 text-brand-text/40" />,
 }
 
 export default function StoragePage() {
@@ -111,6 +138,7 @@ export default function StoragePage() {
   const [loading, setLoading] = useState(true)
   const [isPending, startTransition] = useTransition()
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [confirmDeleteFile, setConfirmDeleteFile] = useState<StorageFile | null>(null)
   const [previewFile, setPreviewFile] = useState<StorageFile | null>(null)
 
   async function load() {
@@ -125,8 +153,15 @@ export default function StoragePage() {
 
   useEffect(() => { load() }, [])
 
-  function handleDelete(id: string) {
+  function handleDelete(file: StorageFile) {
+    setConfirmDeleteFile(file)
+  }
+
+  function confirmDelete() {
+    if (!confirmDeleteFile) return
+    const id = confirmDeleteFile.id
     setDeletingId(id)
+    setConfirmDeleteFile(null)
     startTransition(async () => {
       await fetch(`/api/storage/${id}`, { method: 'DELETE' })
       setDeletingId(null)
@@ -140,21 +175,37 @@ export default function StoragePage() {
   return (
     <div className="space-y-8 max-w-4xl">
       {previewFile && <Lightbox file={previewFile} onClose={() => setPreviewFile(null)} />}
+      {confirmDeleteFile && (
+        <DeleteConfirmModal
+          fileName={confirmDeleteFile.file_name}
+          onConfirm={confirmDelete}
+          onCancel={() => setConfirmDeleteFile(null)}
+          isPending={isPending}
+        />
+      )}
+
+      {/* Header */}
       <div className="space-y-1">
-        <h1 className="text-2xl font-semibold text-white">Storage</h1>
-        <p className="text-sm text-white/50">All your generated content and uploaded files.</p>
+        <p className="text-[11px] font-black uppercase tracking-[0.2em] text-brand-text/30">Files</p>
+        <h1
+          className="text-[32px] font-black uppercase text-brand-text leading-[0.85]"
+          style={{ fontFamily: "'Bebas Neue', 'Arial Black', sans-serif", letterSpacing: '-0.01em' }}
+        >
+          Storage
+        </h1>
+        <p className="text-sm text-brand-text/40">All your generated content and uploaded files.</p>
       </div>
 
       {/* Storage usage card */}
-      <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-5 space-y-4">
+      <div className="rounded-2xl border border-white/[0.07] bg-brand-surface p-5 space-y-4">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center">
-              <HardDrive className="w-5 h-5 text-violet-400" />
+            <div className="w-9 h-9 rounded-xl bg-brand-accent/10 border border-brand-accent/20 flex items-center justify-center">
+              <HardDrive className="w-5 h-5 text-brand-accent" />
             </div>
             <div>
-              <p className="text-sm font-medium text-white">Storage Used</p>
-              <p className="text-xs text-white/40">
+              <p className="text-sm font-medium text-brand-text">Storage Used</p>
+              <p className="text-xs text-brand-text/40">
                 {formatBytes(usedBytes)}
                 {limitBytes > 0 ? ` of ${formatBytes(limitBytes)}` : ''}
               </p>
@@ -163,7 +214,7 @@ export default function StoragePage() {
           {!planId && (
             <Link
               href="/billing"
-              className="text-xs text-violet-400 hover:text-violet-300 transition-colors"
+              className="text-xs text-brand-accent hover:text-brand-accent-hover transition-colors"
             >
               Subscribe for storage →
             </Link>
@@ -176,14 +227,14 @@ export default function StoragePage() {
               <div
                 className={cn(
                   'h-full rounded-full transition-all duration-500',
-                  nearLimit ? 'bg-amber-500' : 'bg-gradient-to-r from-violet-500 to-fuchsia-500',
+                  nearLimit ? 'bg-amber-500' : 'bg-brand-accent',
                 )}
                 style={{ width: `${usedPercent}%` }}
               />
             </div>
             <div className="flex items-center justify-between">
-              <p className="text-xs text-white/30">{usedPercent.toFixed(1)}% used</p>
-              <p className="text-xs text-white/30">{formatBytes(limitBytes - usedBytes)} free</p>
+              <p className="text-xs text-brand-text/30">{usedPercent.toFixed(1)}% used</p>
+              <p className="text-xs text-brand-text/30">{formatBytes(limitBytes - usedBytes)} free</p>
             </div>
           </div>
         )}
@@ -191,7 +242,8 @@ export default function StoragePage() {
         {nearLimit && (
           <div className="flex items-center gap-2 text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2">
             <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-            Storage is almost full. Consider deleting old files or upgrading your plan.
+            Storage is almost full. Delete old files or{' '}
+            <Link href="/billing" className="underline underline-offset-2 hover:text-amber-300">upgrade your plan</Link>.
           </div>
         )}
       </div>
@@ -207,8 +259,8 @@ export default function StoragePage() {
             <HardDrive className="w-6 h-6 text-white/20" />
           </div>
           <div className="space-y-1">
-            <p className="text-sm font-medium text-white/50">No files yet</p>
-            <p className="text-xs text-white/30">Files will appear here after you generate content.</p>
+            <p className="text-sm font-medium text-brand-text/50">No files yet</p>
+            <p className="text-xs text-brand-text/30">Files will appear here after you generate content.</p>
           </div>
         </div>
       ) : (
@@ -216,7 +268,7 @@ export default function StoragePage() {
           {files.map((file) => (
             <div
               key={file.id}
-              className="flex items-center gap-4 rounded-xl border border-white/8 bg-white/[0.02] px-4 py-3 hover:bg-white/[0.03] transition-colors cursor-pointer"
+              className="flex items-center gap-4 rounded-xl border border-white/8 bg-white/[0.02] hover:bg-white/[0.04] hover:border-white/12 px-4 py-3 transition-all cursor-pointer group"
               onClick={() => setPreviewFile(file)}
             >
               {/* Thumbnail or icon */}
@@ -234,13 +286,13 @@ export default function StoragePage() {
               </div>
 
               <div className="flex-1 min-w-0 space-y-0.5">
-                <p className="text-sm text-white/80 font-medium truncate">{file.file_name}</p>
+                <p className="text-sm text-brand-text/80 font-medium truncate">{file.file_name}</p>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-[10px] text-white/30 border border-white/8 rounded-full px-1.5 py-0.5">
+                  <span className="text-[10px] text-brand-text/30 border border-white/8 rounded-full px-1.5 py-0.5">
                     {FILE_TYPE_LABELS[file.file_type]}
                   </span>
-                  <span className="text-[10px] text-white/25">{formatBytes(file.size_bytes)}</span>
-                  <span className="text-[10px] text-white/25">
+                  <span className="text-[10px] text-brand-text/25">{formatBytes(file.size_bytes)}</span>
+                  <span className="text-[10px] text-brand-text/25">
                     {new Date(file.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                   </span>
                 </div>
@@ -251,23 +303,21 @@ export default function StoragePage() {
                   <a
                     href={file.public_url}
                     download={file.file_name}
-                    target="_blank"
-                    rel="noreferrer"
                     onClick={(e) => e.stopPropagation()}
-                    className="p-2 rounded-lg text-white/30 hover:text-white hover:bg-white/5 transition-all"
+                    className="p-2 rounded-lg text-brand-text/25 hover:text-brand-text hover:bg-white/5 transition-all"
                     title="Download"
                   >
                     <Download className="w-3.5 h-3.5" />
                   </a>
                 ) : (
-                  <div className="p-2 opacity-20" onClick={(e) => e.stopPropagation()} title="No download available">
-                    <Download className="w-3.5 h-3.5 text-white/30" />
+                  <div className="p-2 opacity-20">
+                    <Download className="w-3.5 h-3.5 text-brand-text/30" />
                   </div>
                 )}
                 <button
-                  onClick={(e) => { e.stopPropagation(); if (confirm('Delete this file? This cannot be undone.')) handleDelete(file.id) }}
+                  onClick={(e) => { e.stopPropagation(); handleDelete(file) }}
                   disabled={isPending && deletingId === file.id}
-                  className="p-2 rounded-lg text-white/20 hover:text-red-400 hover:bg-red-500/10 transition-all disabled:opacity-40"
+                  className="p-2 rounded-lg text-brand-text/20 hover:text-red-400 hover:bg-red-500/10 transition-all disabled:opacity-40"
                   title="Delete"
                 >
                   <Trash2 className="w-3.5 h-3.5" />

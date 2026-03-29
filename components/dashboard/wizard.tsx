@@ -431,7 +431,7 @@ function StepGenerate({ state, onChange }: { state: WizardState; onChange: (p: P
               <img src={url} alt="Generated" className="w-full h-full object-cover" />
               <a
                 href={url}
-                download={`affilify-image-${i + 1}.jpg`}
+                download={`genetrify-image-${i + 1}.jpg`}
                 onClick={(e) => e.stopPropagation()}
                 className="absolute bottom-2 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-black/70 text-white text-xs px-2.5 py-1 rounded-md whitespace-nowrap"
               >
@@ -531,7 +531,7 @@ function StepSelect({ state, onChange }: { state: WizardState; onChange: (p: Par
             </button>
             <a
               href={url}
-              download={`affilify-image-${i + 1}.jpg`}
+              download={`genetrify-image-${i + 1}.jpg`}
               className="absolute bottom-2 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-black/70 text-white text-xs px-2.5 py-1 rounded-md whitespace-nowrap z-10"
             >
               ↓ Save
@@ -638,7 +638,7 @@ function StepExport({ state, onChange }: { state: WizardState; onChange: (p: Par
         videos: data.videos.map((v: { videoUrl: string }, i: number) => ({
           imageId: selected[i]?.id ?? String(i),
           blobUrl: v.videoUrl,
-          filename: `affilify-video-${i + 1}.mp4`,
+          filename: `genetrify-video-${i + 1}.mp4`,
         })),
       })
       setStatus('done')
@@ -826,7 +826,7 @@ export function Wizard() {
   return (
     <div className="flex flex-col min-h-screen bg-zinc-950">
       <header className="flex items-center justify-between px-6 py-4 border-b border-zinc-800 shrink-0">
-        <span className="text-white font-semibold">Affilify</span>
+        <span className="text-white font-semibold">Genetrify</span>
         <button onClick={() => router.push('/dashboard')} className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors">
           ← Exit
         </button>

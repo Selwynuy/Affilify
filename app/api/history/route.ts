@@ -34,7 +34,7 @@ export async function GET() {
       videos: (videos ?? []).map((v, i) => ({
         imageId: v.image_id ?? v.id,
         videoUrl: v.url,
-        filename: `affilify-video-${i + 1}.mp4`,
+        filename: `genetrify-video-${i + 1}.mp4`,
       })),
     }
   }))

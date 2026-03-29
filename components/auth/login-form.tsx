@@ -26,7 +26,7 @@ export function LoginForm() {
   return (
     <form action={action} className="space-y-5">
       <div className="space-y-2">
-        <Label htmlFor="email" className="text-zinc-300 text-sm font-medium">Email</Label>
+        <Label htmlFor="email" className="text-brand-text/60 text-sm font-medium">Email</Label>
         <Input
           id="email"
           name="email"
@@ -35,12 +35,12 @@ export function LoginForm() {
           required
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="bg-zinc-900 border-zinc-700 text-white placeholder:text-zinc-600 focus:border-violet-500 focus:ring-1 focus:ring-violet-500 h-11 [&:-webkit-autofill]:shadow-[inset_0_0_0_1000px_theme(colors.zinc.900)] [&:-webkit-autofill]:[-webkit-text-fill-color:theme(colors.white)]"
+          className="bg-brand-surface border-white/10 text-brand-text placeholder:text-brand-text/25 focus:border-brand-accent focus:ring-1 focus:ring-brand-accent/50 h-11 [&:-webkit-autofill]:shadow-[inset_0_0_0_1000px_#393E46] [&:-webkit-autofill]:[-webkit-text-fill-color:#EEEEEE]"
         />
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="password" className="text-zinc-300 text-sm font-medium">Password</Label>
+        <Label htmlFor="password" className="text-brand-text/60 text-sm font-medium">Password</Label>
         <div className="relative">
           <Input
             id="password"
@@ -50,12 +50,12 @@ export function LoginForm() {
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="bg-zinc-900 border-zinc-700 text-white placeholder:text-zinc-600 focus:border-violet-500 focus:ring-1 focus:ring-violet-500 h-11 pr-11 [&:-webkit-autofill]:shadow-[inset_0_0_0_1000px_theme(colors.zinc.900)] [&:-webkit-autofill]:[-webkit-text-fill-color:theme(colors.white)]"
+            className="bg-brand-surface border-white/10 text-brand-text placeholder:text-brand-text/25 focus:border-brand-accent focus:ring-1 focus:ring-brand-accent/50 h-11 pr-11 [&:-webkit-autofill]:shadow-[inset_0_0_0_1000px_#393E46] [&:-webkit-autofill]:[-webkit-text-fill-color:#EEEEEE]"
           />
           <button
             type="button"
             onClick={() => setShowPassword((v) => !v)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-text/30 hover:text-brand-text/70 transition-colors"
             tabIndex={-1}
             aria-label={showPassword ? 'Hide password' : 'Show password'}
           >
@@ -73,7 +73,7 @@ export function LoginForm() {
       <Button
         type="submit"
         disabled={pending}
-        className="w-full h-11 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white font-medium shadow-lg shadow-violet-500/20 transition-all disabled:opacity-60"
+        className="w-full h-11 bg-brand-accent hover:bg-brand-accent-hover text-brand-bg font-bold uppercase tracking-wide shadow-lg shadow-brand-accent/20 transition-all disabled:opacity-60"
       >
         {pending ? (
           <span className="flex items-center gap-2">

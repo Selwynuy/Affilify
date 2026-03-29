@@ -107,8 +107,9 @@ export default function BillingPage() {
     <div className="space-y-10 max-w-5xl">
       {/* Header */}
       <div className="space-y-1">
-        <h1 className="text-2xl font-semibold text-white">Billing</h1>
-        <p className="text-sm text-white/50">Manage your plan, tokens, and payment details.</p>
+        <p className="text-[11px] font-black uppercase tracking-[0.2em] text-brand-text/30">Account</p>
+        <h1 className="text-[32px] font-black uppercase text-brand-text leading-[0.85]" style={{ fontFamily: "'Bebas Neue', 'Arial Black', sans-serif", letterSpacing: '-0.01em' }}>Billing</h1>
+        <p className="text-sm text-brand-text/40">Manage your plan, tokens, and payment details.</p>
       </div>
 
       {/* Success banner */}
@@ -128,10 +129,24 @@ export default function BillingPage() {
       )}
 
       {/* Current plan + token balance */}
+      {!data && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 animate-pulse">
+          <div className="rounded-2xl border border-white/[0.07] bg-brand-surface p-5 space-y-4">
+            <div className="h-3 w-24 rounded bg-white/5" />
+            <div className="h-7 w-32 rounded bg-white/5" />
+            <div className="h-3 w-40 rounded bg-white/5" />
+          </div>
+          <div className="rounded-2xl border border-white/[0.07] bg-brand-surface p-5 space-y-4">
+            <div className="h-3 w-24 rounded bg-white/5" />
+            <div className="h-7 w-20 rounded bg-white/5" />
+            <div className="h-2 w-full rounded-full bg-white/5" />
+          </div>
+        </div>
+      )}
       {data && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {/* Plan card */}
-          <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-5 space-y-4">
+          <div className="rounded-2xl border border-white/[0.07] bg-brand-surface p-5 space-y-4">
             <div className="flex items-center justify-between">
               <p className="text-xs font-medium text-white/40 uppercase tracking-wider">Current Plan</p>
               {currentPlanId && !cancelDone && (
@@ -196,7 +211,7 @@ export default function BillingPage() {
           </div>
 
           {/* Token balance card */}
-          <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-5 space-y-4">
+          <div className="rounded-2xl border border-white/[0.07] bg-brand-surface p-5 space-y-4">
             <p className="text-xs font-medium text-white/40 uppercase tracking-wider">Token Balance</p>
             <div className="space-y-1">
               <p className="text-2xl font-bold text-white">{balance.toLocaleString()}</p>
@@ -210,7 +225,7 @@ export default function BillingPage() {
                   <div
                     className={cn(
                       'h-full rounded-full transition-all duration-500',
-                      usedPercent > 80 ? 'bg-amber-500' : 'bg-gradient-to-r from-violet-500 to-fuchsia-500',
+                      usedPercent > 80 ? 'bg-amber-500' : 'bg-brand-accent',
                     )}
                     style={{ width: `${usedPercent}%` }}
                   />
@@ -235,9 +250,9 @@ export default function BillingPage() {
                   key={pack.planId}
                   onClick={() => handleTopup(pack.planId)}
                   disabled={isPending}
-                  className="flex items-center gap-3 rounded-xl border border-white/8 bg-white/5 hover:border-violet-500/40 hover:bg-violet-500/5 px-4 py-3 transition-all"
+                  className="flex items-center gap-3 rounded-xl border border-white/[0.07] bg-brand-surface hover:border-brand-accent/40 hover:bg-brand-accent/5 px-4 py-3 transition-all"
                 >
-                  <Zap className="w-4 h-4 text-violet-400 shrink-0" />
+                  <Zap className="w-4 h-4 text-brand-accent shrink-0" />
                   <div className="text-left">
                     <p className="text-sm font-medium text-white">+1,000 tokens</p>
                     <p className="text-xs text-white/40">{phpFormat(pack.priceCentavos)} one-time</p>
@@ -259,7 +274,7 @@ export default function BillingPage() {
           <p className="text-xs text-white/30">Billed monthly · PHP pricing</p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           {PLANS.map((plan) => {
             const isCurrent = plan.id === currentPlanId
             const isPopular = plan.id === 'growth'
@@ -270,19 +285,19 @@ export default function BillingPage() {
                 className={cn(
                   'relative flex flex-col rounded-2xl border p-5 space-y-5 transition-all',
                   isCurrent
-                    ? 'border-violet-500 bg-violet-500/5'
+                    ? 'border-brand-accent bg-brand-accent/5'
                     : isPopular
-                    ? 'border-fuchsia-500/40 bg-white/[0.03]'
-                    : 'border-white/8 bg-white/[0.03]',
+                    ? 'border-brand-accent/40 bg-brand-surface'
+                    : 'border-white/[0.07] bg-brand-surface',
                 )}
               >
                 {isPopular && !isCurrent && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-600 text-[10px] font-semibold text-white whitespace-nowrap">
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-10 px-3 py-0.5 rounded-full bg-brand-accent text-[10px] font-semibold text-brand-bg whitespace-nowrap">
                     Most Popular
                   </div>
                 )}
                 {isCurrent && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full bg-violet-600 text-[10px] font-semibold text-white">
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full bg-brand-accent text-[10px] font-semibold text-brand-bg">
                     Current
                   </div>
                 )}
@@ -298,7 +313,7 @@ export default function BillingPage() {
                 <ul className="space-y-2 flex-1">
                   {plan.features.map((f) => (
                     <li key={f} className="flex items-start gap-2 text-xs text-white/60">
-                      <Sparkles className="w-3 h-3 text-violet-400 shrink-0 mt-0.5" />
+                      <Sparkles className="w-3 h-3 text-brand-accent shrink-0 mt-0.5" />
                       {f}
                     </li>
                   ))}
@@ -311,7 +326,7 @@ export default function BillingPage() {
                     'w-full h-9 rounded-xl font-semibold text-sm transition-all',
                     isCurrent
                       ? 'bg-white/5 text-white/30 cursor-default'
-                      : 'bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white shadow-lg shadow-violet-500/20',
+                      : 'bg-brand-accent hover:bg-brand-accent-hover text-brand-bg font-bold shadow-lg shadow-brand-accent/20',
                   )}
                 >
                   {actionPending === plan.id ? (
