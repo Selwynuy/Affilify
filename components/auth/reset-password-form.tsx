@@ -1,25 +1,19 @@
 'use client'
 
 import { useActionState, useState } from 'react'
-import Link from 'next/link'
-import { login } from '@/app/actions/auth'
+import { resetPassword } from '@/app/actions/auth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Eye, EyeOff } from 'lucide-react'
 
-export function LoginForm() {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
+export function ResetPasswordForm() {
   const [showPassword, setShowPassword] = useState(false)
+  const [showConfirm, setShowConfirm] = useState(false)
 
   const [state, action, pending] = useActionState(
     async (_prev: { error?: string } | null, formData: FormData) => {
-      const result = await login(formData)
-      if (result?.error) {
-        setPassword('')
-      }
-      return result ?? null
+      return await resetPassword(formData) ?? null
     },
     null
   )
@@ -27,26 +21,7 @@ export function LoginForm() {
   return (
     <form action={action} className="space-y-5">
       <div className="space-y-2">
-        <Label htmlFor="email" className="text-brand-text/60 text-sm font-medium">Email</Label>
-        <Input
-          id="email"
-          name="email"
-          type="email"
-          placeholder="you@example.com"
-          required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="bg-brand-surface border-white/10 text-brand-text placeholder:text-brand-text/25 focus:border-brand-accent focus:ring-1 focus:ring-brand-accent/50 h-11 [&:-webkit-autofill]:shadow-[inset_0_0_0_1000px_#393E46] [&:-webkit-autofill]:[-webkit-text-fill-color:#EEEEEE]"
-        />
-      </div>
-
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <Label htmlFor="password" className="text-brand-text/60 text-sm font-medium">Password</Label>
-          <Link href="/forgot-password" className="text-xs text-brand-text/40 hover:text-brand-accent transition-colors">
-            Forgot password?
-          </Link>
-        </div>
+        <Label htmlFor="password" className="text-brand-text/60 text-sm font-medium">New password</Label>
         <div className="relative">
           <Input
             id="password"
@@ -54,8 +29,7 @@ export function LoginForm() {
             type={showPassword ? 'text' : 'password'}
             placeholder="••••••••"
             required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            minLength={8}
             className="bg-brand-surface border-white/10 text-brand-text placeholder:text-brand-text/25 focus:border-brand-accent focus:ring-1 focus:ring-brand-accent/50 h-11 pr-11 [&:-webkit-autofill]:shadow-[inset_0_0_0_1000px_#393E46] [&:-webkit-autofill]:[-webkit-text-fill-color:#EEEEEE]"
           />
           <button
@@ -66,6 +40,31 @@ export function LoginForm() {
             aria-label={showPassword ? 'Hide password' : 'Show password'}
           >
             {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+          </button>
+        </div>
+        <p className="text-xs text-brand-text/30">Minimum 8 characters</p>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="confirm" className="text-brand-text/60 text-sm font-medium">Confirm new password</Label>
+        <div className="relative">
+          <Input
+            id="confirm"
+            name="confirm"
+            type={showConfirm ? 'text' : 'password'}
+            placeholder="••••••••"
+            required
+            minLength={8}
+            className="bg-brand-surface border-white/10 text-brand-text placeholder:text-brand-text/25 focus:border-brand-accent focus:ring-1 focus:ring-brand-accent/50 h-11 pr-11 [&:-webkit-autofill]:shadow-[inset_0_0_0_1000px_#393E46] [&:-webkit-autofill]:[-webkit-text-fill-color:#EEEEEE]"
+          />
+          <button
+            type="button"
+            onClick={() => setShowConfirm((v) => !v)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-text/30 hover:text-brand-text/70 transition-colors"
+            tabIndex={-1}
+            aria-label={showConfirm ? 'Hide password' : 'Show password'}
+          >
+            {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
           </button>
         </div>
       </div>
@@ -87,9 +86,9 @@ export function LoginForm() {
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z" />
             </svg>
-            Signing in…
+            Saving…
           </span>
-        ) : 'Sign in'}
+        ) : 'Set new password'}
       </Button>
     </form>
   )

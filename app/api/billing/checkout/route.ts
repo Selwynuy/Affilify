@@ -45,6 +45,7 @@ export async function POST(req: NextRequest) {
           type: 'topup',
           planId: topupPlanId,
           tokens: String(pack.tokens),
+          amountCentavos: String(pack.priceCentavos),
         },
       )
       return NextResponse.json({ clientKey: intent.attributes.client_key, intentId: intent.id })

@@ -12,6 +12,7 @@ const REQUIRED_VARS = [
   'NEXT_PUBLIC_APP_URL',
   'PAYMONGO_SECRET_KEY',
   'PAYMONGO_WEBHOOK_SECRET',
+  'RESEND_API_KEY',
 ] as const
 
 export function validateEnv() {

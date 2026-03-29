@@ -14,15 +14,44 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyWebhookSignature, getSubscription } from '@/lib/billing/paymongo'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { grantMonthlyTokens } from '@/lib/billing/tokens'
+import { grantMonthlyTokens, getTokenBalance } from '@/lib/billing/tokens'
 import type { PlanId } from '@/lib/types/billing'
 import { logger } from '@/lib/logger'
+import { sendEmail } from '@/lib/email/resend'
+import { subscriptionActivatedEmail } from '@/lib/email/templates/subscription-activated'
+import { paymentFailedEmail } from '@/lib/email/templates/payment-failed'
+import { subscriptionCancelledEmail } from '@/lib/email/templates/subscription-cancelled'
+import { topupConfirmedEmail } from '@/lib/email/templates/topup-confirmed'
+import { getPlan } from '@/lib/data/plans'
 
 const VALID_PLAN_IDS: readonly PlanId[] = ['starter', 'growth', 'pro', 'business']
 
 function parsePlanId(value: string | undefined): PlanId | null {
   if (!value || !(VALID_PLAN_IDS as readonly string[]).includes(value)) return null
   return value as PlanId
+}
+
+/** Look up a user's email via the admin auth API. Returns null on failure. */
+async function getUserEmail(userId: string): Promise<string | null> {
+  try {
+    const admin = createAdminClient()
+    const { data, error } = await admin.auth.admin.getUserById(userId)
+    if (error || !data.user?.email) return null
+    return data.user.email
+  } catch {
+    return null
+  }
+}
+
+/** Format centavo amount to PHP string e.g. "₱1,099.00" */
+function formatPHP(centavos: number): string {
+  return '₱' + (centavos / 100).toLocaleString('en-PH', { minimumFractionDigits: 2 })
+}
+
+/** Format ISO date string to readable e.g. "April 29, 2026" */
+function formatDate(iso: string | null | undefined): string {
+  if (!iso) return '—'
+  return new Date(iso).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })
 }
 
 export async function POST(req: NextRequest) {
@@ -115,6 +144,20 @@ export async function POST(req: NextRequest) {
 
       await grantMonthlyTokens(subRow.user_id, planId)
       logger.info('subscription.invoice.paid: tokens granted', { userId: subRow.user_id, planId })
+
+      // Send payment confirmation email
+      const email = await getUserEmail(subRow.user_id)
+      if (email) {
+        const plan = getPlan(planId)
+        const tpl = subscriptionActivatedEmail({
+          email,
+          planName: plan.name,
+          tokensGranted: plan.tokensPerMonth,
+          amountPaid: formatPHP(plan.monthlyPriceCentavos),
+          nextBillingDate: formatDate(nextBilling),
+        })
+        await sendEmail({ to: email, ...tpl })
+      }
       break
     }
 
@@ -124,12 +167,26 @@ export async function POST(req: NextRequest) {
       const subId = invoice.attributes.subscription_id
       if (!subId) break
 
-      await admin
+      const { data: failedSub } = await admin
         .from('subscriptions')
         .update({ status: 'past_due', updated_at: new Date().toISOString() })
         .eq('paymongo_subscription_id', subId)
+        .select('user_id, plan_id')
+        .single()
 
       logger.warn('subscription.invoice.payment_failed', { subId })
+
+      if (failedSub?.user_id) {
+        const email = await getUserEmail(failedSub.user_id)
+        if (email) {
+          const plan = getPlan(parsePlanId(failedSub.plan_id) ?? 'starter')
+          const tpl = paymentFailedEmail({
+            planName: plan.name,
+            attemptDate: formatDate(new Date().toISOString()),
+          })
+          await sendEmail({ to: email, ...tpl })
+        }
+      }
       break
     }
 
@@ -137,10 +194,10 @@ export async function POST(req: NextRequest) {
     case 'subscription.updated': {
       const pmSub = eventData as {
         id: string
-        attributes: { status: string; next_billing_schedule: string | null }
+        attributes: { status: string; next_billing_schedule: string | null; cancel_at_period_end?: boolean }
       }
 
-      await admin
+      const { data: updatedSub } = await admin
         .from('subscriptions')
         .update({
           status: pmSub.attributes.status,
@@ -148,6 +205,21 @@ export async function POST(req: NextRequest) {
           updated_at: new Date().toISOString(),
         })
         .eq('paymongo_subscription_id', pmSub.id)
+        .select('user_id, plan_id')
+        .single()
+
+      // Send cancellation email when status flips to 'canceled'
+      if (pmSub.attributes.status === 'canceled' && updatedSub?.user_id) {
+        const email = await getUserEmail(updatedSub.user_id)
+        if (email) {
+          const plan = getPlan(parsePlanId(updatedSub.plan_id) ?? 'starter')
+          const tpl = subscriptionCancelledEmail({
+            planName: plan.name,
+            accessUntil: formatDate(pmSub.attributes.next_billing_schedule),
+          })
+          await sendEmail({ to: email, ...tpl })
+        }
+      }
       break
     }
 
@@ -196,6 +268,21 @@ export async function POST(req: NextRequest) {
       })
 
       logger.info('payment.paid: top-up tokens granted', { userId, tokens })
+
+      // Send top-up confirmation email
+      const topupEmail = await getUserEmail(userId)
+      if (topupEmail) {
+        const newBalance = await getTokenBalance(userId)
+        // Centavos stored in metadata as string (set during checkout)
+        const amountCentavos = parseInt(meta.amountCentavos ?? '0')
+        const tpl = topupConfirmedEmail({
+          email: topupEmail,
+          tokens,
+          amountPaid: amountCentavos ? formatPHP(amountCentavos) : '—',
+          newBalance,
+        })
+        await sendEmail({ to: topupEmail, ...tpl })
+      }
       break
     }
 
