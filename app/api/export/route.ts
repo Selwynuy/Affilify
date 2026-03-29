@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { deductTokens, getTokenBalance, getUserPlanId } from '@/lib/billing/tokens'
-import { getVideoModel, getAvailableModels, VIDEO_MODELS } from '@/lib/data/plans'
+import { getAvailableModels, VIDEO_MODELS } from '@/lib/data/plans'
 import { logger } from '@/lib/logger'
 import { rateLimit } from '@/lib/rate-limit'
 

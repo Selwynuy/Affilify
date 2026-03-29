@@ -6,11 +6,11 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { usePreferences } from '@/lib/context/preferences-context'
 import {
-  ImagePlus, X, Download, Clapperboard, User, UserRound,
+  ImagePlus, X, Download, User,
   Zap, Sparkles, Video, RotateCcw, ChevronDown, CheckCircle2,
-  AlertCircle, ArrowRight, Clock,
+  AlertCircle, ArrowRight,
 } from 'lucide-react'
-import { buildVideoPrompt, getTemplate, MOTION_TEMPLATES } from '@/lib/data/templates'
+import { buildVideoPrompt, MOTION_TEMPLATES } from '@/lib/data/templates'
 import { VIDEO_MODELS, getAvailableModels, TOKEN_COSTS } from '@/lib/data/plans'
 import type { VideoModel, PlanId } from '@/lib/types/billing'
 
@@ -203,20 +203,19 @@ function HistorySection({ runs }: { runs: HistoryRun[] }) {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 export function GeneratePanel() {
-  const { avatarConfig, backgroundConfig, cameraTemplateId, movementTemplateId, setCameraTemplateId, setMovementTemplateId } = usePreferences()
+  const { avatarConfig, backgroundConfig, cameraTemplateId, movementTemplateId } = usePreferences()
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [productFiles, setProductFiles] = useState<ProductFile[]>([])
   const [productDescription, setProductDescription] = useState('')
   const [stage, setStage] = useState<Stage>('idle')
   const [errorMsg, setErrorMsg] = useState('')
-  const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([])
+  const [, setGeneratedImages] = useState<GeneratedImage[]>([])
   const [pendingImage, setPendingImage] = useState<GeneratedImage | null>(null)
   const [lastProjectId, setLastProjectId] = useState<string | null>(null)
   const [lastDescription, setLastDescription] = useState('')
   const [videos, setVideos] = useState<VideoResult[]>([])
   const [videoProgress, setVideoProgress] = useState<{ current: number; total: number } | null>(null)
-  const [avatarImgError, setAvatarImgError] = useState(false)
   const [historyRuns, setHistoryRuns] = useState<HistoryRun[]>([])
   const [historyLoaded, setHistoryLoaded] = useState(false)
   const [tokenBalance, setTokenBalance] = useState<number | null>(null)
@@ -244,8 +243,6 @@ export function GeneratePanel() {
   }, [])
 
   const selectedModel = availableModels.find((m) => m.id === selectedModelId) ?? availableModels[0]
-  const avatarThumb = !avatarImgError && avatarConfig?.type === 'custom' ? avatarConfig.faceUrl : null
-  const GenderIcon = avatarConfig?.gender === 'woman' ? UserRound : User
 
   const isGenerating = stage === 'uploading' || stage === 'generating' || stage === 'making-videos'
   const canGenerate = productFiles.length > 0 && !!avatarConfig && !!backgroundConfig && !isGenerating && stage !== 'reviewing'

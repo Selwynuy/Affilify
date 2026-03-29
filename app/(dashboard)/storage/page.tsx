@@ -151,7 +151,7 @@ export default function StoragePage() {
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { void load() }, []) // eslint-disable-line react-hooks/set-state-in-effect
 
   function handleDelete(file: StorageFile) {
     setConfirmDeleteFile(file)

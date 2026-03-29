@@ -132,7 +132,7 @@ export default function SupportPage() {
     setLoading(false)
   }
 
-  useEffect(() => { loadTickets() }, [])
+  useEffect(() => { void loadTickets() }, []) // eslint-disable-line react-hooks/set-state-in-effect
 
   function handleCreated() {
     setShowNew(false)
@@ -179,7 +179,7 @@ export default function SupportPage() {
             </div>
             <div className="space-y-1">
               <p className="text-sm font-medium text-white/50">No tickets yet</p>
-              <p className="text-xs text-white/30">Have a question? Open a support ticket and we'll help you out.</p>
+              <p className="text-xs text-white/30">Have a question? Open a support ticket and we&apos;ll help you out.</p>
             </div>
             <Button
               onClick={() => setShowNew(true)}

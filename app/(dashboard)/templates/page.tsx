@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition, useRef, useEffect } from 'react'
+import { useState, useTransition, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { CheckCircle2, Camera, Sparkles, Play, User, ImageIcon, Upload } from 'lucide-react'
@@ -110,7 +110,7 @@ function MotionCard({
 
 // ── Simple preset card (avatar & background) ──────────────────────────────────
 function PresetCard({
-  id,
+  id: _id,
   label,
   thumbnailUrl,
   thumbnailAspect,

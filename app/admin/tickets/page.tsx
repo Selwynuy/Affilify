@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useTransition } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { ChevronRight, MessageCircle } from 'lucide-react'
@@ -36,7 +36,7 @@ export default function AdminTicketsPage() {
     setLoading(false)
   }
 
-  useEffect(() => { load(status) }, [status])
+  useEffect(() => { void load(status) }, [status]) // eslint-disable-line react-hooks/set-state-in-effect
 
   function handleStatusChange(s: string) {
     setStatus(s)

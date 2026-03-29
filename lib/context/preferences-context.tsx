@@ -2,7 +2,6 @@
 
 import { createContext, useContext, useState } from 'react'
 import type { AvatarConfig, BackgroundConfig } from '@/lib/types/preferences'
-import { DEFAULT_CAMERA_TEMPLATE_ID, DEFAULT_MOVEMENT_TEMPLATE_ID } from '@/lib/data/templates'
 
 interface PreferencesContextValue {
   avatarConfig: AvatarConfig | null

@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { logout } from '@/app/actions/auth'
 import { cn } from '@/lib/utils'
-import { Video, LayoutDashboard, Settings, LogOut, PanelLeftClose, PanelLeftOpen, Menu, X, Wand2, CreditCard, Zap, HardDrive, MessageCircle } from 'lucide-react'
+import { Video, LayoutDashboard, LogOut, PanelLeftClose, PanelLeftOpen, Menu, X, Wand2, CreditCard, Zap, HardDrive, MessageCircle } from 'lucide-react'
 
 const NAV_LINKS = [
   { href: '/dashboard', label: 'Studio', icon: LayoutDashboard },

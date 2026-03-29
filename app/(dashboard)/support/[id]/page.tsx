@@ -31,7 +31,7 @@ export default function TicketDetailPage() {
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [id])
+  useEffect(() => { void load() }, [id]) // eslint-disable-line react-hooks/set-state-in-effect
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })

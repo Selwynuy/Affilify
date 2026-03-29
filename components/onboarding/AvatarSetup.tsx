@@ -23,11 +23,6 @@ const CARD_GRADIENTS = [
   'from-[#182028] to-[#1a1f27]',
 ]
 
-const GENDER_EMOJI: Record<string, string> = {
-  man: '👤',
-  woman: '👤',
-}
-
 export function AvatarSetup({ value, onChange }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
