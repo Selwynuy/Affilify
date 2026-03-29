@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { usePreferences } from '@/lib/context/preferences-context'
+import { useTokens } from '@/lib/context/token-context'
 import {
   ImagePlus, X, Download, User,
   Zap, Sparkles, Video, RotateCcw, ChevronDown, CheckCircle2,
@@ -12,6 +13,8 @@ import {
 } from 'lucide-react'
 import { buildVideoPrompt, MOTION_TEMPLATES } from '@/lib/data/templates'
 import { VIDEO_MODELS, getAvailableModels, TOKEN_COSTS } from '@/lib/data/plans'
+import { AVATAR_PRESETS } from '@/lib/data/avatar-presets'
+import { BACKGROUND_PRESETS } from '@/lib/data/background-presets'
 import type { VideoModel, PlanId } from '@/lib/types/billing'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -203,7 +206,8 @@ function HistorySection({ runs }: { runs: HistoryRun[] }) {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 export function GeneratePanel() {
-  const { avatarConfig, backgroundConfig, cameraTemplateId, movementTemplateId } = usePreferences()
+  const { avatarConfig, backgroundConfig, cameraTemplateId, movementTemplateId, setAvatarConfig, setBackgroundConfig } = usePreferences()
+  const { balance: tokenBalance, planId: contextPlanId, refreshBalance } = useTokens()
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [productFiles, setProductFiles] = useState<ProductFile[]>([])
@@ -218,7 +222,6 @@ export function GeneratePanel() {
   const [videoProgress, setVideoProgress] = useState<{ current: number; total: number } | null>(null)
   const [historyRuns, setHistoryRuns] = useState<HistoryRun[]>([])
   const [historyLoaded, setHistoryLoaded] = useState(false)
-  const [tokenBalance, setTokenBalance] = useState<number | null>(null)
   const [availableModels, setAvailableModels] = useState<VideoModel[]>([VIDEO_MODELS[0]])
   const [selectedModelId, setSelectedModelId] = useState<string>(VIDEO_MODELS[0].id)
 
@@ -234,13 +237,10 @@ export function GeneratePanel() {
   }, [])
 
   useEffect(() => {
-    fetch('/api/billing/balance').then((r) => r.json()).then((d) => {
-      setTokenBalance(d.balance ?? 0)
-      const models = d.planId ? getAvailableModels(d.planId as PlanId) : [VIDEO_MODELS[0]]
-      setAvailableModels(models)
-      setSelectedModelId((prev) => models.find((m) => m.id === prev) ? prev : models[0].id)
-    }).catch(() => {})
-  }, [])
+    const models = contextPlanId ? getAvailableModels(contextPlanId as PlanId) : [VIDEO_MODELS[0]]
+    setAvailableModels(models)
+    setSelectedModelId((prev) => models.find((m) => m.id === prev) ? prev : models[0].id)
+  }, [contextPlanId])
 
   const selectedModel = availableModels.find((m) => m.id === selectedModelId) ?? availableModels[0]
 
@@ -324,8 +324,7 @@ export function GeneratePanel() {
     if (collected.length === 0) throw new Error('No images could be generated')
     setPendingImage(collected[0])
     setStage('reviewing')
-    // Refresh balance after image generation cost
-    fetch('/api/billing/balance').then((r) => r.json()).then((d) => setTokenBalance(d.balance ?? 0))
+    refreshBalance()
   }
 
   async function handleApproveImage() {
@@ -355,7 +354,7 @@ export function GeneratePanel() {
 
       setStage('done')
       fetch('/api/history').then((r) => r.json()).then((d) => setHistoryRuns(d.runs ?? []))
-      fetch('/api/billing/balance').then((r) => r.json()).then((d) => setTokenBalance(d.balance ?? 0))
+      refreshBalance()
     } catch (e: unknown) {
       setErrorMsg(e instanceof Error ? e.message : 'Something went wrong')
       setStage('error')
@@ -387,6 +386,27 @@ export function GeneratePanel() {
 
   const cameraOptions = MOTION_TEMPLATES.filter((t) => t.category === 'camera').map((t) => ({ id: t.id, name: t.name, badge: t.badge }))
   const movementOptions = MOTION_TEMPLATES.filter((t) => t.category === 'movement').map((t) => ({ id: t.id, name: t.name, badge: t.badge }))
+  const avatarOptions = AVATAR_PRESETS.map((p) => ({ id: p.id, name: p.label }))
+  const backgroundOptions = BACKGROUND_PRESETS.map((p) => ({ id: p.id, name: p.label }))
+
+  const localAvatarId = avatarConfig?.type === 'preset' ? (avatarConfig.presetId ?? avatarOptions[0].id) : avatarOptions[0].id
+  const localBgId = backgroundConfig?.presetId ?? backgroundOptions[0].id
+
+  async function handleAvatarChange(id: string) {
+    const preset = AVATAR_PRESETS.find((p) => p.id === id)
+    if (!preset) return
+    const config = { type: 'preset' as const, presetId: preset.id, gender: preset.gender, style: preset.style }
+    setAvatarConfig(config)
+    fetch('/api/preferences', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ avatar_config: config }) })
+  }
+
+  async function handleBackgroundChange(id: string) {
+    const preset = BACKGROUND_PRESETS.find((p) => p.id === id)
+    if (!preset) return
+    const config = { type: 'preset' as const, presetId: preset.id, roomAesthetic: preset.roomAesthetic, roomColors: preset.roomColors, roomElements: preset.roomElements, thumbnailUrl: preset.thumbnailUrl }
+    setBackgroundConfig(config)
+    fetch('/api/preferences', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ background_config: config }) })
+  }
 
   return (
     <div className="flex flex-col gap-6 max-w-6xl">
@@ -802,64 +822,36 @@ export function GeneratePanel() {
         <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-text/30 px-1 mb-1">Settings</p>
 
         {/* Avatar */}
-        <Link
-          href="/templates"
-          className="flex items-center gap-3 rounded-xl border border-white/8 bg-white/[0.02] px-3 py-2.5 hover:border-brand-accent/40 hover:bg-brand-accent/5 transition-all group"
-        >
-          {avatarConfig?.type === 'custom' && avatarConfig.faceUrl ? (
-            <img src={avatarConfig.faceUrl} alt="Avatar" className="w-8 h-8 rounded-full object-cover border border-white/10 shrink-0" />
-          ) : (
-            <div className="w-8 h-8 rounded-full bg-white/5 border border-white/8 flex items-center justify-center shrink-0">
-              <User className="w-3.5 h-3.5 text-brand-text/30" />
-            </div>
-          )}
-          <div className="min-w-0 flex-1">
-            <p className="text-[10px] text-brand-text/30 leading-none mb-0.5">Avatar</p>
-            <p className="text-xs font-medium text-brand-text/70 truncate group-hover:text-brand-text transition-colors">
-              {avatarConfig ? (avatarConfig.type === 'preset' ? 'AI Model' : 'Custom Face') : 'Not set'}
-            </p>
-          </div>
-        </Link>
+        <InlineSelector
+          label="Avatar"
+          options={avatarOptions}
+          value={localAvatarId}
+          onChange={handleAvatarChange}
+        />
 
         {/* Background */}
-        <Link
-          href="/templates?tab=background"
-          className="flex items-center gap-3 rounded-xl border border-white/8 bg-white/[0.02] px-3 py-2.5 hover:border-brand-accent/40 hover:bg-brand-accent/5 transition-all group"
-        >
-          {backgroundConfig?.thumbnailUrl ? (
-            <img src={backgroundConfig.thumbnailUrl} alt="Background" className="w-8 h-8 rounded-md object-cover border border-white/10 shrink-0" />
-          ) : (
-            <div className="w-8 h-8 rounded-md bg-white/5 border border-white/8 flex items-center justify-center shrink-0 text-[9px] text-brand-text/30 font-bold">BG</div>
-          )}
-          <div className="min-w-0 flex-1">
-            <p className="text-[10px] text-brand-text/30 leading-none mb-0.5">Background</p>
-            <p className="text-xs font-medium text-brand-text/70 truncate group-hover:text-brand-text transition-colors capitalize">
-              {backgroundConfig?.roomAesthetic ?? 'Not set'}
-            </p>
-          </div>
-        </Link>
-
-        <div className="border-t border-white/[0.06] my-1" />
+        <InlineSelector
+          label="Background"
+          options={backgroundOptions}
+          value={localBgId}
+          onChange={handleBackgroundChange}
+        />
 
         {/* Camera */}
-        <div>
-          <InlineSelector
-            label="Camera Angle"
-            options={cameraOptions}
-            value={localCameraId}
-            onChange={setLocalCameraId}
-          />
-        </div>
+        <InlineSelector
+          label="Camera Angle"
+          options={cameraOptions}
+          value={localCameraId}
+          onChange={setLocalCameraId}
+        />
 
         {/* Movement */}
-        <div>
-          <InlineSelector
-            label="Movement"
-            options={movementOptions}
-            value={localMovementId}
-            onChange={setLocalMovementId}
-          />
-        </div>
+        <InlineSelector
+          label="Movement"
+          options={movementOptions}
+          value={localMovementId}
+          onChange={setLocalMovementId}
+        />
 
         <div className="border-t border-white/[0.06] my-1" />
 

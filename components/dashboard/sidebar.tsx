@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { logout } from '@/app/actions/auth'
 import { cn } from '@/lib/utils'
 import { Video, LayoutDashboard, LogOut, PanelLeftClose, PanelLeftOpen, Menu, X, Wand2, CreditCard, Zap, HardDrive, MessageCircle } from 'lucide-react'
+import { useTokens } from '@/lib/context/token-context'
 
 const NAV_LINKS = [
   { href: '/dashboard', label: 'Studio', icon: LayoutDashboard },
@@ -16,14 +17,7 @@ const NAV_LINKS = [
 ]
 
 function TokenWidget({ collapsed }: { collapsed?: boolean }) {
-  const [balance, setBalance] = useState<number | null>(null)
-
-  useEffect(() => {
-    fetch('/api/billing/balance')
-      .then((r) => r.json())
-      .then((d) => setBalance(d.balance ?? 0))
-      .catch(() => {})
-  }, [])
+  const { balance } = useTokens()
 
   if (balance === null) return null
 

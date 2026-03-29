@@ -66,7 +66,16 @@
       "WebFetch(domain:www.oliverrevelo.com)",
       "WebFetch(domain:kscode.dev)",
       "WebFetch(domain:www.prosperna.com)",
-      "WebFetch(domain:paymongo.ossph.org)"
+      "WebFetch(domain:paymongo.ossph.org)",
+      "Bash(profile \")",
+      "Bash(xargs sed:*)",
+      "Bash(grep -r \"#00ADB5\\\\|#00c4cc\\\\|#EEEEEE\\\\|#222831\\\\|#393E46\" app components --include=*.tsx -l)",
+      "Bash(git -C D:/Projects/affilify status)",
+      "Bash(git -C D:/Projects/affilify diff --stat)",
+      "Bash(git -C D:/Projects/affilify log --oneline -5)",
+      "mcp__ide__getDiagnostics",
+      "Bash(npx eslint:*)",
+      "WebFetch(domain:www.anthropic.com)"
     ]
   }
 }

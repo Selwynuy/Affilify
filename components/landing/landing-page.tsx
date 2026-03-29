@@ -125,10 +125,8 @@ function useInView(threshold = 0.15) {
 const CARD_COLORS = [
   "bg-brand-surface",
   "bg-brand-surface/80",
-  "bg-brand-surface",
   "bg-[#1e2530]",
   "bg-[#2a3240]",
-  "bg-brand-surface",
   "bg-[#243040]",
   "bg-[#1e2838]",
   "bg-brand-surface",
@@ -150,7 +148,7 @@ function CarouselRow({ direction }: { direction: "left" | "right" }) {
           <div
             key={i}
             className={cn(
-              "w-20 sm:w-24 md:w-28 shrink-0 aspect-9/16 rounded-2xl overflow-hidden",
+              "w-64 sm:w-72 md:w-80 shrink-0 aspect-3/4 rounded-2xl overflow-hidden",
               color,
             )}
           >
@@ -526,7 +524,7 @@ export default function LandingPage({ user }: Props) {
       {/* ── SCROLLING CAROUSEL ── */}
       <section
         id="examples"
-        className="py-12 overflow-hidden"
+        className="py-16 overflow-hidden"
         style={{ background: "var(--color-brand-bg)" }}
       >
         <div className="mb-2 px-6 md:px-10 max-w-7xl mx-auto">
@@ -534,9 +532,8 @@ export default function LandingPage({ user }: Props) {
             Examples
           </p>
         </div>
-        <div className="flex flex-col gap-3 py-4">
+        <div className="py-4">
           <CarouselRow direction="left" />
-          <CarouselRow direction="right" />
         </div>
       </section>
 
@@ -651,7 +648,7 @@ export default function LandingPage({ user }: Props) {
           <div
             ref={featuresRef}
             className={cn(
-              "grid grid-cols-1 md:grid-cols-3 gap-5",
+              "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5",
               "transition-all duration-700 ease-out",
               featuresInView
                 ? "opacity-100 translate-y-0"
@@ -676,6 +673,12 @@ export default function LandingPage({ user }: Props) {
                 body: "Every product image becomes a cinematic 9:16 video with motion and Ken Burns effects. Export MP4 instantly — no watermarks, no restrictions.",
                 color: "bg-brand-accent/20",
                 delay: "160ms",
+              },
+              {
+                title: "Template Marketplace",
+                body: "Choose from camera angles, motion styles, and background presets built for affiliate content. New templates added weekly — plug and play.",
+                color: "bg-[#1e3a2a]",
+                delay: "240ms",
               },
             ].map((f, i) => (
               <div
