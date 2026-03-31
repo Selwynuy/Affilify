@@ -5,8 +5,9 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { logout } from '@/app/actions/auth'
 import { cn } from '@/lib/utils'
-import { Video, LayoutDashboard, LogOut, PanelLeftClose, PanelLeftOpen, Menu, X, Wand2, CreditCard, Zap, HardDrive, MessageCircle } from 'lucide-react'
+import { LayoutDashboard, LogOut, PanelLeftClose, PanelLeftOpen, Menu, X, Wand2, CreditCard, Zap, HardDrive, MessageCircle } from 'lucide-react'
 import { useTokens } from '@/lib/context/token-context'
+import { BrandLogo } from '@/components/brand-logo'
 
 const NAV_LINKS = [
   { href: '/dashboard', label: 'Studio', icon: LayoutDashboard },
@@ -88,9 +89,7 @@ export function Sidebar() {
       {/* Mobile top bar */}
       <div className="lg:hidden fixed top-0 left-0 right-0 z-30 flex items-center justify-between px-4 h-14 bg-brand-bg border-b border-white/5">
         <Link href="/" className="flex items-center gap-2.5 group">
-          <div className="w-7 h-7 rounded-full bg-brand-accent flex items-center justify-center shrink-0">
-            <Video className="w-3.5 h-3.5 text-brand-bg" />
-          </div>
+          <BrandLogo size={28} />
           <span className="font-black text-sm uppercase tracking-widest text-brand-text">GENETRIFY</span>
         </Link>
         <button
@@ -119,9 +118,7 @@ export function Sidebar() {
       >
         <div className="flex items-center justify-between px-4 h-14 border-b border-white/5">
           <Link href="/" className="flex items-center gap-2.5 group">
-            <div className="w-7 h-7 rounded-full bg-brand-accent flex items-center justify-center shrink-0">
-              <Video className="w-3.5 h-3.5 text-brand-bg" />
-            </div>
+            <BrandLogo size={28} />
             <span className="font-black text-sm uppercase tracking-widest text-brand-text">GENETRIFY</span>
           </Link>
           <button
@@ -157,9 +154,7 @@ export function Sidebar() {
         <div className={cn('flex items-center h-14 border-b border-white/5 px-3', collapsed ? 'justify-center' : 'justify-between')}>
           {!collapsed && (
             <Link href="/" className="flex items-center gap-2.5 group">
-              <div className="w-7 h-7 rounded-full bg-brand-accent flex items-center justify-center shrink-0">
-                <Video className="w-3.5 h-3.5 text-brand-bg" />
-              </div>
+              <BrandLogo size={28} />
               <span className="font-black text-sm uppercase tracking-widest text-brand-text">GENETRIFY</span>
             </Link>
           )}

@@ -1,8 +1,9 @@
 import { redirect } from 'next/navigation'
 import { verifyAdmin } from '@/lib/admin/auth'
 import Link from 'next/link'
-import { Video, LayoutDashboard, MessageCircle, Users, LogOut, Layers } from 'lucide-react'
+import { LayoutDashboard, MessageCircle, Users, LogOut, Layers } from 'lucide-react'
 import { logout } from '@/app/actions/auth'
+import { BrandLogo } from '@/components/brand-logo'
 
 const ADMIN_NAV = [
   { href: '/admin',           label: 'Overview',   icon: LayoutDashboard },
@@ -20,9 +21,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       {/* Admin sidebar */}
       <aside className="hidden lg:flex flex-col w-56 shrink-0 border-r border-white/5 bg-[#0a0814]">
         <div className="flex items-center gap-2.5 h-14 border-b border-white/5 px-4">
-          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-600 flex items-center justify-center">
-            <Video className="w-3.5 h-3.5 text-white" />
-          </div>
+          <BrandLogo size={28} />
           <div>
             <span className="font-bold text-sm text-white">Genetrify</span>
             <span className="block text-[10px] text-violet-400 font-medium -mt-0.5">Admin</span>

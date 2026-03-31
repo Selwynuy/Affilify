@@ -20,6 +20,7 @@ import {
 import { useState, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { NavbarUserMenu, NavbarGuestButtons } from "./NavbarUserMenu";
+import { BrandLogo } from "@/components/brand-logo";
 
 interface Review {
   id: string;
@@ -384,9 +385,7 @@ export default function LandingPage({ user }: Props) {
         >
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2 shrink-0">
-            <div className="w-7 h-7 rounded-full bg-brand-accent flex items-center justify-center shadow-lg shadow-brand-accent/25">
-              <Video className="w-3.5 h-3.5 text-[#120f1c]" />
-            </div>
+            <BrandLogo size={28} className="drop-shadow-[0_0_18px_rgba(139,92,246,0.25)]" />
             <span className="font-black text-[14px] tracking-tight text-brand-text uppercase">
               Genetrify
             </span>
@@ -1142,9 +1141,7 @@ export default function LandingPage({ user }: Props) {
           {/* Brand col */}
           <div className="col-span-2 flex flex-col gap-4">
             <Link href="/" className="flex items-center gap-2 w-fit">
-              <div className="w-7 h-7 rounded-lg bg-brand-accent flex items-center justify-center">
-                <Video className="w-3.5 h-3.5 text-[#1c1917]" />
-              </div>
+              <BrandLogo size={28} />
               <span className="font-black text-[15px] tracking-tight text-brand-text uppercase">
                 Genetrify
               </span>

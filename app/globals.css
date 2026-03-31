@@ -6,11 +6,11 @@
 
 @theme inline {
   /* ── Brand palette ── change these 5 values to retheme the entire app */
-  --color-brand-bg: #222831;
-  --color-brand-surface: #393E46;
-  --color-brand-accent: #00ADB5;
-  --color-brand-accent-hover: #00c4cc;
-  --color-brand-text: #EEEEEE;
+  --color-brand-bg: #0b0b0f;
+  --color-brand-surface: #121218;
+  --color-brand-accent: #8b5cf6;
+  --color-brand-accent-hover: #a855f7;
+  --color-brand-text: #ffffff;
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
