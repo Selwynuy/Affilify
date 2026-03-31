@@ -1,13 +1,14 @@
 import { redirect } from 'next/navigation'
 import { verifyAdmin } from '@/lib/admin/auth'
 import Link from 'next/link'
-import { Video, LayoutDashboard, MessageCircle, Users, LogOut } from 'lucide-react'
+import { Video, LayoutDashboard, MessageCircle, Users, LogOut, Layers } from 'lucide-react'
 import { logout } from '@/app/actions/auth'
 
 const ADMIN_NAV = [
-  { href: '/admin', label: 'Overview', icon: LayoutDashboard },
-  { href: '/admin/tickets', label: 'Tickets', icon: MessageCircle },
-  { href: '/admin/users', label: 'Users', icon: Users },
+  { href: '/admin',           label: 'Overview',   icon: LayoutDashboard },
+  { href: '/admin/templates', label: 'Templates',  icon: Layers          },
+  { href: '/admin/tickets',   label: 'Tickets',    icon: MessageCircle   },
+  { href: '/admin/users',     label: 'Users',      icon: Users           },
 ]
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {

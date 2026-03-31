@@ -1,0 +1,511 @@
+'use client'
+
+import { useActionState, useState } from 'react'
+import { cn }        from '@/lib/utils'
+import {
+  Loader2, Save, Trash2, Eye, EyeOff,
+  Archive, RotateCcw, ExternalLink,
+} from 'lucide-react'
+import {
+  createTemplate,
+  updateTemplate,
+  setTemplateStatus,
+  deleteTemplate,
+} from '@/app/actions/templates'
+import type {
+  MarketplaceTemplate,
+  TemplateCategory,
+  TemplateFormState,
+} from '@/lib/types/marketplace'
+
+// ─── Field primitives ─────────────────────────────────────────────────────────
+
+const inputCls =
+  'w-full rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5 text-sm text-white ' +
+  'placeholder-white/25 focus:outline-none focus:border-violet-500/50 transition-colors'
+
+function FieldGroup({
+  name,
+  label,
+  hint,
+  defaultValue = '',
+  required = false,
+  multiline = false,
+  type = 'text',
+}: {
+  name: string
+  label: string
+  hint?: string
+  defaultValue?: string
+  required?: boolean
+  multiline?: boolean
+  type?: string
+}) {
+  return (
+    <div className="space-y-1.5">
+      <label className="block text-xs font-medium text-white/60">
+        {label}
+        {required && <span className="text-violet-400 ml-1">*</span>}
+      </label>
+      {multiline ? (
+        <textarea
+          name={name}
+          defaultValue={defaultValue}
+          rows={4}
+          className={cn(inputCls, 'resize-none leading-relaxed')}
+        />
+      ) : (
+        <input
+          type={type}
+          name={name}
+          defaultValue={defaultValue}
+          className={inputCls}
+        />
+      )}
+      {hint && <p className="text-[11px] text-white/30">{hint}</p>}
+    </div>
+  )
+}
+
+// ─── Dynamic config section — fields change based on selected category ────────
+
+function ConfigSection({
+  category,
+  config,
+}: {
+  category: TemplateCategory
+  config: Record<string, unknown>
+}) {
+  if (category === 'camera') {
+    return (
+      <div className="space-y-4">
+        <FieldGroup
+          name="config.cameraAnglePrompt"
+          label="Camera Angle Prompt"
+          hint="Injected into the {{camera_angle}} slot in the Gemini image prompt"
+          defaultValue={(config.cameraAnglePrompt as string) ?? ''}
+          multiline
+          required
+        />
+        <FieldGroup
+          name="config.promptFragment"
+          label="Additional Prompt Fragment"
+          hint="Optional extra context appended to the image prompt"
+          defaultValue={(config.promptFragment as string) ?? ''}
+          multiline
+        />
+      </div>
+    )
+  }
+
+  if (category === 'movement') {
+    return (
+      <FieldGroup
+        name="config.promptFragment"
+        label="Movement Prompt"
+        hint="Describes the model's motion — sent to Kling video API. No speaking, no lip-sync."
+        defaultValue={(config.promptFragment as string) ?? ''}
+        multiline
+        required
+      />
+    )
+  }
+
+  if (category === 'avatar') {
+    return (
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-1.5">
+          <label className="block text-xs font-medium text-white/60">Gender</label>
+          <select
+            name="config.gender"
+            defaultValue={(config.gender as string) ?? 'man'}
+            className={inputCls}
+          >
+            <option value="man">Man</option>
+            <option value="woman">Woman</option>
+          </select>
+        </div>
+        <div className="space-y-1.5">
+          <label className="block text-xs font-medium text-white/60">Style</label>
+          <select
+            name="config.style"
+            defaultValue={(config.style as string) ?? 'casual'}
+            className={inputCls}
+          >
+            <option value="casual">Casual</option>
+            <option value="streetwear">Streetwear</option>
+            <option value="luxury">Luxury</option>
+            <option value="minimal">Minimal</option>
+          </select>
+        </div>
+      </div>
+    )
+  }
+
+  if (category === 'background') {
+    return (
+      <div className="space-y-4">
+        <FieldGroup
+          name="config.roomAesthetic"
+          label="Room Aesthetic"
+          hint='e.g. "minimalist", "industrial", "cozy loft"'
+          defaultValue={(config.roomAesthetic as string) ?? ''}
+          required
+        />
+        <FieldGroup
+          name="config.roomColors"
+          label="Room Colors"
+          hint="Comma-separated palette, e.g. white, warm grey, oak"
+          defaultValue={(config.roomColors as string) ?? ''}
+        />
+        <FieldGroup
+          name="config.roomElements"
+          label="Room Elements"
+          hint="Key furniture or props present in the scene"
+          defaultValue={(config.roomElements as string) ?? ''}
+        />
+      </div>
+    )
+  }
+
+  return (
+    <p className="text-sm text-white/30 italic">
+      No predefined config fields for this category.
+    </p>
+  )
+}
+
+// ─── Status sidebar panel — publish / unpublish / archive / restore / delete ──
+
+function StatusPanel({ template }: { template: MarketplaceTemplate }) {
+  const [statusState, statusAction, statusPending] = useActionState(setTemplateStatus, {})
+  const [deleteState, deleteAction, deletePending] = useActionState(deleteTemplate, {})
+
+  const { status } = template
+  const isPublished = status === 'published'
+  const isArchived  = status === 'archived'
+
+  return (
+    <div className="space-y-3">
+
+      {/* Transition buttons */}
+      <form action={statusAction} className="flex flex-col gap-2">
+        <input type="hidden" name="id" value={template.id} />
+
+        {/* Publish — shown when draft or archived */}
+        {!isPublished && (
+          <button
+            type="submit" name="status" value="published"
+            disabled={statusPending}
+            className="flex items-center justify-center gap-2 w-full px-3 py-2.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/20 text-emerald-400 text-sm font-medium transition-colors disabled:opacity-50"
+          >
+            {statusPending
+              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              : <Eye className="w-3.5 h-3.5" />}
+            Publish
+          </button>
+        )}
+
+        {/* Unpublish — shown when published */}
+        {isPublished && (
+          <button
+            type="submit" name="status" value="draft"
+            disabled={statusPending}
+            className="flex items-center justify-center gap-2 w-full px-3 py-2.5 rounded-xl bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/20 text-amber-400 text-sm font-medium transition-colors disabled:opacity-50"
+          >
+            {statusPending
+              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              : <EyeOff className="w-3.5 h-3.5" />}
+            Unpublish
+          </button>
+        )}
+
+        {/* Archive — shown when not already archived */}
+        {!isArchived && (
+          <button
+            type="submit" name="status" value="archived"
+            disabled={statusPending}
+            className="flex items-center justify-center gap-2 w-full px-3 py-2.5 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/8 text-white/40 hover:text-white/60 text-sm font-medium transition-colors disabled:opacity-50"
+          >
+            {statusPending
+              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              : <Archive className="w-3.5 h-3.5" />}
+            Archive
+          </button>
+        )}
+
+        {/* Restore — shown when archived */}
+        {isArchived && (
+          <button
+            type="submit" name="status" value="draft"
+            disabled={statusPending}
+            className="flex items-center justify-center gap-2 w-full px-3 py-2.5 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/8 text-white/40 hover:text-white/60 text-sm font-medium transition-colors disabled:opacity-50"
+          >
+            {statusPending
+              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              : <RotateCcw className="w-3.5 h-3.5" />}
+            Restore to Draft
+          </button>
+        )}
+      </form>
+
+      {statusState?.error   && <p className="text-xs text-red-400">{statusState.error}</p>}
+      {statusState?.success && <p className="text-xs text-emerald-400">{statusState.success}</p>}
+
+      <div className="h-px bg-white/5" />
+
+      {/* Delete */}
+      <form action={deleteAction}>
+        <input type="hidden" name="id" value={template.id} />
+        <button
+          type="submit"
+          disabled={deletePending}
+          onClick={(e) => {
+            if (!confirm(`Delete "${template.title}" permanently? This cannot be undone.`)) {
+              e.preventDefault()
+            }
+          }}
+          className="flex items-center justify-center gap-2 w-full px-3 py-2.5 rounded-xl bg-red-600/10 hover:bg-red-600/20 border border-red-500/20 text-red-400 text-sm font-medium transition-colors disabled:opacity-50"
+        >
+          {deletePending
+            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            : <Trash2 className="w-3.5 h-3.5" />}
+          Delete permanently
+        </button>
+      </form>
+
+      {deleteState?.error && <p className="text-xs text-red-400">{deleteState.error}</p>}
+    </div>
+  )
+}
+
+// ─── Status badge ─────────────────────────────────────────────────────────────
+
+function StatusBadge({ status }: { status: string }) {
+  const styles: Record<string, string> = {
+    draft:     'text-amber-400   bg-amber-500/10   border-amber-500/20',
+    published: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
+    archived:  'text-white/30    bg-white/5         border-white/10',
+  }
+  return (
+    <span className={cn(
+      'text-[10px] font-semibold border rounded-full px-2.5 py-0.5',
+      styles[status] ?? styles.draft,
+    )}>
+      {status}
+    </span>
+  )
+}
+
+// ─── Metadata row ─────────────────────────────────────────────────────────────
+
+function MetaRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <span className="text-xs text-white/30">{label}</span>
+      <span className="text-xs text-white/50 font-mono truncate max-w-[120px]">{value}</span>
+    </div>
+  )
+}
+
+// ─── Main form ────────────────────────────────────────────────────────────────
+
+export default function TemplateForm({ template }: { template?: MarketplaceTemplate }) {
+  const isEdit   = !!template
+  const action   = isEdit ? updateTemplate : createTemplate
+  const [state, formAction, isPending] = useActionState(action, {})
+
+  // Category drives which config fields render; controlled locally so switching
+  // category immediately shows the right fields without a server round-trip.
+  const [category, setCategory] = useState<TemplateCategory>(
+    template?.category ?? 'camera',
+  )
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-[1fr_268px] gap-6 max-w-5xl items-start">
+
+      {/* ── Left: main form ── */}
+      <form action={formAction} className="space-y-6">
+        {isEdit && <input type="hidden" name="id" value={template!.id} />}
+
+        {/* Basic Info */}
+        <section className="rounded-2xl border border-white/8 bg-white/[0.02] p-6 space-y-5">
+          <h2 className="text-xs font-semibold text-white/50 uppercase tracking-wider">Basic Info</h2>
+
+          <FieldGroup
+            name="title"
+            label="Title"
+            defaultValue={template?.title ?? ''}
+            required
+          />
+
+          <FieldGroup
+            name="description"
+            label="Description"
+            hint="Shown below the card title in the marketplace"
+            defaultValue={template?.description ?? ''}
+            multiline
+          />
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <label className="block text-xs font-medium text-white/60">
+                Category <span className="text-violet-400">*</span>
+              </label>
+              <select
+                name="category"
+                value={category}
+                onChange={(e) => setCategory(e.target.value as TemplateCategory)}
+                className={inputCls}
+              >
+                <option value="camera">Camera</option>
+                <option value="movement">Movement</option>
+                <option value="avatar">Avatar</option>
+                <option value="background">Background</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+
+            <FieldGroup
+              name="sort_order"
+              label="Sort Order"
+              type="number"
+              defaultValue={String(template?.sort_order ?? 0)}
+              hint="Lower = appears first in its category"
+            />
+          </div>
+
+          <FieldGroup
+            name="badge"
+            label="Badge"
+            defaultValue={template?.badge ?? ''}
+            hint='Short label shown on the card, e.g. "Popular" or "New" — leave blank to hide'
+          />
+        </section>
+
+        {/* Media */}
+        <section className="rounded-2xl border border-white/8 bg-white/[0.02] p-6 space-y-5">
+          <h2 className="text-xs font-semibold text-white/50 uppercase tracking-wider">Media</h2>
+
+          <FieldGroup
+            name="thumbnail_url"
+            label="Thumbnail URL"
+            defaultValue={template?.thumbnail_url ?? ''}
+            hint="Static image shown in the marketplace card (2:3 aspect ratio works best)"
+          />
+
+          <FieldGroup
+            name="preview_url"
+            label="Preview URL"
+            defaultValue={template?.preview_url ?? ''}
+            hint="GIF or short looping video — displayed on hover over the card"
+          />
+
+          {/* Thumbnail preview */}
+          {template?.thumbnail_url && (
+            <div>
+              <p className="text-[11px] text-white/30 mb-2">Current thumbnail</p>
+              <img
+                src={template.thumbnail_url}
+                alt="thumbnail preview"
+                className="w-20 h-[120px] object-cover rounded-xl border border-white/10"
+                onError={(e) => { e.currentTarget.style.display = 'none' }}
+              />
+            </div>
+          )}
+        </section>
+
+        {/* Config */}
+        <section className="rounded-2xl border border-white/8 bg-white/[0.02] p-6 space-y-5">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xs font-semibold text-white/50 uppercase tracking-wider">Config</h2>
+            <span className="text-[10px] text-white/25 capitalize border border-white/8 rounded-full px-2 py-0.5">
+              {category}
+            </span>
+          </div>
+          <ConfigSection category={category} config={template?.config ?? {}} />
+        </section>
+
+        {/* Feedback */}
+        {state?.error && (
+          <div className="px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20 text-sm text-red-400">
+            {state.error}
+          </div>
+        )}
+        {state?.success && (
+          <div className="px-4 py-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-sm text-emerald-400">
+            {state.success}
+          </div>
+        )}
+
+        {/* Submit */}
+        <button
+          type="submit"
+          disabled={isPending}
+          className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-sm font-medium transition-colors"
+        >
+          {isPending
+            ? <Loader2 className="w-4 h-4 animate-spin" />
+            : <Save className="w-4 h-4" />}
+          {isEdit ? 'Save changes' : 'Create template'}
+        </button>
+      </form>
+
+      {/* ── Right: sidebar ── */}
+      <aside className="space-y-4 lg:sticky lg:top-6">
+
+        {/* Status panel — edit mode only */}
+        {isEdit && (
+          <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-semibold text-white/50 uppercase tracking-wider">
+                Status
+              </h3>
+              <StatusBadge status={template!.status} />
+            </div>
+            <StatusPanel template={template!} />
+          </div>
+        )}
+
+        {/* View in marketplace — published only */}
+        {isEdit && template!.status === 'published' && (
+          <a
+            href={`/templates?tab=${template!.category === 'movement' ? 'movement' : template!.category === 'avatar' ? 'avatar' : template!.category === 'background' ? 'background' : 'camera'}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 w-full px-3 py-2.5 rounded-xl border border-white/8 bg-white/[0.02] text-white/50 hover:text-white/80 text-sm transition-colors"
+          >
+            <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+            View in marketplace
+          </a>
+        )}
+
+        {/* Metadata */}
+        {isEdit && (
+          <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-4 space-y-2.5">
+            <h3 className="text-xs font-semibold text-white/50 uppercase tracking-wider mb-3">
+              Metadata
+            </h3>
+            <MetaRow label="ID"      value={template!.id.slice(0, 8) + '…'} />
+            <MetaRow label="Created" value={new Date(template!.created_at).toLocaleDateString()} />
+            <MetaRow label="Updated" value={new Date(template!.updated_at).toLocaleDateString()} />
+          </div>
+        )}
+
+        {/* New template hint */}
+        {!isEdit && (
+          <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-4 space-y-1.5">
+            <p className="text-xs font-semibold text-white/50 uppercase tracking-wider">
+              Draft
+            </p>
+            <p className="text-xs text-white/30 leading-relaxed">
+              New templates are saved as drafts. After saving, use the publish button
+              to make it visible in the customer marketplace.
+            </p>
+          </div>
+        )}
+      </aside>
+
+    </div>
+  )
+}

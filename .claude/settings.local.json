@@ -75,7 +75,11 @@
       "Bash(git -C D:/Projects/affilify log --oneline -5)",
       "mcp__ide__getDiagnostics",
       "Bash(npx eslint:*)",
-      "WebFetch(domain:www.anthropic.com)"
+      "WebFetch(domain:www.anthropic.com)",
+      "Bash(find /d/Projects/affilify/app/api -type f -name \"route.ts\" -exec wc -l {} +)",
+      "Bash(git log:*)",
+      "Bash(git ls-tree:*)",
+      "Bash(ls app/\\\\\\(auth\\\\\\)/)"
     ]
   }
 }
