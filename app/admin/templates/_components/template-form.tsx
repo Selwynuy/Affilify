@@ -4,7 +4,7 @@ import { useActionState, useState } from 'react'
 import { cn }        from '@/lib/utils'
 import {
   Loader2, Save, Trash2, Eye, EyeOff,
-  Archive, RotateCcw, ExternalLink,
+  Archive, RotateCcw, ExternalLink, Upload,
 } from 'lucide-react'
 import {
   createTemplate,
@@ -63,6 +63,88 @@ function FieldGroup({
         />
       )}
       {hint && <p className="text-[11px] text-white/30">{hint}</p>}
+    </div>
+  )
+}
+
+function MediaField({
+  name,
+  label,
+  hint,
+  accept,
+  kind,
+  value,
+  onChange,
+}: {
+  name: string
+  label: string
+  hint: string
+  accept: string
+  kind: 'thumbnail' | 'preview'
+  value: string
+  onChange: (value: string) => void
+}) {
+  const [isUploading, setIsUploading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    setIsUploading(true)
+    setError(null)
+
+    try {
+      const formData = new FormData()
+      formData.set('file', file)
+      formData.set('kind', kind)
+
+      const response = await fetch('/api/admin/template-media', {
+        method: 'POST',
+        body: formData,
+      })
+
+      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data.error ?? 'Upload failed')
+      }
+
+      onChange(data.url ?? '')
+      event.target.value = ''
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : 'Upload failed')
+    } finally {
+      setIsUploading(false)
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-3">
+        <label className="block text-xs font-medium text-white/60">{label}</label>
+        <label className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-white/8 bg-white/[0.03] text-xs text-white/70 hover:text-white cursor-pointer transition-colors">
+          {isUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+          {isUploading ? 'Uploading...' : 'Upload file'}
+          <input
+            type="file"
+            accept={accept}
+            onChange={handleFileChange}
+            className="hidden"
+            disabled={isUploading}
+          />
+        </label>
+      </div>
+
+      <input
+        type="text"
+        name={name}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className={inputCls}
+      />
+
+      <p className="text-[11px] text-white/30">{hint}</p>
+      {error && <p className="text-[11px] text-red-400">{error}</p>}
     </div>
   )
 }
@@ -320,6 +402,8 @@ export default function TemplateForm({ template }: { template?: MarketplaceTempl
   const [category, setCategory] = useState<TemplateCategory>(
     template?.category ?? 'camera',
   )
+  const [thumbnailUrl, setThumbnailUrl] = useState(template?.thumbnail_url ?? '')
+  const [previewUrl, setPreviewUrl] = useState(template?.preview_url ?? '')
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[1fr_268px] gap-6 max-w-5xl items-start">
@@ -387,30 +471,58 @@ export default function TemplateForm({ template }: { template?: MarketplaceTempl
         <section className="rounded-2xl border border-white/8 bg-white/[0.02] p-6 space-y-5">
           <h2 className="text-xs font-semibold text-white/50 uppercase tracking-wider">Media</h2>
 
-          <FieldGroup
+          <MediaField
             name="thumbnail_url"
             label="Thumbnail URL"
-            defaultValue={template?.thumbnail_url ?? ''}
+            value={thumbnailUrl}
+            onChange={setThumbnailUrl}
+            kind="thumbnail"
+            accept="image/*"
             hint="Static image shown in the marketplace card (2:3 aspect ratio works best)"
           />
 
-          <FieldGroup
+          <MediaField
             name="preview_url"
             label="Preview URL"
-            defaultValue={template?.preview_url ?? ''}
+            value={previewUrl}
+            onChange={setPreviewUrl}
+            kind="preview"
+            accept="image/*,video/mp4,video/webm,video/quicktime"
             hint="GIF or short looping video — displayed on hover over the card"
           />
 
           {/* Thumbnail preview */}
-          {template?.thumbnail_url && (
+          {thumbnailUrl && (
             <div>
               <p className="text-[11px] text-white/30 mb-2">Current thumbnail</p>
               <img
-                src={template.thumbnail_url}
+                src={thumbnailUrl}
                 alt="thumbnail preview"
                 className="w-20 h-[120px] object-cover rounded-xl border border-white/10"
                 onError={(e) => { e.currentTarget.style.display = 'none' }}
               />
+            </div>
+          )}
+
+          {previewUrl && (
+            <div>
+              <p className="text-[11px] text-white/30 mb-2">Current preview</p>
+              {/\.(mp4|webm|mov)(\?|$)/i.test(previewUrl) ? (
+                <video
+                  src={previewUrl}
+                  className="w-32 rounded-xl border border-white/10"
+                  controls
+                  muted
+                  playsInline
+                />
+              ) : (
+                <img
+                  src={previewUrl}
+                  alt="preview media"
+                  className="w-32 rounded-xl border border-white/10"
+                  onError={(e) => { e.currentTarget.style.display = 'none' }}
+                />
+              )}
             </div>
           )}
         </section>
