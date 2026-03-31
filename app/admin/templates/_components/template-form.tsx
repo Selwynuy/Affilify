@@ -121,8 +121,8 @@ function ConfigSection({
             defaultValue={(config.gender as string) ?? 'man'}
             className={inputCls}
           >
-            <option value="man">Man</option>
-            <option value="woman">Woman</option>
+            <option value="man"   className="bg-[#0d0d14] text-white">Man</option>
+            <option value="woman" className="bg-[#0d0d14] text-white">Woman</option>
           </select>
         </div>
         <div className="space-y-1.5">
@@ -132,10 +132,10 @@ function ConfigSection({
             defaultValue={(config.style as string) ?? 'casual'}
             className={inputCls}
           >
-            <option value="casual">Casual</option>
-            <option value="streetwear">Streetwear</option>
-            <option value="luxury">Luxury</option>
-            <option value="minimal">Minimal</option>
+            <option value="casual"      className="bg-[#0d0d14] text-white">Casual</option>
+            <option value="streetwear"  className="bg-[#0d0d14] text-white">Streetwear</option>
+            <option value="luxury"      className="bg-[#0d0d14] text-white">Luxury</option>
+            <option value="minimal"     className="bg-[#0d0d14] text-white">Minimal</option>
           </select>
         </div>
       </div>
@@ -358,11 +358,11 @@ export default function TemplateForm({ template }: { template?: MarketplaceTempl
                 onChange={(e) => setCategory(e.target.value as TemplateCategory)}
                 className={inputCls}
               >
-                <option value="camera">Camera</option>
-                <option value="movement">Movement</option>
-                <option value="avatar">Avatar</option>
-                <option value="background">Background</option>
-                <option value="other">Other</option>
+                <option value="camera"     className="bg-[#0d0d14] text-white">Camera</option>
+                <option value="movement"   className="bg-[#0d0d14] text-white">Movement</option>
+                <option value="avatar"     className="bg-[#0d0d14] text-white">Avatar</option>
+                <option value="background" className="bg-[#0d0d14] text-white">Background</option>
+                <option value="other"      className="bg-[#0d0d14] text-white">Other</option>
               </select>
             </div>
 
