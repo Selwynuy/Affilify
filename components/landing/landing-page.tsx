@@ -1149,8 +1149,12 @@ export default function LandingPage({ user }: Props) {
             <p className="text-[13px] text-brand-text/25 leading-relaxed max-w-55">
               Build your AI model. Dress it. Film it. Product content at scale.
             </p>
+            <p className="text-[12px] text-brand-text/35 leading-relaxed max-w-70">
+              Registered business: Genetrify Information Technology Services
+            </p>
             <p className="text-[11px] text-brand-text/20 mt-auto">
-              © {CURRENT_YEAR} Genetrify. All rights reserved.
+              © {CURRENT_YEAR} Genetrify Information Technology Services. All
+              rights reserved.
             </p>
           </div>
 
@@ -1215,6 +1219,10 @@ export default function LandingPage({ user }: Props) {
           <div className="flex flex-col gap-2.5">
             <span className="text-[10px] font-black uppercase tracking-[0.15em] text-brand-text/25 mb-2">
               Legal
+            </span>
+            <span className="text-[12px] leading-relaxed text-brand-text/30">
+              Policies for genetrify.com by Genetrify Information Technology
+              Services.
             </span>
             <Link
               href="/terms"

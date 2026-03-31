@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { usePreferences } from '@/lib/context/preferences-context'
 import { useTokens } from '@/lib/context/token-context'
+import type { AvatarConfig, BackgroundConfig } from '@/lib/types/preferences'
 import {
   ImagePlus, X, Download,
   Zap, Sparkles, Video, RotateCcw, ChevronDown, CheckCircle2,
@@ -425,7 +426,7 @@ export function GeneratePanel({
       template.config.style === 'minimal'
         ? template.config.style
         : 'casual'
-    const config = {
+    const config: AvatarConfig = {
       type: 'preset' as const,
       presetId: template.id,
       gender: template.config.gender === 'woman' ? 'woman' : 'man',
@@ -438,7 +439,7 @@ export function GeneratePanel({
   async function handleBackgroundChange(id: string) {
     const template = backgroundTemplates.find((item) => item.id === id)
     if (!template) return
-    const config = {
+    const config: BackgroundConfig = {
       type: 'preset' as const,
       presetId: template.id,
       roomAesthetic: String(template.config.roomAesthetic ?? ''),
