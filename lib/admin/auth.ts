@@ -1,8 +1,9 @@
+import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 /** Returns the user if they are an admin, null otherwise. */
-export async function verifyAdmin() {
+export const verifyAdmin = cache(async function verifyAdmin() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
@@ -16,4 +17,4 @@ export async function verifyAdmin() {
 
   if (!data?.is_admin) return null
   return user
-}
+})
