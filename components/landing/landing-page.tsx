@@ -384,8 +384,8 @@ export default function LandingPage({ user }: Props) {
         >
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2 shrink-0">
-            <div className="w-7 h-7 rounded-full bg-brand-accent flex items-center justify-center">
-              <Video className="w-3.5 h-3.5 text-brand-bg" />
+            <div className="w-7 h-7 rounded-full bg-brand-accent flex items-center justify-center shadow-lg shadow-brand-accent/25">
+              <Video className="w-3.5 h-3.5 text-[#120f1c]" />
             </div>
             <span className="font-black text-[14px] tracking-tight text-brand-text uppercase">
               Genetrify
@@ -464,7 +464,7 @@ export default function LandingPage({ user }: Props) {
             <div className="flex flex-col sm:flex-row items-start gap-3 mt-2">
               <Link
                 href="/signup"
-                className="inline-flex items-center gap-2 bg-brand-accent text-brand-bg hover:bg-brand-accent-hover font-bold px-7 py-3.5 rounded-full text-[15px] transition-all duration-200"
+                className="inline-flex items-center gap-2 bg-brand-accent text-[#120f1c] hover:bg-brand-accent-hover font-bold px-7 py-3.5 rounded-full text-[15px] transition-all duration-200 shadow-lg shadow-brand-accent/25"
               >
                 Start for free
                 <ArrowRight className="w-4 h-4" />
@@ -481,6 +481,13 @@ export default function LandingPage({ user }: Props) {
 
           {/* Right — model card */}
           <div className="relative flex justify-center md:justify-end">
+            <div
+              className="absolute inset-y-[8%] left-1/2 w-[85%] -translate-x-1/2 rounded-full blur-3xl pointer-events-none"
+              style={{
+                background:
+                  "radial-gradient(circle at center, rgba(139,92,246,0.25), transparent 60%)",
+              }}
+            />
             <div className="relative w-full max-w-70 sm:max-w-90 aspect-3/4 rounded-3xl overflow-hidden shadow-2xl bg-brand-surface">
               {/* Gradient placeholder for model image */}
               <div className="absolute inset-0 bg-linear-to-b from-brand-surface via-brand-surface/70 to-brand-bg" />

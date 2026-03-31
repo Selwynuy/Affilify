@@ -79,13 +79,13 @@ export function NavbarGuestButtons() {
     <>
       <Link
         href="/login"
-        className="hidden md:inline-flex text-[13px] text-brand-text/50 hover:text-brand-text transition-colors px-3 py-1.5"
+        className="hidden md:inline-flex text-[13px] text-white/70 hover:text-white transition-colors px-3 py-1.5"
       >
         Sign in
       </Link>
       <Link
         href="/signup"
-        className="inline-flex items-center gap-1.5 bg-brand-accent hover:bg-brand-accent-hover text-brand-bg text-[13px] font-bold px-4 py-1.5 rounded-full transition-all duration-200 shadow-lg shadow-brand-accent/20"
+        className="inline-flex items-center gap-1.5 bg-brand-accent hover:bg-brand-accent-hover text-[#120f1c] text-[13px] font-bold px-4 py-1.5 rounded-full transition-all duration-200 shadow-lg shadow-brand-accent/25"
       >
         Get started
       </Link>
