@@ -24,20 +24,32 @@ export async function login(formData: FormData) {
 
 export async function signup(formData: FormData) {
   const supabase = await createClient()
-  const email = formData.get('email') as string
+  const email = (formData.get('email') as string).trim().toLowerCase()
+  const password = formData.get('password') as string
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
 
-  const { error } = await supabase.auth.signUp({ email, password: formData.get('password') as string })
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      emailRedirectTo: `${appUrl}/auth/confirm`,
+    },
+  })
 
   if (error) {
     return { error: error.message }
   }
 
   // Send welcome email (fire-and-forget — never block signup on email failure)
-  const tpl = welcomeEmail(email)
-  await sendEmail({ to: email, ...tpl })
+  if (data.session) {
+    const tpl = welcomeEmail(email)
+    await sendEmail({ to: email, ...tpl })
 
-  revalidatePath('/', 'layout')
-  redirect('/dashboard')
+    revalidatePath('/', 'layout')
+    redirect('/dashboard')
+  }
+
+  redirect(`/check-email?email=${encodeURIComponent(email)}`)
 }
 
 export async function logout() {
