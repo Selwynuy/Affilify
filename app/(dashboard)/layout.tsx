@@ -5,7 +5,10 @@ import { createClient } from '@/lib/supabase/server'
 import { PreferencesProvider } from '@/lib/context/preferences-context'
 import { TokenProvider } from '@/lib/context/token-context'
 import type { AvatarConfig, BackgroundConfig } from '@/lib/types/preferences'
-import { DEFAULT_CAMERA_TEMPLATE_ID, DEFAULT_MOVEMENT_TEMPLATE_ID } from '@/lib/data/templates'
+import {
+  getMarketplaceTemplateDefaults,
+  getPublishedMarketplaceTemplateGroups,
+} from '@/lib/data/marketplace-templates'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await verifySession()
@@ -18,6 +21,24 @@ export default async function DashboardLayout({ children }: { children: React.Re
     .eq('user_id', session.user.id)
     .single()
 
+  const templateDefaults = await getMarketplaceTemplateDefaults()
+  const { camera: cameraTemplates, movement: movementTemplates } =
+    await getPublishedMarketplaceTemplateGroups()
+
+  const preferredCameraTemplateId = typeof prefs?.camera_template_id === 'string'
+    ? prefs.camera_template_id
+    : null
+  const preferredMovementTemplateId = typeof prefs?.movement_template_id === 'string'
+    ? prefs.movement_template_id
+    : null
+
+  const initialCameraTemplateId = cameraTemplates.some((template) => template.id === preferredCameraTemplateId)
+    ? preferredCameraTemplateId!
+    : templateDefaults.cameraTemplateId
+  const initialMovementTemplateId = movementTemplates.some((template) => template.id === preferredMovementTemplateId)
+    ? preferredMovementTemplateId!
+    : templateDefaults.movementTemplateId
+
   if (!prefs || !prefs.onboarding_completed) {
     redirect('/onboarding')
   }
@@ -27,8 +48,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
       <PreferencesProvider
         initialAvatarConfig={(prefs.avatar_config as AvatarConfig) ?? null}
         initialBackgroundConfig={(prefs.background_config as BackgroundConfig) ?? null}
-        initialCameraTemplateId={(prefs.camera_template_id as string) ?? DEFAULT_CAMERA_TEMPLATE_ID}
-        initialMovementTemplateId={(prefs.movement_template_id as string) ?? DEFAULT_MOVEMENT_TEMPLATE_ID}
+        initialCameraTemplateId={initialCameraTemplateId}
+        initialMovementTemplateId={initialMovementTemplateId}
       >
         <div className="flex h-screen overflow-hidden bg-brand-bg">
           <Sidebar />

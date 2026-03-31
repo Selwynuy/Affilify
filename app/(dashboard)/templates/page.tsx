@@ -1,6 +1,5 @@
-import { createClient }   from '@/lib/supabase/server'
 import MarketplaceClient  from './_components/marketplace-client'
-import type { MarketplaceTemplate } from '@/lib/types/marketplace'
+import { getPublishedMarketplaceTemplateGroups } from '@/lib/data/marketplace-templates'
 
 /**
  * Server component — fetches published templates from the database, then
@@ -10,21 +9,17 @@ import type { MarketplaceTemplate } from '@/lib/types/marketplace'
  * The admin CRUD system at /admin/templates controls what is published.
  */
 export default async function MarketplacePage() {
-  const supabase = await createClient()
-
-  const { data } = await supabase
-    .from('marketplace_templates')
-    .select('*')
-    .eq('status', 'published')
-    .order('sort_order')
-
-  const templates = (data ?? []) as MarketplaceTemplate[]
-
-  const cameraTemplates   = templates.filter((t) => t.category === 'camera')
-  const movementTemplates = templates.filter((t) => t.category === 'movement')
+  const {
+    avatar: avatarTemplates,
+    background: backgroundTemplates,
+    camera: cameraTemplates,
+    movement: movementTemplates,
+  } = await getPublishedMarketplaceTemplateGroups()
 
   return (
     <MarketplaceClient
+      avatarTemplates={avatarTemplates}
+      backgroundTemplates={backgroundTemplates}
       cameraTemplates={cameraTemplates}
       movementTemplates={movementTemplates}
     />

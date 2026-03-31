@@ -7,15 +7,13 @@ import { Button } from '@/components/ui/button'
 import { usePreferences } from '@/lib/context/preferences-context'
 import { useTokens } from '@/lib/context/token-context'
 import {
-  ImagePlus, X, Download, User,
+  ImagePlus, X, Download,
   Zap, Sparkles, Video, RotateCcw, ChevronDown, CheckCircle2,
   AlertCircle, ArrowRight,
 } from 'lucide-react'
-import { buildVideoPrompt, MOTION_TEMPLATES } from '@/lib/data/templates'
 import { VIDEO_MODELS, getAvailableModels, TOKEN_COSTS } from '@/lib/data/plans'
-import { AVATAR_PRESETS } from '@/lib/data/avatar-presets'
-import { BACKGROUND_PRESETS } from '@/lib/data/background-presets'
 import type { VideoModel, PlanId } from '@/lib/types/billing'
+import type { MarketplaceTemplate } from '@/lib/types/marketplace'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -127,22 +125,23 @@ function InlineSelector({
   onChange: (id: string) => void
 }) {
   const [open, setOpen] = useState(false)
-  const current = options.find((o) => o.id === value) ?? options[0]
+  const current = options.find((o) => o.id === value) ?? options[0] ?? null
 
   return (
     <div className="relative">
       <button
         onClick={() => setOpen((o) => !o)}
+        disabled={options.length === 0}
         className="flex items-center gap-2 rounded-lg border border-white/8 bg-white/[0.03] px-3 py-2 hover:border-brand-accent/30 transition-all w-full text-left"
       >
         <div className="flex-1 min-w-0">
           <p className="text-[10px] text-brand-text/35 leading-none mb-0.5 uppercase tracking-wider">{label}</p>
-          <p className="text-xs font-medium text-brand-text truncate">{current.name}</p>
+          <p className="text-xs font-medium text-brand-text truncate">{current?.name ?? 'No templates available'}</p>
         </div>
         <ChevronDown className={cn('w-3.5 h-3.5 text-brand-text/30 shrink-0 transition-transform', open && 'rotate-180')} />
       </button>
 
-      {open && (
+      {open && options.length > 0 && (
         <div className="absolute z-20 top-full mt-1 left-0 right-0 rounded-xl border border-white/10 bg-brand-bg shadow-xl shadow-black/40 overflow-hidden">
           {options.map((opt) => (
             <button
@@ -205,7 +204,25 @@ function HistorySection({ runs }: { runs: HistoryRun[] }) {
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
-export function GeneratePanel() {
+function buildMovementPrompt(template: MarketplaceTemplate | null, gender: string, roomAesthetic: string) {
+  const promptFragment = typeof template?.config.promptFragment === 'string'
+    ? template.config.promptFragment
+    : ''
+
+  return `A ${gender} in a ${roomAesthetic} room - ${promptFragment} The overall mood is elegant and confident.`
+}
+
+export function GeneratePanel({
+  avatarTemplates,
+  backgroundTemplates,
+  cameraTemplates,
+  movementTemplates,
+}: {
+  avatarTemplates: MarketplaceTemplate[]
+  backgroundTemplates: MarketplaceTemplate[]
+  cameraTemplates: MarketplaceTemplate[]
+  movementTemplates: MarketplaceTemplate[]
+}) {
   const { avatarConfig, backgroundConfig, cameraTemplateId, movementTemplateId, setAvatarConfig, setBackgroundConfig } = usePreferences()
   const { balance: tokenBalance, planId: contextPlanId, refreshBalance } = useTokens()
 
@@ -226,8 +243,8 @@ export function GeneratePanel() {
   const [selectedModelId, setSelectedModelId] = useState<string>(VIDEO_MODELS[0].id)
 
   // Local copies of template IDs — synced from context but overrideable per-run
-  const [localCameraId, setLocalCameraId] = useState(cameraTemplateId)
-  const [localMovementId, setLocalMovementId] = useState(movementTemplateId)
+  const [localCameraId, setLocalCameraId] = useState(cameraTemplateId || cameraTemplates[0]?.id || '')
+  const [localMovementId, setLocalMovementId] = useState(movementTemplateId || movementTemplates[0]?.id || '')
 
   useEffect(() => { setLocalCameraId(cameraTemplateId) }, [cameraTemplateId])
   useEffect(() => { setLocalMovementId(movementTemplateId) }, [movementTemplateId])
@@ -332,7 +349,12 @@ export function GeneratePanel() {
     setStage('making-videos')
 
     try {
-      const motionPrompt = buildVideoPrompt(localMovementId, avatarConfig?.gender ?? 'man', backgroundConfig?.roomAesthetic ?? 'masculine')
+      const selectedMovementTemplate = movementTemplates.find((template) => template.id === localMovementId) ?? movementTemplates[0] ?? null
+      const motionPrompt = buildMovementPrompt(
+        selectedMovementTemplate,
+        avatarConfig?.gender ?? 'man',
+        backgroundConfig?.roomAesthetic ?? 'masculine',
+      )
       const exportRes = await fetch('/api/export', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -384,26 +406,46 @@ export function GeneratePanel() {
     setVideoProgress(null)
   }
 
-  const cameraOptions = MOTION_TEMPLATES.filter((t) => t.category === 'camera').map((t) => ({ id: t.id, name: t.name, badge: t.badge }))
-  const movementOptions = MOTION_TEMPLATES.filter((t) => t.category === 'movement').map((t) => ({ id: t.id, name: t.name, badge: t.badge }))
-  const avatarOptions = AVATAR_PRESETS.map((p) => ({ id: p.id, name: p.label }))
-  const backgroundOptions = BACKGROUND_PRESETS.map((p) => ({ id: p.id, name: p.label }))
+  const cameraOptions = cameraTemplates.map((template) => ({ id: template.id, name: template.title, badge: template.badge ?? undefined }))
+  const movementOptions = movementTemplates.map((template) => ({ id: template.id, name: template.title, badge: template.badge ?? undefined }))
+  const avatarOptions = avatarTemplates.map((template) => ({ id: template.id, name: template.title }))
+  const backgroundOptions = backgroundTemplates.map((template) => ({ id: template.id, name: template.title }))
 
-  const localAvatarId = avatarConfig?.type === 'preset' ? (avatarConfig.presetId ?? avatarOptions[0].id) : avatarOptions[0].id
-  const localBgId = backgroundConfig?.presetId ?? backgroundOptions[0].id
+  const localAvatarId = avatarConfig?.type === 'preset'
+    ? (avatarConfig.presetId ?? avatarOptions[0]?.id ?? '')
+    : (avatarOptions[0]?.id ?? '')
+  const localBgId = backgroundConfig?.presetId ?? backgroundOptions[0]?.id ?? ''
 
   async function handleAvatarChange(id: string) {
-    const preset = AVATAR_PRESETS.find((p) => p.id === id)
-    if (!preset) return
-    const config = { type: 'preset' as const, presetId: preset.id, gender: preset.gender, style: preset.style }
+    const template = avatarTemplates.find((item) => item.id === id)
+    if (!template) return
+    const style =
+      template.config.style === 'streetwear' ||
+      template.config.style === 'luxury' ||
+      template.config.style === 'minimal'
+        ? template.config.style
+        : 'casual'
+    const config = {
+      type: 'preset' as const,
+      presetId: template.id,
+      gender: template.config.gender === 'woman' ? 'woman' : 'man',
+      style,
+    }
     setAvatarConfig(config)
     fetch('/api/preferences', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ avatar_config: config }) })
   }
 
   async function handleBackgroundChange(id: string) {
-    const preset = BACKGROUND_PRESETS.find((p) => p.id === id)
-    if (!preset) return
-    const config = { type: 'preset' as const, presetId: preset.id, roomAesthetic: preset.roomAesthetic, roomColors: preset.roomColors, roomElements: preset.roomElements, thumbnailUrl: preset.thumbnailUrl }
+    const template = backgroundTemplates.find((item) => item.id === id)
+    if (!template) return
+    const config = {
+      type: 'preset' as const,
+      presetId: template.id,
+      roomAesthetic: String(template.config.roomAesthetic ?? ''),
+      roomColors: String(template.config.roomColors ?? ''),
+      roomElements: String(template.config.roomElements ?? ''),
+      thumbnailUrl: template.thumbnail_url ?? undefined,
+    }
     setBackgroundConfig(config)
     fetch('/api/preferences', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ background_config: config }) })
   }

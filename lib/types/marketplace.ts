@@ -24,6 +24,7 @@ export interface TemplateConfig {
   /** Avatar templates */
   gender?: string
   style?: string
+  promptHint?: string
   /** Background templates */
   roomAesthetic?: string
   roomColors?: string

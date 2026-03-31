@@ -195,31 +195,40 @@ function ConfigSection({
 
   if (category === 'avatar') {
     return (
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-1.5">
-          <label className="block text-xs font-medium text-white/60">Gender</label>
-          <select
-            name="config.gender"
-            defaultValue={(config.gender as string) ?? 'man'}
-            className={inputCls}
-          >
-            <option value="man"   className="bg-[#0d0d14] text-white">Man</option>
-            <option value="woman" className="bg-[#0d0d14] text-white">Woman</option>
-          </select>
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <label className="block text-xs font-medium text-white/60">Gender</label>
+            <select
+              name="config.gender"
+              defaultValue={(config.gender as string) ?? 'man'}
+              className={inputCls}
+            >
+              <option value="man"   className="bg-[#0d0d14] text-white">Man</option>
+              <option value="woman" className="bg-[#0d0d14] text-white">Woman</option>
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <label className="block text-xs font-medium text-white/60">Style</label>
+            <select
+              name="config.style"
+              defaultValue={(config.style as string) ?? 'casual'}
+              className={inputCls}
+            >
+              <option value="casual"      className="bg-[#0d0d14] text-white">Casual</option>
+              <option value="streetwear"  className="bg-[#0d0d14] text-white">Streetwear</option>
+              <option value="luxury"      className="bg-[#0d0d14] text-white">Luxury</option>
+              <option value="minimal"     className="bg-[#0d0d14] text-white">Minimal</option>
+            </select>
+          </div>
         </div>
-        <div className="space-y-1.5">
-          <label className="block text-xs font-medium text-white/60">Style</label>
-          <select
-            name="config.style"
-            defaultValue={(config.style as string) ?? 'casual'}
-            className={inputCls}
-          >
-            <option value="casual"      className="bg-[#0d0d14] text-white">Casual</option>
-            <option value="streetwear"  className="bg-[#0d0d14] text-white">Streetwear</option>
-            <option value="luxury"      className="bg-[#0d0d14] text-white">Luxury</option>
-            <option value="minimal"     className="bg-[#0d0d14] text-white">Minimal</option>
-          </select>
-        </div>
+        <FieldGroup
+          name="config.promptHint"
+          label="Avatar Prompt Hint"
+          hint="Short facial/persona description used when this preset is selected instead of a custom face photo"
+          defaultValue={(config.promptHint as string) ?? ''}
+          multiline
+        />
       </div>
     )
   }

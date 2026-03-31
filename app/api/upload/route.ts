@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { AVATAR_PRESETS } from '@/lib/data/avatar-presets'
 import { getPlan } from '@/lib/data/plans'
 import type { PlanId } from '@/lib/types/billing'
+import {
+  getPublishedMarketplaceTemplateById,
+  getTemplateConfigValue,
+} from '@/lib/data/marketplace-templates'
 
 async function checkStorageLimit(userId: string, additionalBytes: number): Promise<{ ok: boolean; message?: string }> {
   const admin = createAdminClient()
@@ -96,8 +99,15 @@ export async function POST(req: NextRequest) {
     }
 
     // Get promptHint for preset avatars
+    const avatarTemplate = ac.type === 'preset'
+      ? await getPublishedMarketplaceTemplateById(String(ac.presetId ?? ''))
+      : null
     const promptHint = ac.type === 'preset'
-      ? (AVATAR_PRESETS.find((p) => p.id === ac.presetId)?.promptHint ?? '')
+      ? getTemplateConfigValue(
+        avatarTemplate,
+        'promptHint',
+        avatarTemplate?.description ?? avatarTemplate?.title ?? '',
+      )
       : undefined
 
     // Style → outfit defaults

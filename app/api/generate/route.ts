@@ -1,11 +1,15 @@
 import { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { getCameraAnglePrompt, DEFAULT_CAMERA_TEMPLATE_ID } from '@/lib/data/templates'
 import { deductTokens, getTokenBalance } from '@/lib/billing/tokens'
 import { TOKEN_COSTS } from '@/lib/data/plans'
 import { logger } from '@/lib/logger'
 import { rateLimit } from '@/lib/rate-limit'
+import {
+  getMarketplaceTemplateDefaults,
+  getPublishedMarketplaceTemplateById,
+  getTemplateConfigValue,
+} from '@/lib/data/marketplace-templates'
 
 const GEMINI_MODEL = 'gemini-2.5-flash-image'
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`
@@ -30,7 +34,11 @@ function fillTemplate(template: string, vars: Record<string, string | number>): 
   )
 }
 
-function buildPrompt(avatar: Record<string, unknown>, productDescription: string, cameraTemplateId: string): string {
+function buildPrompt(
+  avatar: Record<string, unknown>,
+  productDescription: string,
+  cameraAnglePrompt: string,
+) {
   const vars: Record<string, string | number> = {
     gender:           String(avatar.gender ?? 'man'),
     face_description: avatar.type === 'preset' && avatar.promptHint
@@ -39,7 +47,7 @@ function buildPrompt(avatar: Record<string, unknown>, productDescription: string
     height:           Number(avatar.height ?? 175),
     weight:           Number(avatar.weight ?? 70),
     room_aesthetic:   String(avatar.roomAesthetic ?? 'masculine'),
-    camera_angle:     getCameraAnglePrompt(cameraTemplateId),
+    camera_angle:     cameraAnglePrompt,
     focal_length:     String(avatar.focalLength ?? '35-50mm (natural, balanced)'),
     room_colors:      String(avatar.roomColors ?? 'white and black'),
     room_elements:    String(avatar.roomElements ?? 'a dark gray round shag rug, minimalist black-framed posters, warm LED strips'),
@@ -100,7 +108,14 @@ export async function POST(req: NextRequest) {
     return new Response(JSON.stringify({ error: 'No product images found for this project' }), { status: 400 })
   }
 
-  const prompt = buildPrompt(avatar, productDescription || '', cameraTemplateId || DEFAULT_CAMERA_TEMPLATE_ID)
+  const { cameraTemplateId: defaultCameraTemplateId } = await getMarketplaceTemplateDefaults()
+  const selectedCameraTemplate = await getPublishedMarketplaceTemplateById(cameraTemplateId || defaultCameraTemplateId)
+  const cameraAnglePrompt = getTemplateConfigValue(
+    selectedCameraTemplate,
+    'cameraAnglePrompt',
+    'at eye level, centered on the subject',
+  )
+  const prompt = buildPrompt(avatar, productDescription || '', cameraAnglePrompt)
   const parts: unknown[] = [{ text: prompt }]
 
   const isPreset = avatar.type === 'preset'

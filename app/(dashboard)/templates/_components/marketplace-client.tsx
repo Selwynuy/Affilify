@@ -7,8 +7,6 @@ import {
   CheckCircle2, Camera, Sparkles, Play,
   User, ImageIcon, Upload,
 } from 'lucide-react'
-import { AVATAR_PRESETS }      from '@/lib/data/avatar-presets'
-import { BACKGROUND_PRESETS }  from '@/lib/data/background-presets'
 import { usePreferences }      from '@/lib/context/preferences-context'
 import type { AvatarConfig, BackgroundConfig } from '@/lib/types/preferences'
 import type { MarketplaceTemplate }            from '@/lib/types/marketplace'
@@ -138,9 +136,13 @@ function MarketplaceCard({
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function MarketplaceClient({
+  avatarTemplates,
+  backgroundTemplates,
   cameraTemplates,
   movementTemplates,
 }: {
+  avatarTemplates: MarketplaceTemplate[]
+  backgroundTemplates: MarketplaceTemplate[]
   cameraTemplates:   MarketplaceTemplate[]
   movementTemplates: MarketplaceTemplate[]
 }) {
@@ -171,30 +173,34 @@ export default function MarketplaceClient({
     })
   }
 
-  function handleSelectAvatar(presetId: string) {
+  function handleSelectAvatar(template: MarketplaceTemplate) {
     if (isPending) return
-    setSavingId(presetId)
-    const preset = AVATAR_PRESETS.find((p) => p.id === presetId)
-    if (!preset) return
+    setSavingId(template.id)
     const config: AvatarConfig = {
-      type: 'preset', presetId: preset.id,
-      gender: preset.gender, style: preset.style,
+      type: 'preset',
+      presetId: template.id,
+      gender: template.config.gender === 'woman' ? 'woman' : 'man',
+      style:
+        template.config.style === 'streetwear' ||
+        template.config.style === 'luxury' ||
+        template.config.style === 'minimal'
+          ? template.config.style
+          : 'casual',
     }
     setAvatarConfig(config)
     savePrefs({ avatar_config: config })
   }
 
-  function handleSelectBackground(presetId: string) {
+  function handleSelectBackground(template: MarketplaceTemplate) {
     if (isPending) return
-    setSavingId(presetId)
-    const preset = BACKGROUND_PRESETS.find((p) => p.id === presetId)
-    if (!preset) return
+    setSavingId(template.id)
     const config: BackgroundConfig = {
-      type: 'preset', presetId: preset.id,
-      roomAesthetic: preset.roomAesthetic,
-      roomColors:    preset.roomColors,
-      roomElements:  preset.roomElements,
-      thumbnailUrl:  preset.thumbnailUrl,
+      type: 'preset',
+      presetId: template.id,
+      roomAesthetic: String(template.config.roomAesthetic ?? ''),
+      roomColors: String(template.config.roomColors ?? ''),
+      roomElements: String(template.config.roomElements ?? ''),
+      thumbnailUrl: template.thumbnail_url ?? undefined,
     }
     setBackgroundConfig(config)
     savePrefs({ background_config: config })
@@ -336,36 +342,50 @@ export default function MarketplaceClient({
 
           <div>
             <p className="text-xs font-medium text-brand-text/40 uppercase tracking-wider mb-3">AI Presets</p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-              {AVATAR_PRESETS.map((preset) => (
-                <MarketplaceCard
-                  key={preset.id}
-                  label={preset.label}
-                  thumbnailUrl={preset.thumbnailUrl}
-                  isSelected={avatarConfig?.type === 'preset' && avatarConfig.presetId === preset.id}
-                  isSaving={savingId === preset.id}
-                  onSelect={() => handleSelectAvatar(preset.id)}
-                />
-              ))}
-            </div>
+            {avatarTemplates.length === 0 ? (
+              <p className="text-sm text-brand-text/25 italic">No avatar templates available.</p>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                {avatarTemplates.map((template) => (
+                  <MarketplaceCard
+                    key={template.id}
+                    label={template.title}
+                    description={template.description ?? undefined}
+                    thumbnailUrl={template.thumbnail_url ?? ''}
+                    previewUrl={template.preview_url ?? undefined}
+                    badge={template.badge}
+                    isSelected={avatarConfig?.type === 'preset' && avatarConfig.presetId === template.id}
+                    isSaving={savingId === template.id}
+                    onSelect={() => handleSelectAvatar(template)}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
 
       {/* Background tab */}
       {tab === 'background' && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-          {BACKGROUND_PRESETS.map((preset) => (
-            <MarketplaceCard
-              key={preset.id}
-              label={preset.label}
-              thumbnailUrl={preset.thumbnailUrl}
-              isSelected={backgroundConfig?.presetId === preset.id}
-              isSaving={savingId === preset.id}
-              onSelect={() => handleSelectBackground(preset.id)}
-            />
-          ))}
-        </div>
+        backgroundTemplates.length === 0 ? (
+          <p className="text-sm text-brand-text/25 italic">No background templates available.</p>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+            {backgroundTemplates.map((template) => (
+              <MarketplaceCard
+                key={template.id}
+                label={template.title}
+                description={template.description ?? undefined}
+                thumbnailUrl={template.thumbnail_url ?? ''}
+                previewUrl={template.preview_url ?? undefined}
+                badge={template.badge}
+                isSelected={backgroundConfig?.presetId === template.id}
+                isSaving={savingId === template.id}
+                onSelect={() => handleSelectBackground(template)}
+              />
+            ))}
+          </div>
+        )
       )}
 
       {/* Camera tab — data from DB */}
@@ -382,7 +402,6 @@ export default function MarketplaceClient({
                   label={t.title}
                   description={t.description ?? undefined}
                   thumbnailUrl={t.thumbnail_url ?? ''}
-                  previewUrl={t.preview_url ?? undefined}
                   badge={t.badge}
                   isSelected={cameraTemplateId === t.id}
                   isSaving={savingId === t.id}

@@ -43,6 +43,7 @@ function buildConfig(formData: FormData, category: TemplateCategory): TemplateCo
     case 'avatar':
       config.gender = (formData.get('config.gender') as string) ?? ''
       config.style  = (formData.get('config.style')  as string) ?? ''
+      config.promptHint = (formData.get('config.promptHint') as string) ?? ''
       break
     case 'background':
       config.roomAesthetic = (formData.get('config.roomAesthetic') as string) ?? ''
