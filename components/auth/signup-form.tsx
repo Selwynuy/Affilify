@@ -10,13 +10,16 @@ import { Eye, EyeOff } from 'lucide-react'
 export function SignupForm() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [confirm, setConfirm] = useState('')
   const [showPassword, setShowPassword] = useState(false)
+  const [showConfirm, setShowConfirm] = useState(false)
 
   const [state, action, pending] = useActionState(
     async (_prev: { error?: string } | null, formData: FormData) => {
       const result = await signup(formData)
       if (result?.error) {
         setPassword('')
+        setConfirm('')
       }
       return result ?? null
     },
@@ -42,15 +45,16 @@ export function SignupForm() {
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <Label htmlFor="password" className="text-brand-text/60 text-sm font-medium">Password</Label>
-          <span className="text-xs text-brand-text/25">At least 6 characters</span>
+          <span className="text-xs text-brand-text/25">At least 8 characters</span>
         </div>
         <div className="relative">
           <Input
             id="password"
             name="password"
             type={showPassword ? 'text' : 'password'}
-            placeholder="••••••••"
+            placeholder="Enter your password"
             required
+            minLength={8}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className="bg-brand-surface border-white/10 text-brand-text placeholder:text-brand-text/25 focus:border-brand-accent focus:ring-1 focus:ring-brand-accent/50 h-11 pr-11 [&:-webkit-autofill]:shadow-[inset_0_0_0_1000px_#393E46] [&:-webkit-autofill]:[-webkit-text-fill-color:#EEEEEE]"
@@ -63,6 +67,32 @@ export function SignupForm() {
             aria-label={showPassword ? 'Hide password' : 'Show password'}
           >
             {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+          </button>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="confirm" className="text-brand-text/60 text-sm font-medium">Confirm password</Label>
+        <div className="relative">
+          <Input
+            id="confirm"
+            name="confirm"
+            type={showConfirm ? 'text' : 'password'}
+            placeholder="Re-enter your password"
+            required
+            minLength={8}
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+            className="bg-brand-surface border-white/10 text-brand-text placeholder:text-brand-text/25 focus:border-brand-accent focus:ring-1 focus:ring-brand-accent/50 h-11 pr-11 [&:-webkit-autofill]:shadow-[inset_0_0_0_1000px_#393E46] [&:-webkit-autofill]:[-webkit-text-fill-color:#EEEEEE]"
+          />
+          <button
+            type="button"
+            onClick={() => setShowConfirm((v) => !v)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-text/30 hover:text-brand-text/70 transition-colors"
+            tabIndex={-1}
+            aria-label={showConfirm ? 'Hide password' : 'Show password'}
+          >
+            {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
           </button>
         </div>
       </div>
@@ -84,7 +114,7 @@ export function SignupForm() {
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z" />
             </svg>
-            Creating account…
+            Creating account...
           </span>
         ) : 'Create account'}
       </Button>

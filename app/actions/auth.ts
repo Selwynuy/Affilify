@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { sendEmail } from '@/lib/email/resend'
 import { welcomeEmail } from '@/lib/email/templates/welcome'
@@ -26,7 +27,45 @@ export async function signup(formData: FormData) {
   const supabase = await createClient()
   const email = (formData.get('email') as string).trim().toLowerCase()
   const password = formData.get('password') as string
+  const confirm = formData.get('confirm') as string
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
+
+  if (!email) {
+    return { error: 'Email is required.' }
+  }
+  if (!password || password.length < 8) {
+    return { error: 'Password must be at least 8 characters.' }
+  }
+  if (password !== confirm) {
+    return { error: 'Passwords do not match.' }
+  }
+
+  const admin = createAdminClient()
+  let page = 1
+  let emailTaken = false
+
+  while (!emailTaken) {
+    const { data, error } = await admin.auth.admin.listUsers({
+      page,
+      perPage: 1000,
+    })
+
+    if (error) {
+      return { error: 'Unable to verify email availability right now. Please try again.' }
+    }
+
+    emailTaken = data.users.some((user) => user.email?.toLowerCase() === email)
+
+    if (emailTaken || !data.nextPage) {
+      break
+    }
+
+    page = data.nextPage
+  }
+
+  if (emailTaken) {
+    return { error: 'An account with that email already exists.' }
+  }
 
   const { data, error } = await supabase.auth.signUp({
     email,
