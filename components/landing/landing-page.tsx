@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import {
   Sparkles,
   Video,
@@ -24,6 +25,7 @@ import { useState, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { NavbarUserMenu, NavbarGuestButtons } from "./NavbarUserMenu";
 import { BrandLogo } from "@/components/brand-logo";
+import { TextHoverEffect, FooterBackgroundGradient } from "@/components/ui/hover-footer";
 
 interface Review {
   id: string;
@@ -751,9 +753,9 @@ export default function LandingPage({ user }: Props) {
         >
           {/* Left floating images */}
           <div className="hidden lg:flex flex-col gap-4 shrink-0 w-44">
-            <div className="w-36 h-52 rounded-2xl bg-brand-surface ml-4" />
-            <div className="w-32 h-44 rounded-2xl bg-[#2e3a48]" />
-            <div className="w-28 h-36 rounded-2xl bg-[#1e2a38] ml-6" />
+            <Image src="/Introduction Section/1.png" alt="" width={144} height={208} className="w-36 h-52 rounded-2xl object-cover ml-4" />
+            <Image src="/Introduction Section/2.png" alt="" width={128} height={176} className="w-32 h-44 rounded-2xl object-cover" />
+            <Image src="/Introduction Section/3.png" alt="" width={112} height={144} className="w-28 h-36 rounded-2xl object-cover ml-6" />
           </div>
 
           {/* Center text */}
@@ -792,9 +794,9 @@ export default function LandingPage({ user }: Props) {
 
           {/* Right floating images */}
           <div className="hidden lg:flex flex-col gap-4 shrink-0 w-44 items-end">
-            <div className="w-36 h-56 rounded-2xl bg-brand-surface mr-4" />
-            <div className="w-28 h-40 rounded-2xl bg-brand-accent/20" />
-            <div className="w-32 h-44 rounded-2xl bg-[#2e3a48] mr-6" />
+            <Image src="/Introduction Section/4.png" alt="" width={144} height={224} className="w-36 h-56 rounded-2xl object-cover mr-4" />
+            <Image src="/Introduction Section/5.png" alt="" width={112} height={160} className="w-28 h-40 rounded-2xl object-cover" />
+            <Image src="/Introduction Section/6.png" alt="" width={128} height={176} className="w-32 h-44 rounded-2xl object-cover mr-6" />
           </div>
         </div>
       </section>
@@ -1472,10 +1474,12 @@ export default function LandingPage({ user }: Props) {
 
       {/* ── FOOTER ── */}
       <footer
-        className="border-t border-white/6"
+        className="relative overflow-hidden border-t border-white/6 mx-4 md:mx-8 mb-4 md:mb-8 rounded-3xl"
         style={{ background: "#181c22" }}
       >
-        <div className="max-w-7xl mx-auto px-6 md:px-10 py-16 grid grid-cols-2 md:grid-cols-5 gap-10">
+        <FooterBackgroundGradient />
+
+        <div className="relative z-10 max-w-7xl mx-auto px-6 md:px-10 pt-16 pb-4 grid grid-cols-2 md:grid-cols-5 gap-10">
           {/* Brand col */}
           <div className="col-span-2 flex flex-col gap-4">
             <Link href="/" className="flex items-center gap-2 w-fit">
@@ -1587,6 +1591,11 @@ export default function LandingPage({ user }: Props) {
               Refund Policy
             </Link>
           </div>
+        </div>
+
+        {/* Animated brand text hover effect */}
+        <div className="lg:flex hidden h-64 -mt-20 -mb-10 relative z-10">
+          <TextHoverEffect text="Genetrify" />
         </div>
       </footer>
     </div>
