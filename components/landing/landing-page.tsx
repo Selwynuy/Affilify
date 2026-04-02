@@ -1474,12 +1474,12 @@ export default function LandingPage({ user }: Props) {
 
       {/* ── FOOTER ── */}
       <footer
-        className="relative overflow-hidden border-t border-white/6 mx-4 md:mx-8 mb-4 md:mb-8 rounded-3xl"
+        className="relative overflow-hidden border-t border-white/6"
         style={{ background: "#181c22" }}
       >
         <FooterBackgroundGradient />
 
-        <div className="relative z-10 max-w-7xl mx-auto px-6 md:px-10 pt-16 pb-4 grid grid-cols-2 md:grid-cols-5 gap-10">
+        <div className="relative z-10 max-w-7xl mx-auto px-6 md:px-10 pt-16 pb-8 grid grid-cols-2 md:grid-cols-5 gap-10">
           {/* Brand col */}
           <div className="col-span-2 flex flex-col gap-4">
             <Link href="/" className="flex items-center gap-2 w-fit">
@@ -1594,7 +1594,7 @@ export default function LandingPage({ user }: Props) {
         </div>
 
         {/* Animated brand text hover effect */}
-        <div className="lg:flex hidden h-64 -mt-20 -mb-10 relative z-10">
+        <div className="lg:flex hidden h-48 relative z-10">
           <TextHoverEffect text="Genetrify" />
         </div>
       </footer>
