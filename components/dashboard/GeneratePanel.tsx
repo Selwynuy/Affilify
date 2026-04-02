@@ -904,7 +904,7 @@ export function GeneratePanel({
           className="flex items-center justify-center gap-1.5 text-[11px] text-brand-text/30 hover:text-brand-accent transition-colors py-1"
         >
           <Sparkles className="w-3 h-3" />
-          Browse Marketplace
+          Browse Templates
         </Link>
       </div>
 

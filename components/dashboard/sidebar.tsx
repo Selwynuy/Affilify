@@ -11,7 +11,7 @@ import { BrandLogo } from '@/components/brand-logo'
 
 const NAV_LINKS = [
   { href: '/dashboard', label: 'Studio', icon: LayoutDashboard },
-  { href: '/templates', label: 'Marketplace', icon: Wand2 },
+  { href: '/templates', label: 'Templates', icon: Wand2 },
   { href: '/storage', label: 'Storage', icon: HardDrive },
   { href: '/billing', label: 'Billing', icon: CreditCard },
   { href: '/support', label: 'Support', icon: MessageCircle },

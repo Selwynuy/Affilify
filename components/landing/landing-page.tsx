@@ -122,20 +122,19 @@ function useInView(threshold = 0.15) {
   return { ref, inView };
 }
 
-// Carousel card colors for placeholder visuals
-const CARD_COLORS = [
-  "bg-brand-surface",
-  "bg-brand-surface/80",
-  "bg-[#1e2530]",
-  "bg-[#2a3240]",
-  "bg-[#243040]",
-  "bg-[#1e2838]",
-  "bg-brand-surface",
-  "bg-[#2e3a48]",
+const CAROUSEL_IMAGES = [
+  "/Homepage Carousel/1.png",
+  "/Homepage Carousel/2.png",
+  "/Homepage Carousel/3.png",
+  "/Homepage Carousel/4.png",
+  "/Homepage Carousel/5.png",
+  "/Homepage Carousel/6.png",
+  "/Homepage Carousel/7.png",
+  "/Homepage Carousel/8.png",
 ];
 
 function CarouselRow({ direction }: { direction: "left" | "right" }) {
-  const cards = [...CARD_COLORS, ...CARD_COLORS];
+  const cards = [...CAROUSEL_IMAGES, ...CAROUSEL_IMAGES];
   return (
     <div className="relative overflow-hidden w-full">
       <div
@@ -145,15 +144,17 @@ function CarouselRow({ direction }: { direction: "left" | "right" }) {
         )}
         style={{ willChange: "transform" }}
       >
-        {cards.map((color, i) => (
+        {cards.map((src, i) => (
           <div
             key={i}
-            className={cn(
-              "w-64 sm:w-72 md:w-80 shrink-0 aspect-3/4 rounded-2xl overflow-hidden",
-              color,
-            )}
+            className="w-64 sm:w-72 md:w-80 shrink-0 aspect-3/4 rounded-2xl overflow-hidden bg-brand-surface"
           >
-            <div className="w-full h-full bg-linear-to-b from-white/5 to-black/20" />
+            <img
+              src={src}
+              alt={`Model ${(i % CAROUSEL_IMAGES.length) + 1}`}
+              className="w-full h-full object-cover"
+              draggable={false}
+            />
           </div>
         ))}
       </div>
