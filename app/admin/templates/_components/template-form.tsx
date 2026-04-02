@@ -122,17 +122,29 @@ function MediaField({
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-3">
         <label className="block text-xs font-medium text-white/60">{label}</label>
-        <label className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-white/8 bg-white/[0.03] text-xs text-white/70 hover:text-white cursor-pointer transition-colors">
-          {isUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
-          {isUploading ? 'Uploading...' : 'Upload file'}
-          <input
-            type="file"
-            accept={accept}
-            onChange={handleFileChange}
-            className="hidden"
-            disabled={isUploading}
-          />
-        </label>
+        <div className="flex items-center gap-2">
+          {!!value && (
+            <button
+              type="button"
+              onClick={() => onChange('')}
+              className="inline-flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-300 transition-colors hover:bg-red-500/20"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Clear
+            </button>
+          )}
+          <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2 text-xs text-white/70 transition-colors hover:text-white">
+            {isUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+            {isUploading ? 'Uploading...' : 'Upload file'}
+            <input
+              type="file"
+              accept={accept}
+              onChange={handleFileChange}
+              className="hidden"
+              disabled={isUploading}
+            />
+          </label>
+        </div>
       </div>
 
       <input

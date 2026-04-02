@@ -185,3 +185,25 @@ export async function deleteTemplate(
   revalidateTemplates()
   redirect('/admin/templates')
 }
+
+export async function deleteTemplateInline(
+  _prev: TemplateFormState,
+  formData: FormData,
+): Promise<TemplateFormState> {
+  const user = await verifyAdmin()
+  if (!user) return { error: 'Unauthorized' }
+
+  const id = (formData.get('id') as string)?.trim()
+  if (!id) return { error: 'Missing template ID' }
+
+  const admin = createAdminClient()
+  const { error } = await admin
+    .from('marketplace_templates')
+    .delete()
+    .eq('id', id)
+
+  if (error) return { error: error.message }
+
+  revalidateTemplates()
+  return { success: 'Template deleted' }
+}
