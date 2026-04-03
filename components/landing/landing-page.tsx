@@ -25,7 +25,10 @@ import { useState, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { NavbarUserMenu, NavbarGuestButtons } from "./NavbarUserMenu";
 import { BrandLogo } from "@/components/brand-logo";
-import { TextHoverEffect, FooterBackgroundGradient } from "@/components/ui/hover-footer";
+import {
+  TextHoverEffect,
+  FooterBackgroundGradient,
+} from "@/components/ui/hover-footer";
 
 interface Review {
   id: string;
@@ -169,7 +172,7 @@ function CarouselRow({ direction }: { direction: "left" | "right" }) {
   );
 }
 
-// ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ Bento helpers ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬
+//  Bento helpers
 
 const BENTO_AVATARS = [
   "/Homepage Carousel/1.png",
@@ -248,7 +251,9 @@ function CategoryCycler() {
         >
           <Icon className="w-3.5 h-3.5 text-white/60" />
         </div>
-        <span className="text-[13px] font-medium text-brand-text/60">{label}</span>
+        <span className="text-[13px] font-medium text-brand-text/60">
+          {label}
+        </span>
       </div>
       <div className="flex gap-1.5">
         {BENTO_CATEGORIES.map((_, i) => (
@@ -258,7 +263,9 @@ function CategoryCycler() {
             style={{
               width: i === idx ? "20px" : "6px",
               background:
-                i === idx ? "var(--color-brand-accent)" : "rgba(255,255,255,0.15)",
+                i === idx
+                  ? "var(--color-brand-accent)"
+                  : "rgba(255,255,255,0.15)",
             }}
           />
         ))}
@@ -268,7 +275,7 @@ function CategoryCycler() {
 }
 
 const BENTO_TIERS = [
-  { name: "Standard", desc: "Hailuo Fast ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· Wan 2.1" },
+  { name: "Standard", desc: "Hailuo Fast Wan 2.1" },
   { name: "Pro", desc: "Higher fidelity output" },
   { name: "Elite", desc: "Cinematic AI video" },
 ];
@@ -277,7 +284,10 @@ function TierCycler() {
   const [active, setActive] = useState(0);
 
   useEffect(() => {
-    const id = setInterval(() => setActive((a) => (a + 1) % BENTO_TIERS.length), 2200);
+    const id = setInterval(
+      () => setActive((a) => (a + 1) % BENTO_TIERS.length),
+      2200,
+    );
     return () => clearInterval(id);
   }, []);
 
@@ -290,26 +300,40 @@ function TierCycler() {
             key={tier.name}
             className="flex items-center gap-3 rounded-xl border px-3 py-2.5 transition-all duration-500"
             style={{
-              borderColor: isActive ? "rgba(139,92,246,0.45)" : "rgba(255,255,255,0.06)",
-              background: isActive ? "rgba(139,92,246,0.06)" : "rgba(255,255,255,0.02)",
+              borderColor: isActive
+                ? "rgba(139,92,246,0.45)"
+                : "rgba(255,255,255,0.06)",
+              background: isActive
+                ? "rgba(139,92,246,0.06)"
+                : "rgba(255,255,255,0.02)",
               transform: isActive ? "scale(1.02)" : "scale(1)",
             }}
           >
             <div
               className="w-2 h-2 rounded-full shrink-0 transition-all duration-500"
               style={{
-                background: isActive ? "var(--color-brand-accent)" : "rgba(255,255,255,0.15)",
-                boxShadow: isActive ? "0 0 10px var(--color-brand-accent)" : "none",
+                background: isActive
+                  ? "var(--color-brand-accent)"
+                  : "rgba(255,255,255,0.15)",
+                boxShadow: isActive
+                  ? "0 0 10px var(--color-brand-accent)"
+                  : "none",
               }}
             />
             <div className="min-w-0 flex-1">
               <p
                 className="text-sm font-bold leading-tight transition-colors duration-500"
-                style={{ color: isActive ? "var(--color-brand-text)" : "rgba(255,255,255,0.25)" }}
+                style={{
+                  color: isActive
+                    ? "var(--color-brand-text)"
+                    : "rgba(255,255,255,0.25)",
+                }}
               >
                 {tier.name}
               </p>
-              <p className="text-[10px] text-brand-text/30 truncate">{tier.desc}</p>
+              <p className="text-[10px] text-brand-text/30 truncate">
+                {tier.desc}
+              </p>
             </div>
             {isActive && (
               <div
@@ -329,7 +353,7 @@ function TierCycler() {
   );
 }
 
-// ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ Pricing ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬
+//  Pricing
 
 function PricingGrid() {
   return (
@@ -364,7 +388,7 @@ function PricingGrid() {
               <div className="mt-3 flex items-center gap-2">
                 <Zap className="w-3 h-3 text-brand-text/40 shrink-0" />
                 <span className="text-xs text-brand-text/40">
-                  {plan.tokens} tokens ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· {plan.runs} runs
+                  {plan.tokens} tokens {plan.runs} runs
                 </span>
               </div>
             </div>
@@ -402,7 +426,7 @@ function PricingGrid() {
       </div>
 
       <p className="text-xs text-brand-text/25 mt-8">
-        All plans include a token top-up option ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· Payments via PayMongo ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· Cancel
+        All plans include a token top-up option Payments via PayMongo Cancel
         anytime
       </p>
     </>
@@ -412,7 +436,7 @@ function PricingGrid() {
 const FAQ_ITEMS = [
   {
     q: "What exactly is Genetrify?",
-    a: "Genetrify is an AI-powered product showcase studio. Upload your face and product images ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â our AI builds a model that looks like you, dresses it in your product, then generates cinematic images and videos ready to post.",
+    a: "Genetrify is an AI-powered product showcase studio. Upload your face and product images  our AI builds a model that looks like you, dresses it in your product, then generates cinematic images and videos ready to post.",
   },
   {
     q: "Who is Genetrify designed for?",
@@ -424,11 +448,11 @@ const FAQ_ITEMS = [
   },
   {
     q: "Do I need special skills or equipment?",
-    a: "None. Just a phone photo of your face and a product image. The entire pipeline ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â avatar creation, image generation, video rendering ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â is handled by Genetrify automatically.",
+    a: "None. Just a phone photo of your face and a product image. The entire pipeline  avatar creation, image generation, video rendering  is handled by Genetrify automatically.",
   },
   {
     q: "How is this different from stock model tools?",
-    a: "Unlike tools that use generic stock models, Genetrify lets you create a model from YOUR face. Your audience sees a consistent brand persona that looks like you ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â not a random AI model.",
+    a: "Unlike tools that use generic stock models, Genetrify lets you create a model from YOUR face. Your audience sees a consistent brand persona that looks like you  not a random AI model.",
   },
   {
     q: "Is the content license-free?",
@@ -544,7 +568,7 @@ export default function LandingPage({ user, reviews = [] }: Props) {
         }
       `}</style>
 
-      {/* ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ NAVBAR ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â floating island pill ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ */}
+      {/*  NAVBAR  floating island pill  */}
       <header className="fixed top-0 inset-x-0 z-50 flex justify-center pt-4 px-4 pointer-events-none">
         <div
           className={cn(
@@ -561,7 +585,10 @@ export default function LandingPage({ user, reviews = [] }: Props) {
         >
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2 shrink-0">
-            <BrandLogo size={28} className="drop-shadow-[0_0_18px_rgba(139,92,246,0.25)]" />
+            <BrandLogo
+              size={28}
+              className="drop-shadow-[0_0_18px_rgba(139,92,246,0.25)]"
+            />
             <span
               className={cn(
                 "font-black text-[14px] tracking-tight uppercase transition-colors duration-300",
@@ -605,12 +632,12 @@ export default function LandingPage({ user, reviews = [] }: Props) {
         </div>
       </header>
 
-      {/* ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ HERO ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ */}
+      {/*  HERO  */}
       <section
         className="relative min-h-screen flex items-center overflow-hidden"
         style={{ background: "#f5f3ff" }}
       >
-        {/* Radial glow ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â more visible on light bg */}
+        {/* Radial glow  more visible on light bg */}
         <div
           className="absolute inset-0 z-0 pointer-events-none"
           style={{
@@ -620,7 +647,7 @@ export default function LandingPage({ user, reviews = [] }: Props) {
         />
 
         <div className="relative z-20 max-w-7xl mx-auto px-4 sm:px-6 md:px-10 pt-20 pb-16 w-full grid grid-cols-1 md:grid-cols-2 gap-10 md:gap-16 items-center min-h-100svh">
-          {/* Left ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â text */}
+          {/* Left  text */}
           <div className="flex flex-col gap-6">
             <div className="inline-flex items-center gap-2 border border-brand-accent/30 bg-brand-accent/10 rounded-full px-3 py-1 text-[11px] font-semibold text-brand-accent uppercase tracking-widest w-fit">
               <Sparkles className="w-3 h-3" />
@@ -640,10 +667,13 @@ export default function LandingPage({ user, reviews = [] }: Props) {
               <span className="text-brand-accent">Film It.</span>
             </h1>
 
-            <p className="text-[17px] leading-relaxed max-w-100" style={{ color: "rgba(18,17,26,0.52)" }}>
+            <p
+              className="text-[17px] leading-relaxed max-w-100"
+              style={{ color: "rgba(18,17,26,0.52)" }}
+            >
               Upload your face. Add your products. Genetrify generates a custom
-              AI model that looks like you ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â wearing your exact products ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â and
-              turns it into a video. No studio. No shoots. Just content.
+              AI model that looks like you wearing your exact products and turns
+              it into a video. No studio. No shoots. Just content.
             </p>
 
             <div className="flex flex-col sm:flex-row items-start gap-3 mt-2">
@@ -664,7 +694,7 @@ export default function LandingPage({ user, reviews = [] }: Props) {
             </div>
           </div>
 
-          {/* Right ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â model card */}
+          {/* Right  model card */}
           <div className="relative flex justify-center md:justify-end">
             <div
               className="absolute inset-y-[8%] left-1/2 w-[85%] -translate-x-1/2 rounded-full blur-3xl pointer-events-none"
@@ -678,11 +708,13 @@ export default function LandingPage({ user, reviews = [] }: Props) {
               <div
                 className="absolute inset-0"
                 style={{
-                  background:
-                    "linear-gradient(to bottom, #e9e4f8, #d4caf0)",
+                  background: "linear-gradient(to bottom, #e9e4f8, #d4caf0)",
                 }}
               />
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2" style={{ color: "rgba(100,80,160,0.35)" }}>
+              <div
+                className="absolute inset-0 flex flex-col items-center justify-center gap-2"
+                style={{ color: "rgba(100,80,160,0.35)" }}
+              >
                 <Users className="w-12 h-12" />
                 <span className="text-xs font-semibold uppercase tracking-widest">
                   Your AI Model
@@ -720,9 +752,7 @@ export default function LandingPage({ user, reviews = [] }: Props) {
         />
 
         {/* Scroll hint */}
-        <div
-          className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-2 text-brand-text/30 animate-bounce"
-        >
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-2 text-brand-text/30 animate-bounce">
           <ArrowDown className="w-4 h-4" />
           <span className="text-[10px] uppercase tracking-widest font-semibold">
             Scroll
@@ -730,7 +760,7 @@ export default function LandingPage({ user, reviews = [] }: Props) {
         </div>
       </section>
 
-      {/* ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ SCROLLING CAROUSEL ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ */}
+      {/*  SCROLLING CAROUSEL  */}
       <section
         id="examples"
         className="py-16 overflow-hidden"
@@ -746,7 +776,7 @@ export default function LandingPage({ user, reviews = [] }: Props) {
         </div>
       </section>
 
-      {/* ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ INTRODUCTION ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ */}
+      {/*  INTRODUCTION  */}
       <section
         className="py-24 overflow-hidden"
         style={{ background: "var(--color-brand-bg)" }}
@@ -763,9 +793,27 @@ export default function LandingPage({ user, reviews = [] }: Props) {
         >
           {/* Left floating images */}
           <div className="hidden lg:flex flex-col gap-4 shrink-0 w-44">
-            <Image src="/Introduction Section/1.png" alt="" width={144} height={208} className="w-36 h-52 rounded-2xl object-cover ml-4" />
-            <Image src="/Introduction Section/2.png" alt="" width={128} height={176} className="w-32 h-44 rounded-2xl object-cover" />
-            <Image src="/Introduction Section/3.png" alt="" width={112} height={144} className="w-28 h-36 rounded-2xl object-cover ml-6" />
+            <Image
+              src="/Introduction Section/1.png"
+              alt=""
+              width={144}
+              height={208}
+              className="w-36 h-52 rounded-2xl object-cover ml-4"
+            />
+            <Image
+              src="/Introduction Section/2.png"
+              alt=""
+              width={128}
+              height={176}
+              className="w-32 h-44 rounded-2xl object-cover"
+            />
+            <Image
+              src="/Introduction Section/3.png"
+              alt=""
+              width={112}
+              height={144}
+              className="w-28 h-36 rounded-2xl object-cover ml-6"
+            />
           </div>
 
           {/* Center text */}
@@ -786,12 +834,12 @@ export default function LandingPage({ user, reviews = [] }: Props) {
               Genetrify is designed for TikTok affiliates, dropshippers, and
               small brands who need professional content without the overhead.
               Build your AI model from your own face, customize it to your look,
-              then dress it in any product and generate cinematic videos ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â all
+              then dress it in any product and generate cinematic videos all
               from one dashboard.
             </p>
             <p className="text-[15px] text-brand-text/60 leading-relaxed mb-8">
-              It&apos;s your always-on creative studio. A faster, more personal way
-              to create, test, and publish product content at scale.
+              It&apos;s your always-on creative studio. A faster, more personal
+              way to create, test, and publish product content at scale.
             </p>
             <a
               href="#how-it-works"
@@ -804,23 +852,39 @@ export default function LandingPage({ user, reviews = [] }: Props) {
 
           {/* Right floating images */}
           <div className="hidden lg:flex flex-col gap-4 shrink-0 w-44 items-end">
-            <Image src="/Introduction Section/4.png" alt="" width={144} height={224} className="w-36 h-56 rounded-2xl object-cover mr-4" />
-            <Image src="/Introduction Section/5.png" alt="" width={112} height={160} className="w-28 h-40 rounded-2xl object-cover" />
-            <Image src="/Introduction Section/6.png" alt="" width={128} height={176} className="w-32 h-44 rounded-2xl object-cover mr-6" />
+            <Image
+              src="/Introduction Section/4.png"
+              alt=""
+              width={144}
+              height={224}
+              className="w-36 h-56 rounded-2xl object-cover mr-4"
+            />
+            <Image
+              src="/Introduction Section/5.png"
+              alt=""
+              width={112}
+              height={160}
+              className="w-28 h-40 rounded-2xl object-cover"
+            />
+            <Image
+              src="/Introduction Section/6.png"
+              alt=""
+              width={128}
+              height={176}
+              className="w-32 h-44 rounded-2xl object-cover mr-6"
+            />
           </div>
         </div>
       </section>
 
-      {/* ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ BIG STATEMENT ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ */}
+      {/*  BIG STATEMENT  */}
       <section className="py-28 text-center" style={{ background: "#1a1f27" }}>
         <div
           ref={statementRef}
           className={cn(
             "max-w-5xl mx-auto px-6",
             "transition-all duration-1000 ease-out",
-            statementInView
-              ? "opacity-100 scale-100"
-              : "opacity-0 scale-95",
+            statementInView ? "opacity-100 scale-100" : "opacity-0 scale-95",
           )}
         >
           <p
@@ -838,12 +902,12 @@ export default function LandingPage({ user, reviews = [] }: Props) {
           </p>
           <p className="mt-8 text-[16px] text-brand-text/40 max-w-xl mx-auto leading-relaxed">
             The only product video tool that puts <em>your</em> face at the
-            center of every campaign ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â not a stock model.
+            center of every campaign not a stock model.
           </p>
         </div>
       </section>
 
-      {/* ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ KEY FEATURES (BENTO) ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ */}
+      {/*  KEY FEATURES (BENTO)  */}
       <section
         id="features"
         className="py-24"
@@ -859,10 +923,12 @@ export default function LandingPage({ user, reviews = [] }: Props) {
             className={cn(
               "grid grid-cols-1 md:grid-cols-6 gap-3 md:auto-rows-[180px]",
               "transition-all duration-700 ease-out",
-              featuresInView ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8",
+              featuresInView
+                ? "opacity-100 translate-y-0"
+                : "opacity-0 translate-y-8",
             )}
           >
-            {/* A ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â 10+ AI Avatars (2ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â2) */}
+            {/* A  10+ AI Avatars (2ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â2) */}
             <div
               className="relative md:col-span-2 md:row-span-2 rounded-2xl border border-white/8 overflow-hidden flex flex-col p-5 hover:border-white/15 transition-colors min-h-[360px] md:min-h-0"
               style={{ background: "var(--color-brand-surface)" }}
@@ -894,7 +960,7 @@ export default function LandingPage({ user, reviews = [] }: Props) {
               </div>
             </div>
 
-            {/* B ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â 1 Photo (2ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â1) */}
+            {/* B  1 Photo (2ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â1) */}
             <div
               className="md:col-span-2 rounded-2xl border border-white/8 flex flex-col justify-between p-5 hover:border-white/15 transition-colors overflow-hidden"
               style={{ background: "var(--color-brand-surface)" }}
@@ -930,7 +996,7 @@ export default function LandingPage({ user, reviews = [] }: Props) {
               </div>
             </div>
 
-            {/* C ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â 9:16 (2ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â1) */}
+            {/* C  9:16 (2ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â1) */}
             <div
               className="md:col-span-2 rounded-2xl border border-white/8 flex flex-col justify-between p-5 hover:border-white/15 transition-colors overflow-hidden"
               style={{ background: "var(--color-brand-surface)" }}
@@ -972,7 +1038,7 @@ export default function LandingPage({ user, reviews = [] }: Props) {
               </div>
             </div>
 
-            {/* D ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â 4 Template Types (2ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â1) */}
+            {/* D  4 Template Types (2ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â1) */}
             <div
               className="md:col-span-2 rounded-2xl border border-white/8 flex flex-col justify-between p-5 hover:border-white/15 transition-colors overflow-hidden"
               style={{ background: "var(--color-brand-surface)" }}
@@ -994,7 +1060,7 @@ export default function LandingPage({ user, reviews = [] }: Props) {
               </div>
             </div>
 
-            {/* E ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â 3 AI Tiers (2ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â2) */}
+            {/* E  3 AI Tiers (2ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â2) */}
             <div
               className="md:col-span-2 md:row-span-2 rounded-2xl border border-white/8 flex flex-col justify-between p-5 hover:border-white/15 transition-colors overflow-hidden min-h-[360px] md:min-h-0"
               style={{ background: "var(--color-brand-surface)" }}
@@ -1015,11 +1081,12 @@ export default function LandingPage({ user, reviews = [] }: Props) {
                 <TierCycler />
               </div>
               <p className="text-[11px] text-brand-text/25 leading-relaxed">
-                From fast drafts to cinematic outputs ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â pick the model that fits your run.
+                From fast drafts to cinematic outputs pick the model that fits
+                your run.
               </p>
             </div>
 
-            {/* F ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â 0 Watermarks (2ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â1) */}
+            {/* F  0 Watermarks (2ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â1) */}
             <div
               className="md:col-span-2 rounded-2xl border border-white/8 flex flex-col justify-between p-5 hover:border-white/15 transition-colors overflow-hidden"
               style={{ background: "var(--color-brand-surface)" }}
@@ -1046,7 +1113,7 @@ export default function LandingPage({ user, reviews = [] }: Props) {
               </div>
             </div>
 
-            {/* G ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â 30-Day Token Rollover (2ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â1) */}
+            {/* G  30-Day Token Rollover (2ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â1) */}
             <div
               className="md:col-span-2 rounded-2xl border border-white/8 flex flex-col justify-between p-5 hover:border-white/15 transition-colors overflow-hidden"
               style={{ background: "var(--color-brand-surface)" }}
@@ -1072,12 +1139,11 @@ export default function LandingPage({ user, reviews = [] }: Props) {
                 </p>
               </div>
             </div>
-
           </div>
         </div>
       </section>
 
-      {/* ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ ALT SECTION 1 ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â text left, image right ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ */}
+      {/*  ALT SECTION 1  text left, image right  */}
       <section
         id="how-it-works"
         className="py-0 overflow-hidden"
@@ -1109,7 +1175,7 @@ export default function LandingPage({ user, reviews = [] }: Props) {
               AI Model
             </h2>
             <p className="text-[15px] text-brand-text/60 leading-relaxed max-w-md">
-              Upload a single face photo. Set your body preferences ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â height,
+              Upload a single face photo. Set your body preferences height,
               build, skin tone, style archetype. Genetrify generates your
               personal AI model and saves it permanently. Every future
               generation uses your model automatically.
@@ -1133,7 +1199,7 @@ export default function LandingPage({ user, reviews = [] }: Props) {
         </div>
       </section>
 
-      {/* ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ ALT SECTION 2 ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â image left, text right ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ */}
+      {/*  ALT SECTION 2  image left, text right  */}
       <section
         className="py-0 overflow-hidden"
         style={{ background: "var(--color-brand-bg)" }}
@@ -1172,7 +1238,7 @@ export default function LandingPage({ user, reviews = [] }: Props) {
               Products
             </h2>
             <p className="text-[15px] text-brand-text/60 leading-relaxed max-w-md">
-              Drop in 1ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ5 product images from a single dashboard ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â T-shirts,
+              Drop in 1-5 product images from a single dashboard T-shirts,
               pants, shoes, accessories. Genetrify automatically maps each item
               onto your model, respecting fit, drape, and proportions.
             </p>
@@ -1187,7 +1253,7 @@ export default function LandingPage({ user, reviews = [] }: Props) {
         </div>
       </section>
 
-      {/* ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ ALT SECTION 3 ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â text left, image right ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ */}
+      {/*  ALT SECTION 3  text left, image right  */}
       <section
         className="py-0 overflow-hidden"
         style={{ background: "#1a1f27" }}
@@ -1220,7 +1286,7 @@ export default function LandingPage({ user, reviews = [] }: Props) {
             <p className="text-[15px] text-brand-text/60 leading-relaxed max-w-md">
               Select a template from our marketplace and hit generate. Genetrify
               produces high-quality model images and converts each into a
-              cinematic 9:16 video ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â complete with scene, lighting, and motion.
+              cinematic 9:16 video complete with scene, lighting, and motion.
               Ready to post in under 2 minutes.
             </p>
             <Link
@@ -1242,7 +1308,7 @@ export default function LandingPage({ user, reviews = [] }: Props) {
         </div>
       </section>
 
-      {/* ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ PRICING ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ */}
+      {/*  PRICING  */}
       <section
         id="pricing"
         className="py-28"
@@ -1273,14 +1339,14 @@ export default function LandingPage({ user, reviews = [] }: Props) {
             you use.
           </h2>
           <p className="text-[15px] text-brand-text/60 max-w-lg mb-12 leading-relaxed">
-            Token-based pricing ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â every generation deducts tokens from your
+            Token-based pricing every generation deducts tokens from your
             balance. Upgrade or top up anytime.
           </p>
           <PricingGrid />
         </div>
       </section>
 
-      {/* ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ REVIEWS ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ */}
+      {/*  REVIEWS  */}
       {loadedReviews.length > 0 && (
         <section
           className="py-28 border-t border-white/6"
@@ -1321,7 +1387,8 @@ export default function LandingPage({ user, reviews = [] }: Props) {
                   ))}
                   <span className="ml-2 text-[13px] text-brand-text/40">
                     {(
-                      loadedReviews.reduce((s, r) => s + r.rating, 0) / loadedReviews.length
+                      loadedReviews.reduce((s, r) => s + r.rating, 0) /
+                      loadedReviews.length
                     ).toFixed(1)}{" "}
                     / 5 / {loadedReviews.length} reviews
                   </span>
@@ -1392,7 +1459,7 @@ export default function LandingPage({ user, reviews = [] }: Props) {
         </section>
       )}
 
-      {/* ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ FAQ ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ */}
+      {/*  FAQ  */}
       <section
         className="py-28"
         style={{ background: "var(--color-brand-bg)" }}
@@ -1402,9 +1469,7 @@ export default function LandingPage({ user, reviews = [] }: Props) {
           className={cn(
             "max-w-7xl mx-auto px-6 md:px-10 grid grid-cols-1 md:grid-cols-[300px_1fr] gap-16",
             "transition-all duration-700 ease-out",
-            faqInView
-              ? "opacity-100 translate-y-0"
-              : "opacity-0 translate-y-8",
+            faqInView ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8",
           )}
         >
           {/* Left */}
@@ -1430,12 +1495,12 @@ export default function LandingPage({ user, reviews = [] }: Props) {
             </a>
           </div>
 
-          {/* Right ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â accordion */}
+          {/* Right  accordion */}
           <FaqAccordion />
         </div>
       </section>
 
-      {/* ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ CTA BANNER ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ */}
+      {/*  CTA BANNER  */}
       <section className="py-0" style={{ background: "#1a1f27" }}>
         <div className="max-w-7xl mx-auto px-6 md:px-10 py-20">
           <div
@@ -1482,7 +1547,7 @@ export default function LandingPage({ user, reviews = [] }: Props) {
         </div>
       </section>
 
-      {/* ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ FOOTER ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ */}
+      {/*  FOOTER  */}
       <footer
         className="relative overflow-hidden border-t border-white/6"
         style={{ background: "#181c22" }}
@@ -1505,8 +1570,8 @@ export default function LandingPage({ user, reviews = [] }: Props) {
               Registered business: Genetrify Information Technology Services
             </p>
             <p className="text-[11px] text-brand-text/20 mt-auto">
-              ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â© {CURRENT_YEAR} Genetrify Information Technology Services. All
-              rights reserved.
+              ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â© {CURRENT_YEAR} Genetrify Information
+              Technology Services. All rights reserved.
             </p>
           </div>
 
