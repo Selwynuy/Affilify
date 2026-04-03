@@ -1,20 +1,18 @@
-import { GeneratePanel } from '@/components/dashboard/GeneratePanel'
+import { StudioCanvas } from '@/components/studio/StudioCanvas'
 import { getPublishedMarketplaceTemplateGroups } from '@/lib/data/marketplace-templates'
 
+export const metadata = { title: 'Studio' }
+
 export default async function DashboardPage() {
-  const {
-    avatar: avatarTemplates,
-    background: backgroundTemplates,
-    camera: cameraTemplates,
-    movement: movementTemplates,
-  } = await getPublishedMarketplaceTemplateGroups()
+  const { avatar, background, camera, movement } =
+    await getPublishedMarketplaceTemplateGroups()
 
   return (
-    <GeneratePanel
-      avatarTemplates={avatarTemplates}
-      backgroundTemplates={backgroundTemplates}
-      cameraTemplates={cameraTemplates}
-      movementTemplates={movementTemplates}
+    <StudioCanvas
+      avatarTemplates={avatar}
+      backgroundTemplates={background}
+      cameraTemplates={camera}
+      movementTemplates={movement}
     />
   )
 }

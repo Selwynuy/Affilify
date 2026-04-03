@@ -1,0 +1,1190 @@
+'use client'
+
+import { useState, useRef, useCallback, useEffect } from 'react'
+import Link from 'next/link'
+import { AnimatePresence, motion } from 'motion/react'
+import {
+  Upload, X, Sparkles, Film, Camera, User, Layers, Wind,
+  Pencil, Check, RefreshCw, Trash2, AlertCircle, Settings2, ZoomIn, ZoomOut,
+} from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { usePreferences } from '@/lib/context/preferences-context'
+import type { MarketplaceTemplate } from '@/lib/types/marketplace'
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+interface CardBase { id: string; x: number; y: number }
+
+interface ProductCard extends CardBase {
+  type: 'product'
+  imageUrl: string
+  fileName: string
+  file: File
+}
+
+interface GeneratedCard extends CardBase {
+  type: 'generated'
+  imageUrl: string
+  prompt: string
+  sourceIds: string[]
+  isLoading?: boolean
+  hasError?: boolean
+}
+
+type Card = ProductCard | GeneratedCard
+
+interface Connection { id: string; from: string; to: string }
+interface SelBox { x1: number; y1: number; x2: number; y2: number }
+
+interface PersistedProductCard extends CardBase {
+  type: 'product'
+  fileName: string
+  file: File
+}
+
+interface PersistedGeneratedCard extends CardBase {
+  type: 'generated'
+  imageUrl: string
+  prompt: string
+  sourceIds: string[]
+  isLoading?: boolean
+  hasError?: boolean
+}
+
+interface PersistedStudioState {
+  cards: Array<PersistedProductCard | PersistedGeneratedCard>
+  connections: Connection[]
+  selectedIds: string[]
+  prompt: string
+  zoom: number
+  pan: { x: number; y: number }
+}
+
+export interface StudioCanvasProps {
+  cameraTemplates: MarketplaceTemplate[]
+  movementTemplates: MarketplaceTemplate[]
+  avatarTemplates: MarketplaceTemplate[]
+  backgroundTemplates: MarketplaceTemplate[]
+}
+
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+const CARD_W      = 196
+const CARD_IMG_H  = 220
+const CARD_FOOT_H = 56
+const CARD_H      = CARD_IMG_H + CARD_FOOT_H
+const PORT_R      = 6   // port circle radius
+const DRAG_THRESH = 5
+const MAX_PRODUCTS = 5
+const GAP         = 22
+const MIN_ZOOM    = 0.6
+const MAX_ZOOM    = 1.8
+const ZOOM_STEP   = 0.2
+const STUDIO_DB_NAME = 'genetrify-studio'
+const STUDIO_STORE_NAME = 'canvas'
+const STUDIO_STATE_KEY = 'session'
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function uid() { return Math.random().toString(36).slice(2, 9) }
+
+function boxRect(b: SelBox) {
+  return { left: Math.min(b.x1, b.x2), top: Math.min(b.y1, b.y2), right: Math.max(b.x1, b.x2), bottom: Math.max(b.y1, b.y2) }
+}
+
+function cardInBox(c: Card, b: SelBox) {
+  const r = boxRect(b)
+  return c.x < r.right && c.x + CARD_W > r.left && c.y < r.bottom && c.y + CARD_H > r.top
+}
+
+function selBounds(cards: Card[], ids: Set<string>) {
+  const sel = cards.filter(c => ids.has(c.id))
+  if (!sel.length) return null
+  return {
+    left:   Math.min(...sel.map(c => c.x)),
+    top:    Math.min(...sel.map(c => c.y)),
+    right:  Math.max(...sel.map(c => c.x + CARD_W)),
+    bottom: Math.max(...sel.map(c => c.y + CARD_H)),
+  }
+}
+
+/** Right-edge port position of a card */
+function outPort(c: Card) { return { x: c.x + CARD_W + PORT_R, y: c.y + CARD_IMG_H / 2 } }
+/** Left-edge port position of a card */
+function inPort(c: Card)  { return { x: c.x - PORT_R, y: c.y + CARD_IMG_H / 2 } }
+
+/** Transitively expand a set of card IDs via connections */
+function expandGroup(ids: Set<string>, connections: Connection[]): Set<string> {
+  const group = new Set(ids)
+  let changed = true
+  while (changed) {
+    changed = false
+    for (const c of connections) {
+      if (group.has(c.from) && !group.has(c.to)) { group.add(c.to); changed = true }
+      if (group.has(c.to) && !group.has(c.from)) { group.add(c.from); changed = true }
+    }
+  }
+  return group
+}
+
+async function* readNDJSON(res: Response) {
+  const reader = res.body!.getReader()
+  const dec = new TextDecoder()
+  let buf = ''
+  while (true) {
+    const { value, done } = await reader.read()
+    if (done) break
+    buf += dec.decode(value, { stream: true })
+    const lines = buf.split('\n')
+    buf = lines.pop() ?? ''
+    for (const line of lines) { if (line.trim()) yield JSON.parse(line) }
+  }
+  if (buf.trim()) yield JSON.parse(buf)
+}
+
+function openStudioDb() {
+  return new Promise<IDBDatabase>((resolve, reject) => {
+    const request = indexedDB.open(STUDIO_DB_NAME, 1)
+    request.onupgradeneeded = () => {
+      const db = request.result
+      if (!db.objectStoreNames.contains(STUDIO_STORE_NAME)) {
+        db.createObjectStore(STUDIO_STORE_NAME)
+      }
+    }
+    request.onsuccess = () => resolve(request.result)
+    request.onerror = () => reject(request.error ?? new Error('Failed to open studio db'))
+  })
+}
+
+async function loadStudioState() {
+  const db = await openStudioDb()
+  return new Promise<PersistedStudioState | null>((resolve, reject) => {
+    const tx = db.transaction(STUDIO_STORE_NAME, 'readonly')
+    const store = tx.objectStore(STUDIO_STORE_NAME)
+    const request = store.get(STUDIO_STATE_KEY)
+    request.onsuccess = () => resolve((request.result as PersistedStudioState | undefined) ?? null)
+    request.onerror = () => reject(request.error ?? new Error('Failed to read studio state'))
+  })
+}
+
+async function saveStudioState(state: PersistedStudioState) {
+  const db = await openStudioDb()
+  return new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(STUDIO_STORE_NAME, 'readwrite')
+    tx.oncomplete = () => resolve()
+    tx.onerror = () => reject(tx.error ?? new Error('Failed to save studio state'))
+    tx.objectStore(STUDIO_STORE_NAME).put(state, STUDIO_STATE_KEY)
+  })
+}
+
+async function clearStudioState() {
+  const db = await openStudioDb()
+  return new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(STUDIO_STORE_NAME, 'readwrite')
+    tx.oncomplete = () => resolve()
+    tx.onerror = () => reject(tx.error ?? new Error('Failed to clear studio state'))
+    tx.objectStore(STUDIO_STORE_NAME).delete(STUDIO_STATE_KEY)
+  })
+}
+
+
+// ── DropdownShell ─────────────────────────────────────────────────────────────
+// Shared open/close logic for all top-bar chips
+
+function StatusChip({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: React.ElementType
+  label: string
+  value: string
+}) {
+  return (
+    <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium border bg-white/[0.04] border-white/[0.08] text-white/55 select-none">
+      <Icon size={11} />
+      <span className="hidden lg:inline text-white/30 mr-0.5 font-normal">{label}:</span>
+      <span className="max-w-[110px] truncate">{value || '—'}</span>
+    </div>
+  )
+}
+
+function TemplateShortcut() {
+  return (
+    <Link
+      href="/templates"
+      className={cn(
+        'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all border whitespace-nowrap',
+        'bg-brand-accent/10 border-brand-accent/20 text-brand-accent hover:bg-brand-accent/18 hover:border-brand-accent/35',
+      )}
+    >
+      <Settings2 size={11} />
+      <span>Change in Templates</span>
+    </Link>
+  )
+}
+
+// ── AvatarChip ────────────────────────────────────────────────────────────────
+
+function CardComp({
+  card, selected, isInConnectMode,
+  onPtrDown, onPortPtrDown, onVideoOpen, onPromptSave, onRegenerate, onDelete,
+}: {
+  card: Card
+  selected: boolean
+  isInConnectMode: boolean
+  onPtrDown: (e: React.PointerEvent, id: string) => void
+  onPortPtrDown: (e: React.PointerEvent, id: string) => void
+  onVideoOpen?: (c: GeneratedCard) => void
+  onPromptSave?: (id: string, p: string) => void
+  onRegenerate?: (id: string) => void
+  onDelete: (id: string) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(card.type === 'generated' ? card.prompt : '')
+  const [hover, setHover] = useState(false)
+
+  return (
+    <div
+      data-card
+      style={{
+        position: 'absolute', left: card.x, top: card.y,
+        width: CARD_W, userSelect: 'none', touchAction: 'none',
+        zIndex: selected ? 50 : 10,
+        cursor: isInConnectMode ? 'crosshair' : 'grab',
+      }}
+      onPointerDown={e => onPtrDown(e, card.id)}
+      onPointerEnter={() => setHover(true)}
+      onPointerLeave={() => setHover(false)}
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.82, y: 16 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+        className={cn(
+          'rounded-2xl overflow-visible transition-all duration-150',
+          selected
+            ? 'ring-[1.5px] ring-brand-accent shadow-[0_0_32px_rgba(139,92,246,0.22),0_8px_40px_rgba(0,0,0,0.6)]'
+            : 'ring-1 ring-white/[0.08] shadow-[0_4px_28px_rgba(0,0,0,0.5)]',
+        )}
+      >
+        {/* Image */}
+        <div
+          className="relative bg-[#1b1b24] rounded-t-2xl overflow-hidden"
+          style={{ height: CARD_IMG_H }}
+        >
+          {card.type === 'generated' && card.isLoading ? (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+              <div className="relative w-9 h-9">
+                <div className="absolute inset-0 rounded-full border-[1.5px] border-brand-accent/20 animate-ping" />
+                <div className="absolute inset-[3px] rounded-full border-[1.5px] border-brand-accent border-t-transparent animate-spin" />
+              </div>
+              <span className="text-[10px] text-white/30 font-mono tracking-widest">GENERATING</span>
+            </div>
+          ) : card.type === 'generated' && card.hasError ? (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+              <AlertCircle size={18} className="text-red-400/50" />
+              <span className="text-[10px] text-white/25 font-mono">Generation failed</span>
+            </div>
+          ) : card.imageUrl ? (
+            <img src={card.imageUrl} alt="" className="w-full h-full object-cover" draggable={false} />
+          ) : null}
+
+          {/* Action overlay */}
+          <div className={cn(
+            'absolute inset-0 flex items-start justify-end gap-1 p-2 transition-opacity duration-150',
+            hover || selected ? 'opacity-100' : 'opacity-0',
+          )}>
+            {card.type === 'generated' && !card.isLoading && !card.hasError && (
+              <button
+                onPointerDown={e => e.stopPropagation()}
+                onClick={() => onVideoOpen?.(card as GeneratedCard)}
+                className="p-1.5 rounded-lg bg-black/75 border border-white/10 text-white/50 hover:text-white hover:bg-brand-accent/40 hover:border-brand-accent/30 transition-all"
+                title="Create video"
+              >
+                <Film size={11} />
+              </button>
+            )}
+            <button
+              onPointerDown={e => e.stopPropagation()}
+              onClick={() => onDelete(card.id)}
+              className="p-1.5 rounded-lg bg-black/75 border border-white/10 text-white/30 hover:text-red-400 hover:border-red-500/20 hover:bg-red-500/10 transition-all"
+            >
+              <X size={11} />
+            </button>
+          </div>
+
+          {/* Type badge */}
+          <div className="absolute bottom-2 left-2 pointer-events-none">
+            <span className={cn(
+              'text-[9px] px-1.5 py-0.5 rounded-full font-mono tracking-widest leading-none',
+              card.type === 'product'
+                ? 'bg-black/60 text-white/35 border border-white/10'
+                : 'bg-brand-accent/15 text-brand-accent border border-brand-accent/25',
+            )}>
+              {card.type === 'product' ? 'PRODUCT' : 'AI GEN'}
+            </span>
+          </div>
+
+          {/* ── Connection port (product only) ─────────────────────────────── */}
+          {card.type === 'product' && (
+            <motion.div
+              animate={{
+                opacity: hover || selected || isInConnectMode ? 1 : 0,
+                scale: hover || selected || isInConnectMode ? 1 : 0.5,
+              }}
+              transition={{ duration: 0.15 }}
+              data-port
+              data-card-id={card.id}
+              style={{
+                position: 'absolute',
+                right: -(PORT_R),
+                top: CARD_IMG_H / 2 - PORT_R,
+                width: PORT_R * 2,
+                height: PORT_R * 2,
+                borderRadius: '50%',
+                background: 'radial-gradient(circle at 40% 35%, #a78bfa, #7c3aed)',
+                border: '2px solid #0b0b0f',
+                cursor: 'crosshair',
+                zIndex: 200,
+                boxShadow: '0 0 8px rgba(139,92,246,0.6)',
+              }}
+              onPointerDown={e => {
+                e.stopPropagation()
+                onPortPtrDown(e, card.id)
+              }}
+              title="Drag to connect"
+            />
+          )}
+        </div>
+
+        {/* Footer */}
+        <div
+          className="bg-[#15151e] px-3 py-2.5 rounded-b-2xl"
+          style={{ minHeight: CARD_FOOT_H }}
+        >
+          {card.type === 'product' ? (
+            <p className="text-[11px] text-white/35 truncate font-mono mt-1">{card.fileName}</p>
+          ) : editing ? (
+            <div onPointerDown={e => e.stopPropagation()} className="flex gap-1.5">
+              <input
+                autoFocus
+                value={draft}
+                onChange={e => setDraft(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') { onPromptSave?.(card.id, draft); setEditing(false) }
+                  if (e.key === 'Escape') setEditing(false)
+                }}
+                className="flex-1 min-w-0 bg-white/[0.05] border border-brand-accent/30 rounded-lg px-2 py-1 text-[11px] text-white outline-none font-mono"
+              />
+              <button
+                onClick={() => { onPromptSave?.(card.id, draft); setEditing(false) }}
+                className="shrink-0 p-1.5 rounded-lg bg-brand-accent/20 text-brand-accent hover:bg-brand-accent/30 transition-colors"
+              >
+                <Check size={10} />
+              </button>
+            </div>
+          ) : (
+            <div onPointerDown={e => e.stopPropagation()} className="flex items-start gap-1">
+              <p className="flex-1 text-[11px] text-white/35 line-clamp-2 font-mono leading-relaxed">
+                {(card as GeneratedCard).prompt}
+              </p>
+              <div className="flex flex-col gap-0.5 shrink-0 mt-0.5">
+                <button
+                  onClick={() => { setDraft((card as GeneratedCard).prompt); setEditing(true) }}
+                  className="p-0.5 rounded text-white/20 hover:text-white/55 transition-colors"
+                  title="Edit prompt"
+                >
+                  <Pencil size={9} />
+                </button>
+                <button
+                  onClick={() => onRegenerate?.(card.id)}
+                  className="p-0.5 rounded text-white/20 hover:text-brand-accent transition-colors"
+                  title="Regenerate"
+                >
+                  <RefreshCw size={9} />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </motion.div>
+    </div>
+  )
+}
+
+// ── StudioCanvas ──────────────────────────────────────────────────────────────
+
+export function StudioCanvas({
+  cameraTemplates,
+  movementTemplates,
+}: StudioCanvasProps) {
+  const { avatarConfig, backgroundConfig, cameraTemplateId, movementTemplateId } = usePreferences()
+
+  const [cards, setCards]             = useState<Card[]>([])
+  const [connections, setConnections] = useState<Connection[]>([])
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [selBox, setSelBox]           = useState<SelBox | null>(null)
+  const [isDragOver, setIsDragOver]   = useState(false)
+  const [prompt, setPrompt]           = useState('')
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [videoCard, setVideoCard]     = useState<GeneratedCard | null>(null)
+  const [videoMovement, setVideoMovement] = useState(movementTemplateId)
+  const [isCreatingVideo, setIsCreatingVideo] = useState(false)
+  const [zoom, setZoom] = useState(1)
+  const [pan, setPan] = useState({ x: 0, y: 0 })
+
+  // Connection-draw state
+  const [connectingFrom, setConnectingFrom] = useState<string | null>(null)
+  const [pendingEnd, setPendingEnd]         = useState<{ x: number; y: number } | null>(null)
+
+  // Stable refs
+  const canvasRef         = useRef<HTMLDivElement>(null)
+  const fileInputRef      = useRef<HTMLInputElement>(null)
+  const promptInputRef    = useRef<HTMLTextAreaElement>(null)
+  const cardsRef          = useRef(cards)
+  const selectedRef       = useRef(selectedIds)
+  const connectionsRef    = useRef(connections)
+  const connectingRef     = useRef(connectingFrom)
+  const hydratedRef       = useRef(false)
+  const dragMode          = useRef<'card' | 'select' | 'pan' | null>(null)
+  const dragStart         = useRef({ x: 0, y: 0 })
+  const cardStartPos      = useRef<Map<string, { x: number; y: number }>>(new Map())
+  const panStart          = useRef({ x: 0, y: 0 })
+  const didDrag           = useRef(false)
+
+  useEffect(() => { cardsRef.current = cards },            [cards])
+  useEffect(() => { selectedRef.current = selectedIds },   [selectedIds])
+  useEffect(() => { connectionsRef.current = connections }, [connections])
+  useEffect(() => { connectingRef.current = connectingFrom }, [connectingFrom])
+  useEffect(() => {
+    loadStudioState()
+      .then(saved => {
+        if (!saved) return
+        const restoredCards = saved.cards.map(card => {
+          if (card.type === 'product') {
+            return {
+              ...card,
+              imageUrl: URL.createObjectURL(card.file),
+            } satisfies ProductCard
+          }
+          return card satisfies GeneratedCard
+        })
+        setCards(restoredCards)
+        setConnections(saved.connections ?? [])
+        setSelectedIds(new Set(saved.selectedIds ?? []))
+        setPrompt(saved.prompt ?? '')
+        setZoom(saved.zoom ?? 1)
+        setPan(saved.pan ?? { x: 0, y: 0 })
+      })
+      .catch(() => {
+        clearStudioState().catch(() => {})
+      })
+      .finally(() => {
+        hydratedRef.current = true
+      })
+  }, [])
+  useEffect(() => {
+    if (!hydratedRef.current) return
+    const payload: PersistedStudioState = {
+      cards: cards.map(card => {
+        if (card.type === 'product') {
+          return {
+            id: card.id,
+            type: 'product',
+            x: card.x,
+            y: card.y,
+            fileName: card.fileName,
+            file: card.file,
+          } satisfies PersistedProductCard
+        }
+        return {
+          id: card.id,
+          type: 'generated',
+          x: card.x,
+          y: card.y,
+          imageUrl: card.imageUrl,
+          prompt: card.prompt,
+          sourceIds: card.sourceIds,
+          isLoading: card.isLoading,
+          hasError: card.hasError,
+        } satisfies PersistedGeneratedCard
+      }),
+      connections,
+      selectedIds: [...selectedIds],
+      prompt,
+      zoom,
+      pan,
+    }
+    saveStudioState(payload).catch(() => {})
+  }, [cards, connections, pan, prompt, selectedIds, zoom])
+  useEffect(() => {
+    const el = promptInputRef.current
+    if (!el) return
+    el.style.height = '0px'
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`
+    el.style.overflowY = el.scrollHeight > 160 ? 'auto' : 'hidden'
+  }, [prompt, selectedIds])
+
+  // ── Canvas coordinate helper ─────────────────────────────────────────────────
+  const toCanvas = useCallback((cx: number, cy: number) => {
+    const canvas = canvasRef.current
+    if (!canvas) return null
+    const r = canvas.getBoundingClientRect()
+    return { x: (cx - r.left - pan.x) / zoom, y: (cy - r.top - pan.y) / zoom }
+  }, [pan.x, pan.y, zoom])
+
+  // ── Global pointer move/up ───────────────────────────────────────────────────
+  useEffect(() => {
+    const onMove = (e: PointerEvent) => {
+      const pos = toCanvas(e.clientX, e.clientY)
+      if (!pos) return
+
+      // Connection-draw mode
+      if (connectingRef.current !== null) {
+        setPendingEnd(pos)
+        return
+      }
+
+      if (!dragMode.current) return
+      const dx = pos.x - dragStart.current.x
+      const dy = pos.y - dragStart.current.y
+      if (!didDrag.current && Math.hypot(dx, dy) > DRAG_THRESH) didDrag.current = true
+      if (!didDrag.current) return
+
+      if (dragMode.current === 'select') {
+        const box: SelBox = { x1: dragStart.current.x, y1: dragStart.current.y, x2: pos.x, y2: pos.y }
+        setSelBox(box)
+        const ids = new Set<string>()
+        cardsRef.current.forEach(c => { if (cardInBox(c, box)) ids.add(c.id) })
+        setSelectedIds(ids)
+      } else if (dragMode.current === 'pan') {
+        setPan({
+          x: panStart.current.x + (e.clientX - dragStart.current.x),
+          y: panStart.current.y + (e.clientY - dragStart.current.y),
+        })
+      } else {
+        setCards(prev => prev.map(c => {
+          const s = cardStartPos.current.get(c.id)
+          if (!s) return c
+          return { ...c, x: Math.max(0, s.x + dx), y: Math.max(0, s.y + dy) }
+        }))
+      }
+    }
+
+    const onUp = (e: PointerEvent) => {
+      // Finish connection draw
+      if (connectingRef.current !== null) {
+        const pos = toCanvas(e.clientX, e.clientY)
+        if (!pos) {
+          setConnectingFrom(null)
+          setPendingEnd(null)
+          return
+        }
+        const fromId = connectingRef.current
+        const target = cardsRef.current.find(c =>
+          c.type === 'product' && c.id !== fromId &&
+          pos.x >= c.x && pos.x <= c.x + CARD_W &&
+          pos.y >= c.y && pos.y <= c.y + CARD_H
+        )
+        if (target) {
+          const dup = connectionsRef.current.some(
+            cn => (cn.from === fromId && cn.to === target.id) || (cn.from === target.id && cn.to === fromId)
+          )
+          if (!dup) setConnections(prev => [...prev, { id: uid(), from: fromId, to: target.id }])
+        }
+        setConnectingFrom(null)
+        setPendingEnd(null)
+        return
+      }
+      dragMode.current = null
+      setSelBox(null)
+    }
+
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    return () => { window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp) }
+  }, [toCanvas])
+
+  // ── Pointer handlers ──────────────────────────────────────────────────────────
+  const onCanvasPtrDown = useCallback((e: React.PointerEvent) => {
+    if ((e.target as HTMLElement).closest('[data-card]')) return
+    if (connectingRef.current !== null) { setConnectingFrom(null); setPendingEnd(null); return }
+    if (e.shiftKey) {
+      setSelectedIds(new Set())
+      const pos = toCanvas(e.clientX, e.clientY)
+      dragMode.current = 'select'
+      dragStart.current = pos
+      setSelBox({ x1: pos.x, y1: pos.y, x2: pos.x, y2: pos.y })
+    } else {
+      dragMode.current = 'pan'
+      dragStart.current = { x: e.clientX, y: e.clientY }
+      panStart.current = pan
+    }
+    didDrag.current = false
+  }, [pan, toCanvas])
+
+  const onCardPtrDown = useCallback((e: React.PointerEvent, cardId: string) => {
+    e.stopPropagation()
+    if (connectingRef.current !== null) return
+    const pos = toCanvas(e.clientX, e.clientY)
+    if (!pos) return
+    dragMode.current = 'card'
+    dragStart.current = pos
+    didDrag.current = false
+
+    const isSelected = selectedRef.current.has(cardId)
+    if (e.shiftKey) {
+      setSelectedIds(prev => {
+        const n = new Set(prev)
+        if (n.has(cardId)) n.delete(cardId)
+        else n.add(cardId)
+        return n
+      })
+    } else if (!isSelected) {
+      // Auto-expand to connected group for product cards
+      const card = cardsRef.current.find(c => c.id === cardId)
+      if (card?.type === 'product') {
+        setSelectedIds(expandGroup(new Set([cardId]), connectionsRef.current))
+      } else {
+        setSelectedIds(new Set([cardId]))
+      }
+    }
+
+    const idsToMove = isSelected && !e.shiftKey ? [...selectedRef.current] : [cardId]
+    const snap = new Map<string, { x: number; y: number }>()
+    cardsRef.current.forEach(c => { if (idsToMove.includes(c.id)) snap.set(c.id, { x: c.x, y: c.y }) })
+    cardStartPos.current = snap
+  }, [toCanvas])
+
+  const onPortPtrDown = useCallback((e: React.PointerEvent, cardId: string) => {
+    e.stopPropagation()
+    const pos = toCanvas(e.clientX, e.clientY)
+    if (!pos) return
+    setConnectingFrom(cardId)
+    setPendingEnd(pos)
+  }, [toCanvas])
+
+  // ── File handling ─────────────────────────────────────────────────────────────
+  const addFiles = useCallback(async (files: File[], dropX?: number, dropY?: number) => {
+    const imgs = files.filter(f => f.type.startsWith('image/'))
+    if (!imgs.length) return
+    const existing = cardsRef.current.filter(c => c.type === 'product').length
+    const toAdd = imgs.slice(0, MAX_PRODUCTS - existing)
+    if (!toAdd.length) return
+
+    const nextCards = toAdd.map((file, i) => ({
+      id: uid(),
+      type: 'product' as const,
+      x: dropX != null ? dropX + i * (CARD_W + GAP) : 60 + (existing + i) * (CARD_W + GAP),
+      y: dropY != null ? dropY : 80,
+      imageUrl: URL.createObjectURL(file),
+      fileName: file.name,
+      file,
+    }))
+
+    setCards(prev => [...prev, ...nextCards])
+  }, [])
+
+  const onDragOver  = useCallback((e: React.DragEvent) => { e.preventDefault(); setIsDragOver(true) }, [])
+  const onDragLeave = useCallback((e: React.DragEvent) => {
+    if (!canvasRef.current?.contains(e.relatedTarget as Node)) setIsDragOver(false)
+  }, [])
+  const onDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault(); setIsDragOver(false)
+    const r = canvasRef.current?.getBoundingClientRect()
+    const x = r ? Math.max(0, (e.clientX - r.left - pan.x) / zoom - CARD_W / 2) : 60
+    const y = r ? Math.max(0, (e.clientY - r.top - pan.y) / zoom - CARD_H / 2) : 80
+    addFiles(Array.from(e.dataTransfer.files), x, y)
+  }, [addFiles, pan.x, pan.y, zoom])
+
+  // ── Generate ──────────────────────────────────────────────────────────────────
+  const handleGenerate = useCallback(async () => {
+    // Expand selection to include connected group
+    const expanded = expandGroup(selectedRef.current, connectionsRef.current)
+    const productCards = cardsRef.current.filter(
+      c => expanded.has(c.id) && c.type === 'product'
+    ) as ProductCard[]
+    if (!productCards.length) return
+    const normalizedPrompt = prompt.trim()
+
+    const bounds = selBounds(cardsRef.current, selectedRef.current)
+    const pid = uid()
+    setCards(prev => [...prev, {
+      id: pid, type: 'generated',
+      x: bounds ? bounds.right + GAP : 60,
+      y: bounds ? bounds.top : 80,
+      imageUrl: '', prompt: normalizedPrompt,
+      sourceIds: productCards.map(c => c.id), isLoading: true,
+    } satisfies GeneratedCard])
+    setIsGenerating(true)
+
+    try {
+      const fd = new FormData()
+      fd.append('usePreferences', 'true')
+      productCards.forEach(c => fd.append('products', c.file))
+
+      const upRes = await fetch('/api/upload', { method: 'POST', body: fd })
+      if (!upRes.ok) throw new Error('Upload failed')
+      const { projectId } = await upRes.json()
+
+      const genRes = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId, productDescription: normalizedPrompt, cameraTemplateId }),
+      })
+      if (!genRes.ok) throw new Error('Generate failed')
+
+      let imageUrl = ''
+      for await (const evt of readNDJSON(genRes)) {
+        if (evt.type === 'image' && (evt as { image?: { url?: string } }).image?.url) {
+          imageUrl = (evt as { image: { url: string } }).image.url
+        }
+      }
+      setCards(prev => prev.map(c =>
+        c.id === pid ? { ...c, imageUrl, isLoading: false, hasError: !imageUrl } : c
+      ))
+    } catch {
+      setCards(prev => prev.map(c => c.id === pid ? { ...c, isLoading: false, hasError: true } : c))
+    } finally {
+      setIsGenerating(false)
+    }
+  }, [prompt, cameraTemplateId])
+
+  // ── Card ops ──────────────────────────────────────────────────────────────────
+  const deleteCard = useCallback((id: string) => {
+    setCards(prev => prev.filter(c => c.id !== id))
+    setConnections(prev => prev.filter(cn => cn.from !== id && cn.to !== id))
+    setSelectedIds(prev => { const n = new Set(prev); n.delete(id); return n })
+  }, [])
+
+  const savePrompt = useCallback((id: string, p: string) => {
+    setCards(prev => prev.map(c => c.id === id ? { ...c, prompt: p } : c))
+  }, [])
+
+  const handleRegenerate = useCallback((id: string) => {
+    const c = cardsRef.current.find(x => x.id === id) as GeneratedCard | undefined
+    if (!c) return
+    setPrompt(c.prompt)
+    setSelectedIds(new Set(c.sourceIds))
+  }, [])
+
+  // ── Derived state ─────────────────────────────────────────────────────────────
+  const selCards    = cards.filter(c => selectedIds.has(c.id))
+  const selProducts = selCards.filter(c => c.type === 'product')
+  const bounds      = selBounds(cards, selectedIds)
+  const showPanel   = selectedIds.size > 0 && !!bounds
+  const panelCx     = bounds ? (bounds.left + bounds.right) / 2 : 0
+  const panelY      = bounds ? bounds.bottom + 18 : 0
+  const avatarLabel = avatarConfig
+    ? `${avatarConfig.gender === 'woman' ? 'Female' : 'Male'} ? ${avatarConfig.style ?? 'casual'}`
+    : 'Choose avatar'
+  const backgroundLabel = backgroundConfig?.roomAesthetic
+    ? backgroundConfig.roomAesthetic.charAt(0).toUpperCase() + backgroundConfig.roomAesthetic.slice(1)
+    : 'Choose BG'
+  const cameraLabel = cameraTemplates.find(t => t.id === cameraTemplateId)?.title ?? 'Choose camera'
+  const movementLabel = movementTemplates.find(t => t.id === movementTemplateId)?.title ?? 'Choose movement'
+
+  // ── SVG connection paths ──────────────────────────────────────────────────────
+  const renderConnections = () => {
+    const productCards = cards.filter(c => c.type === 'product')
+
+    return connections.map(conn => {
+      const from = productCards.find(c => c.id === conn.from)
+      const to   = productCards.find(c => c.id === conn.to)
+      if (!from || !to) return null
+
+      const p1 = outPort(from)
+      const p2 = inPort(to)
+      const cx = (p1.x + p2.x) / 2
+      const d  = `M ${p1.x} ${p1.y} C ${cx} ${p1.y} ${cx} ${p2.y} ${p2.x} ${p2.y}`
+
+      return (
+        <g key={conn.id}>
+          {/* Wide invisible hit area */}
+          <path
+            d={d}
+            stroke="transparent" strokeWidth="14" fill="none"
+            style={{ pointerEvents: 'stroke', cursor: 'pointer' }}
+            onClick={() => setConnections(prev => prev.filter(c => c.id !== conn.id))}
+          />
+          {/* Visible path */}
+          <path
+            d={d}
+            stroke="rgba(139,92,246,0.5)" strokeWidth="1.5" fill="none"
+            strokeDasharray="5 3"
+          />
+          {/* End arrowhead dot */}
+          <circle cx={p2.x} cy={p2.y} r="3" fill="rgba(139,92,246,0.6)" />
+          {/* Start dot */}
+          <circle cx={p1.x} cy={p1.y} r="3" fill="rgba(139,92,246,0.6)" />
+        </g>
+      )
+    })
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────────────
+  return (
+    <div
+      className="flex-1 flex flex-col overflow-hidden min-h-0 pt-14 lg:pt-0"
+      style={{ background: '#0b0b0f', fontFamily: 'var(--font-sans)' }}
+    >
+      {/* ── Top bar ───────────────────────────────────────────────────────────── */}
+      <header className="shrink-0 flex items-center gap-1 sm:gap-1.5 px-3 sm:px-4 h-12 border-b border-white/[0.06] bg-[#110d1d]/92 backdrop-blur-md z-40">
+        {/* Brand */}
+        <div className="flex items-center gap-2 mr-1 shrink-0">
+          <div className="w-5 h-5 rounded-md bg-brand-accent/20 border border-brand-accent/25 flex items-center justify-center">
+            <Sparkles size={9} className="text-brand-accent" />
+          </div>
+        </div>
+
+        {/* Settings chips */}
+        <div className="flex items-center gap-1 overflow-x-auto">
+          <StatusChip icon={User} label="Avatar" value={avatarLabel} />
+          <StatusChip icon={Layers} label="BG" value={backgroundLabel} />
+          <StatusChip icon={Camera} label="Camera" value={cameraLabel} />
+          <StatusChip icon={Wind} label="Movement" value={movementLabel} />
+          <TemplateShortcut />
+        </div>
+
+        {/* Right controls */}
+        <div className="ml-auto flex items-center gap-1.5 shrink-0">
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="flex items-center gap-1.5 h-7 px-3 rounded-lg text-[11px] font-medium bg-brand-accent/10 border border-brand-accent/25 text-brand-accent hover:bg-brand-accent/20 transition-all"
+          >
+            <Upload size={11} />
+            <span className="hidden sm:inline">Upload</span>
+          </button>
+          {cards.length > 0 && (
+            <button
+              onClick={() => { setCards([]); setConnections([]); setSelectedIds(new Set()) }}
+              className="flex items-center h-7 px-2.5 rounded-lg text-[11px] border bg-white/[0.04] border-white/[0.08] text-white/35 hover:text-white/70 hover:bg-white/[0.08] transition-all"
+              title="Clear canvas"
+            >
+              <Trash2 size={11} />
+            </button>
+          )}
+        </div>
+      </header>
+
+      {/* ── Canvas ────────────────────────────────────────────────────────────── */}
+      <div
+        ref={canvasRef}
+        className="relative flex-1 overflow-hidden"
+        style={{
+          backgroundColor: '#090611',
+          backgroundImage: [
+            'linear-gradient(rgba(139,92,246,0.14) 1px, transparent 1px)',
+            'linear-gradient(90deg, rgba(139,92,246,0.14) 1px, transparent 1px)',
+            'radial-gradient(circle at 20% 0%, rgba(124,58,237,0.18), transparent 34%)',
+            'radial-gradient(circle at 80% 15%, rgba(168,85,247,0.12), transparent 28%)',
+            'linear-gradient(180deg, rgba(17,13,29,0.92), rgba(9,6,17,0.98))',
+          ].join(', '),
+          backgroundSize: '36px 36px, 36px 36px, 100% 100%, 100% 100%, 100% 100%',
+          touchAction: 'none',
+          cursor: connectingFrom ? 'crosshair' : dragMode.current === 'pan' ? 'grabbing' : 'grab',
+        }}
+        onPointerDown={onCanvasPtrDown}
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
+        onDrop={onDrop}
+      >
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(168,85,247,0.06),transparent_55%)]" />
+        <div className="absolute top-3 right-3 z-[120] flex items-center gap-1.5 rounded-xl border border-white/[0.08] bg-[#120f1d]/85 px-2 py-2 shadow-[0_8px_24px_rgba(0,0,0,0.35)] backdrop-blur-sm">
+          <button
+            type="button"
+            onClick={() => setZoom(prev => Math.max(MIN_ZOOM, Number((prev - ZOOM_STEP).toFixed(2))))}
+            disabled={zoom <= MIN_ZOOM}
+            className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.03] text-white/60 transition-colors hover:bg-white/[0.08] hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
+            title="Zoom out"
+          >
+            <ZoomOut size={13} />
+          </button>
+          <button
+            type="button"
+            onClick={() => setZoom(1)}
+            className="min-w-[3rem] rounded-lg border border-white/[0.08] bg-white/[0.03] px-2 py-1 text-[11px] font-medium text-white/70 transition-colors hover:bg-white/[0.08] hover:text-white"
+            title="Reset zoom"
+          >
+            {Math.round(zoom * 100)}%
+          </button>
+          <button
+            type="button"
+            onClick={() => setPan({ x: 0, y: 0 })}
+            className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-2 py-1 text-[11px] font-medium text-white/55 transition-colors hover:bg-white/[0.08] hover:text-white"
+            title="Center canvas"
+          >
+            Center
+          </button>
+          <button
+            type="button"
+            onClick={() => setZoom(prev => Math.min(MAX_ZOOM, Number((prev + ZOOM_STEP).toFixed(2))))}
+            disabled={zoom >= MAX_ZOOM}
+            className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.03] text-white/60 transition-colors hover:bg-white/[0.08] hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
+            title="Zoom in"
+          >
+            <ZoomIn size={13} />
+          </button>
+        </div>
+        <div
+          className="absolute inset-0 origin-top-left"
+          style={{
+            transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+            width: `${100 / zoom}%`,
+            height: `${100 / zoom}%`,
+          }}
+        >
+        {/* Drop highlight */}
+        <AnimatePresence>
+          {isDragOver && (
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              transition={{ duration: 0.08 }}
+              className="absolute inset-3 rounded-2xl border-2 border-dashed border-brand-accent/40 bg-brand-accent/[0.04] pointer-events-none z-50 flex items-center justify-center"
+            >
+              <div className="text-center">
+                <Upload className="mx-auto mb-2 text-brand-accent/45" size={26} />
+                <p className="text-sm font-medium text-brand-accent/45">Drop product images</p>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Empty state */}
+        <AnimatePresence>
+          {cards.length === 0 && !isDragOver && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1, transition: { delay: 0.1 } }}
+              exit={{ opacity: 0, transition: { duration: 0.1 } }}
+              className="absolute inset-0 flex items-center justify-center pointer-events-none"
+            >
+              <div className="text-center">
+                <button
+                  className="pointer-events-auto w-16 h-16 rounded-2xl border border-dashed border-white/[0.1] flex items-center justify-center mx-auto mb-4 hover:border-brand-accent/35 hover:bg-brand-accent/[0.04] transition-all"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Upload size={22} className="text-white/18" />
+                </button>
+                <p className="text-sm text-white/22 mb-1 font-medium">Drop product images or click to upload</p>
+                <p className="text-xs text-white/12">Up to 5 products · Drag port handles to connect cards</p>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* ── SVG connections overlay ─────────────────────────────────────────── */}
+        <svg
+          className="absolute inset-0 pointer-events-none"
+          style={{ width: '100%', height: '100%', overflow: 'visible', zIndex: 5 }}
+        >
+          {/* Established connections */}
+          {renderConnections()}
+
+          {/* Pending connection while dragging from port */}
+          {connectingFrom && pendingEnd && (() => {
+            const from = cards.find(c => c.id === connectingFrom)
+            if (!from) return null
+            const p1 = outPort(from)
+            const cx = (p1.x + pendingEnd.x) / 2
+            return (
+              <path
+                d={`M ${p1.x} ${p1.y} C ${cx} ${p1.y} ${cx} ${pendingEnd.y} ${pendingEnd.x} ${pendingEnd.y}`}
+                stroke="rgba(139,92,246,0.35)" strokeWidth="1.5" fill="none"
+                strokeDasharray="4 3"
+              />
+            )
+          })()}
+        </svg>
+
+        {/* Cards */}
+        {cards.map(card => (
+          <CardComp
+            key={card.id}
+            card={card}
+            selected={selectedIds.has(card.id)}
+            isInConnectMode={!!connectingFrom}
+            onPtrDown={onCardPtrDown}
+            onPortPtrDown={onPortPtrDown}
+            onVideoOpen={card.type === 'generated'
+              ? c => { setVideoCard(c as GeneratedCard); setVideoMovement(movementTemplateId) }
+              : undefined}
+            onPromptSave={savePrompt}
+            onRegenerate={handleRegenerate}
+            onDelete={deleteCard}
+          />
+        ))}
+
+        {/* Rubber-band */}
+        {selBox && (
+          <div
+            className="absolute pointer-events-none rounded-lg border border-brand-accent/50"
+            style={{
+              left:   Math.min(selBox.x1, selBox.x2),
+              top:    Math.min(selBox.y1, selBox.y2),
+              width:  Math.abs(selBox.x2 - selBox.x1),
+              height: Math.abs(selBox.y2 - selBox.y1),
+              background: 'rgba(139,92,246,0.05)',
+            }}
+          />
+        )}
+
+        {/* ── Contextual panel ──────────────────────────────────────────────── */}
+        <AnimatePresence>
+          {showPanel && (
+            <motion.div
+              key="ctx-panel"
+              initial={{ opacity: 0, y: -8, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -8, scale: 0.96 }}
+              transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
+              style={{ position: 'absolute', left: panelCx, top: panelY, transform: 'translateX(-50%)', zIndex: 200 }}
+              onPointerDown={e => e.stopPropagation()}
+            >
+              <div className="w-[272px] bg-[#12121b] border border-white/[0.09] rounded-2xl shadow-[0_24px_64px_rgba(0,0,0,0.7)] p-3">
+                {/* Selection summary */}
+                <div className="flex items-center gap-2 mb-2.5">
+                  <div className="flex -space-x-2">
+                    {selCards.slice(0, 3).map((c, i) => (
+                      <div key={c.id} className="w-5 h-5 rounded-full overflow-hidden border-[1.5px] border-[#12121b] bg-white/10" style={{ zIndex: 3 - i }}>
+                        {c.imageUrl && <img src={c.imageUrl} alt="" className="w-full h-full object-cover" />}
+                      </div>
+                    ))}
+                  </div>
+                  <span className="text-[10px] text-white/30 leading-snug">
+                    {selProducts.length === 0
+                      ? 'Select product cards to generate'
+                      : selProducts.length === 1
+                      ? 'Generate model for this product'
+                      : `Generate outfit · ${selProducts.length} connected items`}
+                  </span>
+                </div>
+                <div className="flex gap-2 items-end">
+                  <textarea
+                    ref={promptInputRef}
+                    value={prompt}
+                    onChange={e => setPrompt(e.target.value)}
+                    rows={2}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault()
+                        handleGenerate()
+                      }
+                    }}
+                    placeholder={selProducts.length > 1 ? 'Describe the outfit...' : 'Describe the product...'}
+                    className="flex-1 min-w-0 max-h-40 min-h-[44px] resize-none overflow-hidden bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2 text-xs leading-relaxed text-white placeholder-white/20 outline-none focus:border-brand-accent/40 transition-colors font-mono [scrollbar-width:thin] [scrollbar-color:rgba(168,85,247,0.5)_transparent]"
+                  />
+                  <button
+                    onClick={handleGenerate}
+                    disabled={isGenerating || !selProducts.length}
+                    className={cn(
+                      'shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all',
+                      isGenerating || !selProducts.length
+                        ? 'bg-white/[0.04] text-white/18 cursor-not-allowed'
+                        : 'bg-brand-accent text-white hover:bg-brand-accent-hover shadow-[0_0_18px_rgba(139,92,246,0.38)]',
+                    )}
+                  >
+                    <Sparkles size={11} />
+                    {isGenerating ? '…' : 'Go'}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+        </div>
+      </div>
+
+      {/* ── Video side panel ──────────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {videoCard && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="fixed inset-0 bg-black/25 z-[300]"
+              onClick={() => setVideoCard(null)}
+            />
+            <motion.aside
+              initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 30, stiffness: 280 }}
+              className="fixed right-0 top-0 bottom-0 w-[268px] flex flex-col bg-[#111119] border-l border-white/[0.07] z-[400]"
+              style={{ boxShadow: '-24px 0 64px rgba(0,0,0,0.5)' }}
+            >
+              <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06] shrink-0">
+                <div>
+                  <h3 className="text-sm font-semibold text-white">Create Video</h3>
+                  <p className="text-[11px] text-white/30 mt-0.5">Animate this image</p>
+                </div>
+                <button onClick={() => setVideoCard(null)} className="p-1.5 rounded-lg text-white/30 hover:text-white hover:bg-white/[0.07] transition-all">
+                  <X size={14} />
+                </button>
+              </div>
+
+              <div className="px-5 pt-4 pb-3 shrink-0">
+                <div className="w-full rounded-xl overflow-hidden border border-white/[0.07]" style={{ aspectRatio: '9/16', maxHeight: 172, display: 'flex' }}>
+                  <img src={videoCard.imageUrl} alt="" className="w-full object-cover" />
+                </div>
+              </div>
+
+              <div className="px-5 pb-3 shrink-0">
+                <p className="text-[9px] text-white/22 font-mono uppercase tracking-widest mb-1.5">Prompt</p>
+                <p className="text-[11px] text-white/35 font-mono bg-white/[0.03] border border-white/[0.05] rounded-lg px-3 py-2 leading-relaxed line-clamp-3">
+                  {videoCard.prompt}
+                </p>
+              </div>
+
+              <div className="px-5 pb-4 shrink-0">
+                <p className="text-[9px] text-white/22 font-mono uppercase tracking-widest mb-2">Movement</p>
+                <div className="flex flex-col gap-1.5">
+                  {movementTemplates.map(t => (
+                    <button
+                      key={t.id}
+                      onClick={() => setVideoMovement(t.id)}
+                      className={cn(
+                        'px-3 py-2 rounded-lg text-[11px] text-left transition-all border',
+                        videoMovement === t.id
+                          ? 'bg-brand-accent/12 border-brand-accent/35 text-brand-accent font-medium'
+                          : 'bg-white/[0.03] border-white/[0.07] text-white/38 hover:bg-white/[0.06] hover:text-white/65',
+                      )}
+                    >
+                      {t.title}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="px-5 mt-auto pb-6 shrink-0">
+                <button
+                  onClick={async () => {
+                    setIsCreatingVideo(true)
+                    // TODO: wire to video generation API with videoMovement
+                    await new Promise(r => setTimeout(r, 2000))
+                    setIsCreatingVideo(false)
+                  }}
+                  disabled={isCreatingVideo}
+                  className={cn(
+                    'w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold transition-all',
+                    isCreatingVideo
+                      ? 'bg-white/[0.05] text-white/22 cursor-not-allowed'
+                      : 'bg-gradient-to-r from-brand-accent to-violet-400 text-white hover:opacity-90 shadow-[0_4px_24px_rgba(139,92,246,0.35)]',
+                  )}
+                >
+                  {isCreatingVideo
+                    ? <><div className="w-3.5 h-3.5 rounded-full border-[1.5px] border-white/20 border-t-white animate-spin" />Creating…</>
+                    : <><Film size={14} />Create Video</>}
+                </button>
+              </div>
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
+
+      <input
+        ref={fileInputRef} type="file" accept="image/*" multiple className="hidden"
+        onChange={e => e.target.files && addFiles(Array.from(e.target.files))}
+      />
+    </div>
+  )
+}

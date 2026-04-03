@@ -1,5 +1,6 @@
 import MarketplaceClient  from './_components/marketplace-client'
 import { getPublishedMarketplaceTemplateGroups } from '@/lib/data/marketplace-templates'
+import { PageWrapper } from '@/components/dashboard/PageWrapper'
 
 /**
  * Server component — fetches published templates from the database, then
@@ -17,11 +18,13 @@ export default async function MarketplacePage() {
   } = await getPublishedMarketplaceTemplateGroups()
 
   return (
-    <MarketplaceClient
-      avatarTemplates={avatarTemplates}
-      backgroundTemplates={backgroundTemplates}
-      cameraTemplates={cameraTemplates}
-      movementTemplates={movementTemplates}
-    />
+    <PageWrapper>
+      <MarketplaceClient
+        avatarTemplates={avatarTemplates}
+        backgroundTemplates={backgroundTemplates}
+        cameraTemplates={cameraTemplates}
+        movementTemplates={movementTemplates}
+      />
+    </PageWrapper>
   )
 }
