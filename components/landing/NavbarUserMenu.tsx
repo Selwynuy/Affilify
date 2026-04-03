@@ -28,7 +28,7 @@ export function NavbarUserMenu({ email }: Props) {
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-2 rounded-full focus:outline-none"
+        className="flex items-center gap-2 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:ring-offset-2 focus-visible:ring-offset-brand-bg"
         aria-label="User menu"
         aria-expanded={open}
       >

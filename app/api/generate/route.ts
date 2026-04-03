@@ -20,7 +20,7 @@ const DEFAULT_TEMPLATE =
   `stands in a modern, neatly arranged and {{room_aesthetic}} aesthetic room. ` +
   `The camera is positioned {{camera_angle}}. ` +
   `Use a {{focal_length}} focal length and an aperture of f/4-f/5.6 to keep the room details gently in focus. ` +
-  `They are wearing the exact clothing product shown in the product reference photo — it must be clearly and prominently visible, worn naturally. ` +
+  `They are wearing the exact clothing product shown in the product reference photo, and it must be clearly and prominently visible, worn naturally. ` +
   `Their hands are in their pockets, gazing at the camera with an elegant and natural expression. ` +
   `The room interior is dominated by {{room_colors}}, creating a clean, modern impression. ` +
   `Room elements: {{room_elements}}. ` +

@@ -52,7 +52,7 @@ export function LoginForm() {
             id="password"
             name="password"
             type={showPassword ? 'text' : 'password'}
-            placeholder="••••••••"
+            placeholder="Enter your password"
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -61,8 +61,7 @@ export function LoginForm() {
           <button
             type="button"
             onClick={() => setShowPassword((v) => !v)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-text/30 hover:text-brand-text/70 transition-colors"
-            tabIndex={-1}
+            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-sm text-brand-text/30 hover:text-brand-text/70 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
             aria-label={showPassword ? 'Hide password' : 'Show password'}
           >
             {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -87,7 +86,7 @@ export function LoginForm() {
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z" />
             </svg>
-            Signing in…
+            Signing in...
           </span>
         ) : 'Sign in'}
       </Button>

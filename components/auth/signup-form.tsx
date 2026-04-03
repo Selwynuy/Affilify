@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useActionState, useState } from 'react'
 import { signup } from '@/app/actions/auth'
 import { Button } from '@/components/ui/button'
@@ -62,8 +63,7 @@ export function SignupForm() {
           <button
             type="button"
             onClick={() => setShowPassword((v) => !v)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-text/30 hover:text-brand-text/70 transition-colors"
-            tabIndex={-1}
+            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-sm text-brand-text/30 hover:text-brand-text/70 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
             aria-label={showPassword ? 'Hide password' : 'Show password'}
           >
             {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -88,8 +88,7 @@ export function SignupForm() {
           <button
             type="button"
             onClick={() => setShowConfirm((v) => !v)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-text/30 hover:text-brand-text/70 transition-colors"
-            tabIndex={-1}
+            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-sm text-brand-text/30 hover:text-brand-text/70 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
             aria-label={showConfirm ? 'Hide password' : 'Show password'}
           >
             {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -121,9 +120,13 @@ export function SignupForm() {
 
       <p className="text-xs text-brand-text/25 text-center">
         By creating an account you agree to our{' '}
-        <span className="text-brand-text/40">Terms of Service</span>
+        <Link href="/terms" className="text-brand-text/40 underline underline-offset-4 transition-colors hover:text-brand-text">
+          Terms of Service
+        </Link>
         {' '}and{' '}
-        <span className="text-brand-text/40">Privacy Policy</span>
+        <Link href="/privacy" className="text-brand-text/40 underline underline-offset-4 transition-colors hover:text-brand-text">
+          Privacy Policy
+        </Link>
       </p>
     </form>
   )

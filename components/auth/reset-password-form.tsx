@@ -27,7 +27,7 @@ export function ResetPasswordForm() {
             id="password"
             name="password"
             type={showPassword ? 'text' : 'password'}
-            placeholder="••••••••"
+            placeholder="Enter your new password"
             required
             minLength={8}
             className="bg-brand-surface border-white/10 text-brand-text placeholder:text-brand-text/25 focus:border-brand-accent focus:ring-1 focus:ring-brand-accent/50 h-11 pr-11 [&:-webkit-autofill]:shadow-[inset_0_0_0_1000px_#393E46] [&:-webkit-autofill]:[-webkit-text-fill-color:#EEEEEE]"
@@ -35,8 +35,7 @@ export function ResetPasswordForm() {
           <button
             type="button"
             onClick={() => setShowPassword((v) => !v)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-text/30 hover:text-brand-text/70 transition-colors"
-            tabIndex={-1}
+            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-sm text-brand-text/30 hover:text-brand-text/70 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
             aria-label={showPassword ? 'Hide password' : 'Show password'}
           >
             {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -52,7 +51,7 @@ export function ResetPasswordForm() {
             id="confirm"
             name="confirm"
             type={showConfirm ? 'text' : 'password'}
-            placeholder="••••••••"
+            placeholder="Confirm your new password"
             required
             minLength={8}
             className="bg-brand-surface border-white/10 text-brand-text placeholder:text-brand-text/25 focus:border-brand-accent focus:ring-1 focus:ring-brand-accent/50 h-11 pr-11 [&:-webkit-autofill]:shadow-[inset_0_0_0_1000px_#393E46] [&:-webkit-autofill]:[-webkit-text-fill-color:#EEEEEE]"
@@ -60,8 +59,7 @@ export function ResetPasswordForm() {
           <button
             type="button"
             onClick={() => setShowConfirm((v) => !v)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-text/30 hover:text-brand-text/70 transition-colors"
-            tabIndex={-1}
+            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-sm text-brand-text/30 hover:text-brand-text/70 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:ring-offset-2 focus-visible:ring-offset-brand-surface"
             aria-label={showConfirm ? 'Hide password' : 'Show password'}
           >
             {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -86,7 +84,7 @@ export function ResetPasswordForm() {
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z" />
             </svg>
-            Saving…
+            Saving...
           </span>
         ) : 'Set new password'}
       </Button>
