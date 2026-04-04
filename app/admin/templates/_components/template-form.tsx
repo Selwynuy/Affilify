@@ -1,6 +1,6 @@
 'use client'
 
-import { useActionState, useState } from 'react'
+import { useActionState, useMemo, useState } from 'react'
 import { cn }        from '@/lib/utils'
 import {
   Loader2, Save, Trash2, Eye, EyeOff,
@@ -15,7 +15,6 @@ import {
 import type {
   MarketplaceTemplate,
   TemplateCategory,
-  TemplateFormState,
 } from '@/lib/types/marketplace'
 
 // ─── Field primitives ─────────────────────────────────────────────────────────
@@ -75,14 +74,20 @@ function MediaField({
   kind,
   value,
   onChange,
+  matchesField,
+  syncSource,
 }: {
   name: string
   label: string
   hint: string
   accept: string
-  kind: 'thumbnail' | 'preview'
+  kind: 'thumbnail' | 'preview' | 'reference'
   value: string
   onChange: (value: string) => void
+  /** Name of the other field this value currently duplicates, e.g. "Reference" */
+  matchesField?: string
+  /** Label of the field whose value can be copied into this one */
+  syncSource?: { label: string; getValue: () => string }
 }) {
   const [isUploading, setIsUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -120,9 +125,26 @@ function MediaField({
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between gap-3">
-        <label className="block text-xs font-medium text-white/60">{label}</label>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2">
+          <label className="block text-xs font-medium text-white/60">{label}</label>
+          {matchesField && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-400/80 font-mono">
+              = {matchesField}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          {syncSource && syncSource.getValue() && !matchesField && (
+            <button
+              type="button"
+              onClick={() => onChange(syncSource.getValue())}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-white/8 bg-white/3 px-3 py-2 text-xs text-white/50 transition-colors hover:text-white/80"
+              title={`Use same URL as ${syncSource.label}`}
+            >
+              ← Use {syncSource.label}
+            </button>
+          )}
           {!!value && (
             <button
               type="button"
@@ -157,6 +179,64 @@ function MediaField({
 
       <p className="text-[11px] text-white/30">{hint}</p>
       {error && <p className="text-[11px] text-red-400">{error}</p>}
+    </div>
+  )
+}
+
+function normalizeMediaUrl(value: string) {
+  const trimmed = value.trim()
+  if (!trimmed) return ''
+
+  try {
+    const parsed = new URL(trimmed, 'http://localhost')
+    parsed.hash = ''
+    const searchParams = new URLSearchParams(parsed.search)
+    searchParams.sort()
+    parsed.search = searchParams.toString()
+    return `${parsed.pathname}?${parsed.search}`
+  } catch {
+    return trimmed
+  }
+}
+
+function MediaPreviewCard({
+  title,
+  description,
+  url,
+  allowVideo = false,
+}: {
+  title: string
+  description: string
+  url: string
+  allowVideo?: boolean
+}) {
+  const isVideo = allowVideo && /\.(mp4|webm|mov)(\?|$)/i.test(url)
+
+  return (
+    <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-3">
+      <div className="mb-2 space-y-0.5">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/45">{title}</p>
+        <p className="text-[11px] text-white/30">{description}</p>
+      </div>
+      <div className="overflow-hidden rounded-xl border border-white/10 bg-black/20">
+        {isVideo ? (
+          <video
+            src={url}
+            className="aspect-[4/5] w-full object-cover"
+            controls
+            muted
+            playsInline
+          />
+        ) : (
+          <img
+            src={url}
+            alt={`${title} preview`}
+            className="aspect-[4/5] w-full object-cover"
+            onError={(e) => { e.currentTarget.style.display = 'none' }}
+          />
+        )}
+      </div>
+      <p className="mt-2 break-all text-[10px] text-white/25">{url}</p>
     </div>
   )
 }
@@ -425,6 +505,16 @@ export default function TemplateForm({ template }: { template?: MarketplaceTempl
   )
   const [thumbnailUrl, setThumbnailUrl] = useState(template?.thumbnail_url ?? '')
   const [previewUrl, setPreviewUrl] = useState(template?.preview_url ?? '')
+  const [referenceUrl, setReferenceUrl] = useState(template?.reference_url ?? '')
+  const isImageTemplate = category === 'avatar' || category === 'background'
+  const previewMatchesReference = useMemo(
+    () => !!previewUrl && !!referenceUrl && normalizeMediaUrl(previewUrl) === normalizeMediaUrl(referenceUrl),
+    [previewUrl, referenceUrl],
+  )
+  const thumbnailMatchesReference = useMemo(
+    () => !!thumbnailUrl && !!referenceUrl && normalizeMediaUrl(thumbnailUrl) === normalizeMediaUrl(referenceUrl),
+    [thumbnailUrl, referenceUrl],
+  )
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[1fr_268px] gap-6 max-w-5xl items-start">
@@ -490,7 +580,22 @@ export default function TemplateForm({ template }: { template?: MarketplaceTempl
 
         {/* Media */}
         <section className="rounded-2xl border border-white/8 bg-white/[0.02] p-6 space-y-5">
-          <h2 className="text-xs font-semibold text-white/50 uppercase tracking-wider">Media</h2>
+          <div className="space-y-3">
+            <div>
+              <h2 className="text-xs font-semibold text-white/50 uppercase tracking-wider">Media</h2>
+              <p className="mt-1 text-sm text-white/35">
+                Keep each media slot intentional: card thumbnail for browsing, preview for hover playback or a medium preview, reference for the exact full-resolution asset used in generation.
+              </p>
+            </div>
+
+            {isImageTemplate && (
+              <div className="rounded-2xl border border-violet-500/15 bg-violet-500/6 p-4 text-sm text-white/55">
+                <p className="font-medium text-white/75">Recommended setup for avatar and background templates</p>
+                <p className="mt-1">`thumbnail` should be a lightweight card image, `preview` can be a hover image/video, and `reference` should be the exact full-resolution still sent to Gemini.</p>
+              </div>
+            )}
+
+          </div>
 
           <MediaField
             name="thumbnail_url"
@@ -500,6 +605,8 @@ export default function TemplateForm({ template }: { template?: MarketplaceTempl
             kind="thumbnail"
             accept="image/*"
             hint="Static image shown in the marketplace card (2:3 aspect ratio works best)"
+            matchesField={thumbnailMatchesReference ? 'Reference' : undefined}
+            syncSource={{ label: 'Reference', getValue: () => referenceUrl }}
           />
 
           <MediaField
@@ -510,38 +617,42 @@ export default function TemplateForm({ template }: { template?: MarketplaceTempl
             kind="preview"
             accept="image/*,video/mp4,video/webm,video/quicktime"
             hint="GIF or short looping video — displayed on hover over the card"
+            matchesField={previewMatchesReference ? 'Reference' : undefined}
+            syncSource={{ label: 'Reference', getValue: () => referenceUrl }}
           />
 
-          {/* Thumbnail preview */}
-          {thumbnailUrl && (
-            <div>
-              <p className="text-[11px] text-white/30 mb-2">Current thumbnail</p>
-              <img
-                src={thumbnailUrl}
-                alt="thumbnail preview"
-                className="w-20 h-[120px] object-cover rounded-xl border border-white/10"
-                onError={(e) => { e.currentTarget.style.display = 'none' }}
-              />
-            </div>
-          )}
+          <MediaField
+            name="reference_url"
+            label="Reference URL"
+            value={referenceUrl}
+            onChange={setReferenceUrl}
+            kind="reference"
+            accept="image/*"
+            hint="Full-resolution image used for Gemini generation. Use this for avatar and background templates."
+          />
 
-          {previewUrl && (
-            <div>
-              <p className="text-[11px] text-white/30 mb-2">Current preview</p>
-              {/\.(mp4|webm|mov)(\?|$)/i.test(previewUrl) ? (
-                <video
-                  src={previewUrl}
-                  className="w-32 rounded-xl border border-white/10"
-                  controls
-                  muted
-                  playsInline
+          {(thumbnailUrl || previewUrl || referenceUrl) && (
+            <div className="grid gap-3 md:grid-cols-3">
+              {thumbnailUrl && (
+                <MediaPreviewCard
+                  title="Thumbnail"
+                  description="Marketplace card media"
+                  url={thumbnailUrl}
                 />
-              ) : (
-                <img
-                  src={previewUrl}
-                  alt="preview media"
-                  className="w-32 rounded-xl border border-white/10"
-                  onError={(e) => { e.currentTarget.style.display = 'none' }}
+              )}
+              {previewUrl && (
+                <MediaPreviewCard
+                  title="Preview"
+                  description="Hover media shown in the marketplace"
+                  url={previewUrl}
+                  allowVideo
+                />
+              )}
+              {referenceUrl && (
+                <MediaPreviewCard
+                  title="Reference"
+                  description="Exact full-resolution generation asset"
+                  url={referenceUrl}
                 />
               )}
             </div>

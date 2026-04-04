@@ -144,20 +144,22 @@ export async function POST(req: NextRequest) {
           successCount++
           await deductTokens(user.id, tokenCostPerVideo, 'video_gen', `Video generation — ${videoModel.name}`, projectId)
           // Track in storage_files (external URL, size unknown — use 0 as placeholder)
-          await admin.from('storage_files').insert({
+          const storageFileName = `genetrify-video-${i + 1}.mp4`
+          const { data: storageFile, error: storageFileError } = await admin.from('storage_files').insert({
             user_id: user.id,
             project_id: projectId,
-            file_name: `genetrify-video-${i + 1}.mp4`,
+            file_name: storageFileName,
             file_type: 'generated_video',
             storage_path: videoUrl,
             public_url: videoUrl,
             size_bytes: 0,
-          })
+          }).select('id').single()
+          if (storageFileError) throw new Error(storageFileError.message)
           controller.enqueue(encode({
             type: 'video',
             index: i,
             total: imageUrls.length,
-            video: { videoUrl, imageId, filename: `genetrify-video-${i + 1}.mp4` },
+            video: { videoUrl, imageId, filename: storageFileName, storageFileId: storageFile.id },
           }))
         } catch (e) {
           logger.error('Video generation failed', { userId: user.id, projectId, index: i }, e)

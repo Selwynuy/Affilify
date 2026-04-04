@@ -25,6 +25,13 @@ export interface TemplateConfig {
   gender?: string
   style?: string
   promptHint?: string
+  /** Detailed avatar descriptors used as hard constraints in the generation prompt.
+   *  These supplement the reference image and ensure accuracy when the thumbnail
+   *  is insufficient for Gemini to reproduce fine details like skin tone. */
+  skinTone?: string        // e.g. "fair porcelain with cool pink undertones"
+  hairDescription?: string // e.g. "long straight black hair, center-parted"
+  faceFeatures?: string    // e.g. "high cheekbones, monolid eyes, soft jawline"
+  bodyType?: string        // e.g. "slim, 170cm, lean build"
   /** Background templates */
   roomAesthetic?: string
   roomColors?: string
@@ -39,8 +46,9 @@ export interface MarketplaceTemplate {
   description:   string | null
   category:      TemplateCategory
   status:        TemplateStatus
-  thumbnail_url: string | null
-  preview_url:   string | null
+  thumbnail_url: string | null  // small card image shown in the UI selector
+  preview_url:   string | null  // medium preview, fallback for generation
+  reference_url: string | null  // full-resolution image passed to Gemini — populate this for avatar + background templates
   badge:         string | null
   sort_order:    number
   config:        TemplateConfig

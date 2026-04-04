@@ -15,11 +15,12 @@ import {
 import { VIDEO_MODELS, getAvailableModels, TOKEN_COSTS } from '@/lib/data/plans'
 import type { VideoModel, PlanId } from '@/lib/types/billing'
 import type { MarketplaceTemplate } from '@/lib/types/marketplace'
+import { TikTokShareButton } from '@/components/dashboard/TikTokShareButton'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface GeneratedImage { id: string; url: string }
-interface VideoResult { imageId: string; videoUrl: string; filename: string }
+interface VideoResult { imageId: string; videoUrl: string; filename: string; storageFileId?: string | null }
 interface HistoryRun { projectId: string; createdAt: string; videos: VideoResult[] }
 interface ProductFile { file: File; previewUrl: string }
 
@@ -193,6 +194,14 @@ function HistorySection({ runs }: { runs: HistoryRun[] }) {
                     <Download className="w-2.5 h-2.5" />
                     Video {i + 1}
                   </a>
+                  {v.storageFileId && (
+                    <TikTokShareButton
+                      storageFileId={v.storageFileId}
+                      fileName={v.filename}
+                      buttonLabel="Share"
+                      className="w-full h-7 rounded-md bg-white/[0.03] hover:bg-white/[0.06] text-white/55 border border-white/8 text-[10px]"
+                    />
+                  )}
                 </div>
               ))}
             </div>
@@ -745,6 +754,13 @@ export function GeneratePanel({
                     <Download className="w-3 h-3" />
                     Download video {i + 1}
                   </a>
+                  {v.storageFileId && (
+                    <TikTokShareButton
+                      storageFileId={v.storageFileId}
+                      fileName={v.filename}
+                      className="w-full"
+                    />
+                  )}
                 </div>
               ))}
             </div>

@@ -2,10 +2,13 @@
 
 import { useState, useTransition } from 'react'
 import { cn } from '@/lib/utils'
-import { HardDrive, Trash2, Download, ImageIcon, Video, AlertTriangle, X } from 'lucide-react'
+import { HardDrive, Trash2, Download, ImageIcon, Video, AlertTriangle, X, CheckSquare, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { TikTokShareButton } from '@/components/dashboard/TikTokShareButton'
 import Link from 'next/link'
 import type { StorageFile, StoragePageData } from '@/lib/data/dashboard'
+
+const FILES_PER_PAGE = 12
 
 function Lightbox({ file, onClose }: { file: StorageFile; onClose: () => void }) {
   const isImage = file.file_type !== 'generated_video'
@@ -28,6 +31,13 @@ function Lightbox({ file, onClose }: { file: StorageFile; onClose: () => void })
                 <Download className="w-3.5 h-3.5" />
                 Download
               </a>
+            )}
+            {isVideo && (
+              <TikTokShareButton
+                storageFileId={file.id}
+                fileName={file.file_name}
+                buttonLabel="Share to TikTok"
+              />
             )}
             <button onClick={onClose} className="p-2 rounded-lg text-white/40 hover:text-white hover:bg-white/10 transition-all">
               <X className="w-4 h-4" />
@@ -75,6 +85,37 @@ function DeleteConfirmModal({ fileName, onConfirm, onCancel, isPending }: {
   )
 }
 
+function BatchDeleteConfirmModal({ fileCount, onConfirm, onCancel, isPending }: {
+  fileCount: number
+  onConfirm: () => void
+  onCancel: () => void
+  isPending: boolean
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+      <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-brand-bg p-6 space-y-5">
+        <div className="flex items-start gap-3">
+          <div className="w-9 h-9 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center shrink-0">
+            <Trash2 className="w-4 h-4 text-red-400" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-white">Delete selected files?</p>
+            <p className="text-xs text-white/40 mt-1 leading-relaxed">
+              <span className="text-white/60">{fileCount}</span> selected file{fileCount === 1 ? '' : 's'} will be permanently deleted. This cannot be undone.
+            </p>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <Button onClick={onCancel} className="flex-1 h-9 rounded-xl bg-white/5 hover:bg-white/10 text-white/60 hover:text-white border border-white/8 text-sm">Cancel</Button>
+          <Button onClick={onConfirm} disabled={isPending} className="flex-1 h-9 rounded-xl bg-red-600/80 hover:bg-red-600 text-white text-sm font-semibold disabled:opacity-50">
+            {isPending ? 'Deleting...' : 'Delete'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B'
   if (bytes < 1024) return `${bytes} B`
@@ -102,12 +143,16 @@ export function StoragePageClient({ initialData }: { initialData: StoragePageDat
   const [isPending, startTransition] = useTransition()
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [confirmDeleteFile, setConfirmDeleteFile] = useState<StorageFile | null>(null)
+  const [showBatchDeleteConfirm, setShowBatchDeleteConfirm] = useState(false)
   const [previewFile, setPreviewFile] = useState<StorageFile | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [currentPage, setCurrentPage] = useState(1)
 
   async function load() {
     const res = await fetch('/api/storage')
     const json = await res.json()
     setData(json)
+    setSelectedIds((prev) => new Set([...prev].filter((id) => json.files.some((file: StorageFile) => file.id === id))))
   }
 
   function confirmDelete() {
@@ -122,8 +167,60 @@ export function StoragePageClient({ initialData }: { initialData: StoragePageDat
     })
   }
 
+  function toggleSelected(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function toggleSelectAll() {
+    setSelectedIds((prev) => {
+      if (prev.size === data.files.length) return new Set()
+      return new Set(data.files.map((file) => file.id))
+    })
+  }
+
+  function clearSelection() {
+    setSelectedIds(new Set())
+  }
+
+  function confirmBatchDelete() {
+    const ids = [...selectedIds]
+    if (ids.length === 0) return
+
+    setShowBatchDeleteConfirm(false)
+    startTransition(async () => {
+      for (const id of ids) {
+        await fetch(`/api/storage/${id}`, { method: 'DELETE' })
+      }
+      setSelectedIds(new Set())
+      await load()
+    })
+  }
+
   const usedPercent = data.limitBytes > 0 ? Math.min(100, (data.usedBytes / data.limitBytes) * 100) : 0
   const nearLimit = usedPercent >= 80
+  const allSelected = data.files.length > 0 && selectedIds.size === data.files.length
+  const totalPages = Math.max(1, Math.ceil(data.files.length / FILES_PER_PAGE))
+  const safeCurrentPage = Math.min(currentPage, totalPages)
+  const startIndex = (safeCurrentPage - 1) * FILES_PER_PAGE
+  const visibleFiles = data.files.slice(startIndex, startIndex + FILES_PER_PAGE)
+  const allVisibleSelected = visibleFiles.length > 0 && visibleFiles.every((file) => selectedIds.has(file.id))
+
+  function toggleSelectVisible() {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (allVisibleSelected) {
+        for (const file of visibleFiles) next.delete(file.id)
+      } else {
+        for (const file of visibleFiles) next.add(file.id)
+      }
+      return next
+    })
+  }
 
   return (
     <div className="space-y-8 max-w-4xl">
@@ -133,6 +230,14 @@ export function StoragePageClient({ initialData }: { initialData: StoragePageDat
           fileName={confirmDeleteFile.file_name}
           onConfirm={confirmDelete}
           onCancel={() => setConfirmDeleteFile(null)}
+          isPending={isPending}
+        />
+      )}
+      {showBatchDeleteConfirm && selectedIds.size > 0 && (
+        <BatchDeleteConfirmModal
+          fileCount={selectedIds.size}
+          onConfirm={confirmBatchDelete}
+          onCancel={() => setShowBatchDeleteConfirm(false)}
           isPending={isPending}
         />
       )}
@@ -192,8 +297,69 @@ export function StoragePageClient({ initialData }: { initialData: StoragePageDat
         </div>
       ) : (
         <div className="space-y-2">
-          {data.files.map((file) => (
-            <div key={file.id} className="flex items-center gap-4 rounded-xl border border-white/8 bg-white/[0.02] hover:bg-white/[0.04] hover:border-white/12 px-4 py-3 transition-all cursor-pointer group" onClick={() => setPreviewFile(file)}>
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-white/8 bg-white/[0.02] px-4 py-3">
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={toggleSelectVisible}
+                className="flex items-center gap-2 text-xs text-brand-text/55 hover:text-brand-text transition-colors"
+              >
+                {allVisibleSelected ? <CheckSquare className="w-4 h-4 text-brand-accent" /> : <Square className="w-4 h-4" />}
+                {allVisibleSelected ? 'Deselect page' : 'Select page'}
+              </button>
+              {data.files.length > visibleFiles.length && (
+                <button
+                  type="button"
+                  onClick={toggleSelectAll}
+                  className="text-xs text-brand-text/35 hover:text-brand-text/65 transition-colors"
+                >
+                  {allSelected ? 'Deselect all files' : 'Select all files'}
+                </button>
+              )}
+              {selectedIds.size > 0 && (
+                <p className="text-xs text-brand-text/35">
+                  {selectedIds.size} selected
+                </p>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {selectedIds.size > 0 && (
+                <button
+                  type="button"
+                  onClick={clearSelection}
+                  className="text-xs text-brand-text/35 hover:text-brand-text/65 transition-colors"
+                >
+                  Clear
+                </button>
+              )}
+              <Button
+                onClick={() => setShowBatchDeleteConfirm(true)}
+                disabled={selectedIds.size === 0 || isPending}
+                className="h-8 rounded-xl bg-red-600/80 hover:bg-red-600 text-white text-xs font-semibold disabled:opacity-40"
+              >
+                Delete selected
+              </Button>
+            </div>
+          </div>
+          {visibleFiles.map((file) => (
+            <div
+              key={file.id}
+              className={cn(
+                "flex items-center gap-4 rounded-xl border px-4 py-3 transition-all cursor-pointer group",
+                selectedIds.has(file.id)
+                  ? "border-brand-accent/40 bg-brand-accent/[0.06]"
+                  : "border-white/8 bg-white/[0.02] hover:bg-white/[0.04] hover:border-white/12",
+              )}
+              onClick={() => setPreviewFile(file)}
+            >
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); toggleSelected(file.id) }}
+                className="shrink-0 text-brand-text/35 hover:text-brand-text transition-colors"
+                aria-label={selectedIds.has(file.id) ? 'Deselect file' : 'Select file'}
+              >
+                {selectedIds.has(file.id) ? <CheckSquare className="w-4 h-4 text-brand-accent" /> : <Square className="w-4 h-4" />}
+              </button>
               <div className="w-12 h-12 rounded-lg bg-white/5 border border-white/8 flex items-center justify-center shrink-0 overflow-hidden">
                 {file.public_url && (file.file_type === 'generated_image' || file.file_type === 'product_image' || file.file_type === 'face_upload') ? (
                   <img src={file.public_url} alt={file.file_name} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none' }} />
@@ -210,6 +376,16 @@ export function StoragePageClient({ initialData }: { initialData: StoragePageDat
                 </div>
               </div>
               <div className="flex items-center gap-1 shrink-0">
+                {file.file_type === 'generated_video' && (
+                  <div onClick={(e) => e.stopPropagation()}>
+                    <TikTokShareButton
+                      storageFileId={file.id}
+                      fileName={file.file_name}
+                      buttonLabel="Share"
+                      className="h-8 rounded-lg bg-transparent hover:bg-white/5 text-brand-text/25 hover:text-brand-text border border-transparent hover:border-white/8 px-2"
+                    />
+                  </div>
+                )}
                 {file.public_url ? (
                   <a href={file.public_url} download={file.file_name} onClick={(e) => e.stopPropagation()} className="p-2 rounded-lg text-brand-text/25 hover:text-brand-text hover:bg-white/5 transition-all" title="Download">
                     <Download className="w-3.5 h-3.5" />
@@ -230,6 +406,29 @@ export function StoragePageClient({ initialData }: { initialData: StoragePageDat
               </div>
             </div>
           ))}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between gap-3 rounded-xl border border-white/8 bg-white/[0.02] px-4 py-3">
+              <p className="text-xs text-brand-text/35">
+                Page {safeCurrentPage} of {totalPages}
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                  disabled={safeCurrentPage === 1}
+                  className="h-8 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 border border-white/8 text-xs disabled:opacity-40"
+                >
+                  Previous
+                </Button>
+                <Button
+                  onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                  disabled={safeCurrentPage === totalPages}
+                  className="h-8 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 border border-white/8 text-xs disabled:opacity-40"
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

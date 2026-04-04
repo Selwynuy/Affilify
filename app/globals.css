@@ -162,6 +162,25 @@
   animation: node-line-draw 2s ease-out 0.5s forwards;
 }
 
+/* Brand scrollbar — used in panels, side drawers, etc. */
+.scrollbar-brand {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(139, 92, 246, 0.35) transparent;
+}
+.scrollbar-brand::-webkit-scrollbar {
+  width: 4px;
+}
+.scrollbar-brand::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-brand::-webkit-scrollbar-thumb {
+  background: rgba(139, 92, 246, 0.35);
+  border-radius: 9999px;
+}
+.scrollbar-brand::-webkit-scrollbar-thumb:hover {
+  background: rgba(139, 92, 246, 0.6);
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
