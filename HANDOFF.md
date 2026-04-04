@@ -2,58 +2,62 @@
 
 ## Current state
 
-The `/dashboard` studio canvas has been reworked into a more persistent workflow surface:
+Two areas changed recently and are now in a better state:
 
-- Header chips are now passive status pills.
-- `Change in Templates` remains the active route out to template selection.
-- Canvas supports zoom controls and panning on empty-space drag.
-- Box selection is now `Shift + drag`.
-- Prompt is optional for image generation.
-- Prompt input is now an auto-resizing textarea.
-- Returning from Templates should restore the canvas session.
+### TikTok sharing
 
-## Persistence model
+- Generated videos can now be posted to TikTok through the Content Posting API.
+- OAuth connect/callback/account/share/status routes exist under `app/api/tiktok/`.
+- TikTok tokens are stored in `tiktok_accounts`.
+- Share actions are exposed from generated-video results and the Storage page.
 
-Canvas session state is now stored in `IndexedDB` inside [`components/studio/StudioCanvas.tsx`](components/studio/StudioCanvas.tsx).
+### Studio canvas
 
-Persisted state includes:
+- Canvas session persistence is active through IndexedDB in `components/studio/StudioCanvas.tsx`.
+- Persisted state includes cards, connections, selected ids, prompt, zoom, and pan.
+- Product cards restore with regenerated blob URLs.
+- Wheel zoom is implemented with `Ctrl`/`Cmd` + wheel.
+- A small helper hint now explains selection/zoom behavior.
+- Generated cards now retain `projectId` and generated image ids so the side-panel "Create Video" action is wired to the real `/api/export` flow.
+- Created videos are shown back inside the video side panel and are persisted on the generated card.
+- Product blob URLs are now revoked on card removal, user switch, canvas clear, and unmount.
 
-- uploaded product files
-- product/generated cards
-- card positions
-- connections
-- current prompt
-- selected ids
-- zoom
-- pan
+## Files touched in this pass
 
-Product cards store the original `File` in IndexedDB and rebuild preview URLs with `URL.createObjectURL()` on restore.
-
-## Files changed in this pass
-
-- [`components/studio/StudioCanvas.tsx`](components/studio/StudioCanvas.tsx)
-- [`components/dashboard/sidebar.tsx`](components/dashboard/sidebar.tsx)
-- [`app/layout.tsx`](app/layout.tsx)
-
-## Known follow-up items
-
-1. The studio file has some mojibake in text literals/comments from prior edits. It is cosmetic but should be cleaned.
-2. The canvas persistence currently recreates object URLs on restore but does not explicitly revoke old URLs during resets/unmount. That should be tightened.
-3. The canvas now pans on empty drag and selects on `Shift + drag`; if product feedback suggests this is too hidden, add a small helper hint in the UI.
-4. Mouse-wheel zoom has not been added yet.
-5. The generated-result lineage is still fairly minimal. There is more room to make the relation between source cards and AI output clearer.
-6. Lint still reports existing `next/no-img-element` warnings in `StudioCanvas.tsx`.
+- `components/studio/StudioCanvas.tsx`
+- `app/api/upload/route.ts`
+- `HANDOFF.md`
 
 ## Verification done
 
-- `npm run lint -- app/layout.tsx components/studio/StudioCanvas.tsx`
-- `npm run lint -- components/dashboard/sidebar.tsx components/studio/StudioCanvas.tsx`
+- `npx tsc --noEmit`
+  - passes
 
-Both pass with only the existing `next/no-img-element` warnings.
+- `npm run lint -- components/studio/StudioCanvas.tsx app/api/upload/route.ts`
+  - passes with existing `next/no-img-element` warnings in `StudioCanvas.tsx`
 
-## Suggested next steps
+## Remaining follow-up items
 
-1. Manually test the IndexedDB restore flow across navigation to `/templates` and back.
-2. Revoke object URLs when cards are removed or when the canvas is cleared.
-3. Clean up remaining broken punctuation/encoding artifacts in `StudioCanvas.tsx`.
-4. Add wheel/pinch zoom if desired.
+1. TikTok rollout still needs real external setup:
+   - apply `supabase/migrations/20260404_tiktok_accounts.sql`
+   - set `TIKTOK_CLIENT_KEY`
+   - set `TIKTOK_CLIENT_SECRET`
+   - configure `${NEXT_PUBLIC_APP_URL}/api/tiktok/callback` in the TikTok app
+   - verify `video.publish` / Direct Post approval on the TikTok app
+
+2. Studio canvas still has some cleanup potential:
+   - file comments/section dividers still contain mojibake from earlier edits
+   - `StudioCanvas.tsx` still uses several raw `<img>` tags, which is why lint warns
+   - the video side-panel flow should still be manually tested end-to-end against real token balances and real generated images
+   - canvas persistence should still be manually tested across refresh, navigation away, and account switches
+
+## Practical production read
+
+The studio canvas is materially closer to production now than before this pass:
+
+- typecheck is clean
+- the "Create Video" action is no longer a stub
+- object URL cleanup is no longer obviously leaky
+- zoom/select affordances are clearer
+
+What still blocks calling it fully production-ready is mostly verification and cleanup work, not a known hard functional bug.

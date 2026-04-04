@@ -1,15 +1,18 @@
 'use client'
 
-import { useState, useRef, useCallback, useEffect } from 'react'
-import Link from 'next/link'
+import { useState, useRef, useCallback, useEffect, useTransition } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import {
   Upload, X, Sparkles, Film, Camera, User, Layers, Wind,
-  Pencil, Check, RefreshCw, Trash2, AlertCircle, Settings2, ZoomIn, ZoomOut,
+  Pencil, Check, RefreshCw, Trash2, AlertCircle, ZoomIn, ZoomOut, Maximize2, Download, Zap,
+  CheckCircle2, ExternalLink, Mars, Venus,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { usePreferences } from '@/lib/context/preferences-context'
 import type { MarketplaceTemplate } from '@/lib/types/marketplace'
+import type { AvatarConfig, BackgroundConfig } from '@/lib/types/preferences'
+import { VIDEO_MODELS } from '@/lib/data/plans'
+import type { VideoModel } from '@/lib/types/billing'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -27,6 +30,11 @@ interface GeneratedCard extends CardBase {
   imageUrl: string
   prompt: string
   sourceIds: string[]
+  projectId?: string
+  generatedImageId?: string
+  videoUrl?: string
+  videoFileName?: string
+  videoStorageFileId?: string | null
   isLoading?: boolean
   hasError?: boolean
 }
@@ -47,6 +55,11 @@ interface PersistedGeneratedCard extends CardBase {
   imageUrl: string
   prompt: string
   sourceIds: string[]
+  projectId?: string
+  generatedImageId?: string
+  videoUrl?: string
+  videoFileName?: string
+  videoStorageFileId?: string | null
   isLoading?: boolean
   hasError?: boolean
 }
@@ -61,6 +74,7 @@ interface PersistedStudioState {
 }
 
 export interface StudioCanvasProps {
+  userId: string
   cameraTemplates: MarketplaceTemplate[]
   movementTemplates: MarketplaceTemplate[]
   avatarTemplates: MarketplaceTemplate[]
@@ -77,16 +91,22 @@ const PORT_R      = 6   // port circle radius
 const DRAG_THRESH = 5
 const MAX_PRODUCTS = 5
 const GAP         = 22
-const MIN_ZOOM    = 0.6
-const MAX_ZOOM    = 1.8
-const ZOOM_STEP   = 0.2
+const MIN_ZOOM    = 0.25
+const MAX_ZOOM    = 2.0
+const ZOOM_STEP   = 0.12
+const CANVAS_W    = 6000
+const CANVAS_H    = 4000
 const STUDIO_DB_NAME = 'genetrify-studio'
 const STUDIO_STORE_NAME = 'canvas'
-const STUDIO_STATE_KEY = 'session'
+const STUDIO_STATE_KEY_PREFIX = 'session'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function uid() { return Math.random().toString(36).slice(2, 9) }
+
+function getStudioStateKey(userId: string) {
+  return `${STUDIO_STATE_KEY_PREFIX}:${userId}`
+}
 
 function boxRect(b: SelBox) {
   return { left: Math.min(b.x1, b.x2), top: Math.min(b.y1, b.y2), right: Math.max(b.x1, b.x2), bottom: Math.max(b.y1, b.y2) }
@@ -156,71 +176,432 @@ function openStudioDb() {
   })
 }
 
-async function loadStudioState() {
+async function loadStudioState(storageKey: string) {
   const db = await openStudioDb()
   return new Promise<PersistedStudioState | null>((resolve, reject) => {
     const tx = db.transaction(STUDIO_STORE_NAME, 'readonly')
     const store = tx.objectStore(STUDIO_STORE_NAME)
-    const request = store.get(STUDIO_STATE_KEY)
+    const request = store.get(storageKey)
     request.onsuccess = () => resolve((request.result as PersistedStudioState | undefined) ?? null)
     request.onerror = () => reject(request.error ?? new Error('Failed to read studio state'))
   })
 }
 
-async function saveStudioState(state: PersistedStudioState) {
+async function saveStudioState(storageKey: string, state: PersistedStudioState) {
   const db = await openStudioDb()
   return new Promise<void>((resolve, reject) => {
     const tx = db.transaction(STUDIO_STORE_NAME, 'readwrite')
     tx.oncomplete = () => resolve()
     tx.onerror = () => reject(tx.error ?? new Error('Failed to save studio state'))
-    tx.objectStore(STUDIO_STORE_NAME).put(state, STUDIO_STATE_KEY)
+    tx.objectStore(STUDIO_STORE_NAME).put(state, storageKey)
   })
 }
 
-async function clearStudioState() {
+async function clearStudioState(storageKey: string) {
   const db = await openStudioDb()
   return new Promise<void>((resolve, reject) => {
     const tx = db.transaction(STUDIO_STORE_NAME, 'readwrite')
     tx.oncomplete = () => resolve()
     tx.onerror = () => reject(tx.error ?? new Error('Failed to clear studio state'))
-    tx.objectStore(STUDIO_STORE_NAME).delete(STUDIO_STATE_KEY)
+    tx.objectStore(STUDIO_STORE_NAME).delete(storageKey)
   })
 }
 
+function revokeProductObjectUrls(cards: Card[]) {
+  for (const card of cards) {
+    if (card.type === 'product' && card.imageUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(card.imageUrl)
+    }
+  }
+}
 
-// ── DropdownShell ─────────────────────────────────────────────────────────────
-// Shared open/close logic for all top-bar chips
+function buildStudioVideoPrompt(
+  basePrompt: string,
+  movementTemplate: MarketplaceTemplate | undefined,
+  avatarConfig: AvatarConfig | null,
+  backgroundConfig: BackgroundConfig | null,
+) {
+  const cleanedPrompt = basePrompt.trim()
+  const motionFragment = typeof movementTemplate?.config.promptFragment === 'string'
+    ? movementTemplate.config.promptFragment.trim()
+    : ''
+  const gender = avatarConfig?.gender === 'woman' ? 'woman' : 'man'
+  const roomAesthetic = backgroundConfig?.roomAesthetic || 'studio'
+
+  return [
+    cleanedPrompt,
+    `Subject: ${gender} in a ${roomAesthetic} space.`,
+    motionFragment,
+    'Keep the framing vertical 9:16, keep motion natural, and preserve the outfit details.',
+  ]
+    .filter(Boolean)
+    .join(' ')
+}
+
+
+// ── StatusChip ────────────────────────────────────────────────────────────────
+
+type TemplateCategory = 'avatar' | 'background' | 'camera' | 'movement'
 
 function StatusChip({
   icon: Icon,
   label,
   value,
+  active,
+  onClick,
 }: {
   icon: React.ElementType
   label: string
   value: string
+  active?: boolean
+  onClick?: () => void
 }) {
   return (
-    <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium border bg-white/[0.04] border-white/[0.08] text-white/55 select-none">
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium border transition-all select-none cursor-pointer',
+        active
+          ? 'bg-brand-accent/15 border-brand-accent/35 text-brand-accent'
+          : 'bg-white/[0.04] border-white/[0.08] text-white/55 hover:bg-white/[0.07] hover:border-white/[0.14] hover:text-white/75',
+      )}
+    >
       <Icon size={11} />
-      <span className="hidden lg:inline text-white/30 mr-0.5 font-normal">{label}:</span>
+      <span className="hidden lg:inline text-current/60 mr-0.5 font-normal">{label}:</span>
       <span className="max-w-[110px] truncate">{value || '—'}</span>
-    </div>
+    </button>
   )
 }
 
-function TemplateShortcut() {
+// ── TemplatePanel ─────────────────────────────────────────────────────────────
+
+function TemplatePanel({
+  category,
+  avatarTemplates,
+  backgroundTemplates,
+  cameraTemplates,
+  movementTemplates,
+  onClose,
+}: {
+  category: TemplateCategory
+  avatarTemplates: MarketplaceTemplate[]
+  backgroundTemplates: MarketplaceTemplate[]
+  cameraTemplates: MarketplaceTemplate[]
+  movementTemplates: MarketplaceTemplate[]
+  onClose: () => void
+}) {
+  const {
+    avatarConfig, setAvatarConfig,
+    backgroundConfig, setBackgroundConfig,
+    cameraTemplateId, setCameraTemplateId,
+    movementTemplateId, setMovementTemplateId,
+  } = usePreferences()
+
+  const [isPending, startTransition] = useTransition()
+  const [savingId, setSavingId] = useState<string | null>(null)
+  const [avatarGender, setAvatarGender] = useState<'male' | 'female'>(
+    avatarConfig?.gender === 'woman' ? 'female' : 'male',
+  )
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  function savePrefs(body: Record<string, unknown>) {
+    startTransition(async () => {
+      await fetch('/api/preferences', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      setSavingId(null)
+    })
+  }
+
+  function handleSelectAvatar(template: MarketplaceTemplate) {
+    if (isPending) return
+    setSavingId(template.id)
+    const config: AvatarConfig = {
+      type: 'preset',
+      presetId: template.id,
+      gender: template.config.gender === 'woman' ? 'woman' : 'man',
+      style: ['streetwear', 'luxury', 'minimal'].includes(template.config.style as string)
+        ? (template.config.style as AvatarConfig['style'])
+        : 'casual',
+    }
+    setAvatarConfig(config)
+    savePrefs({ avatar_config: config })
+    onClose()
+  }
+
+  function handleSelectBackground(template: MarketplaceTemplate) {
+    if (isPending) return
+    setSavingId(template.id)
+    const config: BackgroundConfig = {
+      type: 'preset',
+      presetId: template.id,
+      roomAesthetic: String(template.config.roomAesthetic ?? ''),
+      roomColors: String(template.config.roomColors ?? ''),
+      roomElements: String(template.config.roomElements ?? ''),
+      thumbnailUrl: template.thumbnail_url ?? undefined,
+    }
+    setBackgroundConfig(config)
+    savePrefs({ background_config: config })
+    onClose()
+  }
+
+  function handleSelectCamera(id: string) {
+    if (isPending) return
+    setSavingId(id)
+    setCameraTemplateId(id)
+    savePrefs({ camera_template_id: id, movement_template_id: movementTemplateId })
+    onClose()
+  }
+
+  function handleSelectMovement(id: string) {
+    if (isPending) return
+    setSavingId(id)
+    setMovementTemplateId(id)
+    savePrefs({ camera_template_id: cameraTemplateId, movement_template_id: id })
+    onClose()
+  }
+
+  async function handleCustomFace(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = async (e) => {
+      const dataUrl = e.target?.result as string
+      const [meta, b64] = dataUrl.split(',')
+      const mime = meta.split(':')[1].split(';')[0]
+      const byteString = atob(b64)
+      const arr = new Uint8Array(byteString.length)
+      for (let i = 0; i < byteString.length; i++) arr[i] = byteString.charCodeAt(i)
+      const blob = new Blob([arr], { type: mime })
+      const formData = new FormData()
+      formData.append('face', blob, 'face.jpg')
+      formData.append('onboardingFaceOnly', 'true')
+      const res = await fetch('/api/upload', { method: 'POST', body: formData })
+      const data = await res.json()
+      if (res.ok && data.faceUrl) {
+        const config: AvatarConfig = { type: 'custom', gender: 'man', style: 'casual', faceUrl: data.faceUrl, facePath: data.facePath }
+        setAvatarConfig(config)
+        await fetch('/api/preferences', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ avatar_config: config }),
+        })
+        onClose()
+      }
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const CATEGORY_META: Record<TemplateCategory, { label: string; icon: React.ElementType }> = {
+    avatar:     { label: 'Avatar',    icon: User },
+    background: { label: 'Background', icon: Layers },
+    camera:     { label: 'Camera',    icon: Camera },
+    movement:   { label: 'Movement',  icon: Wind },
+  }
+  const meta = CATEGORY_META[category]
+
+  const visibleAvatars = avatarTemplates.filter(t =>
+    avatarGender === 'female' ? t.config.gender === 'woman' : t.config.gender !== 'woman',
+  )
+
+  const templates: MarketplaceTemplate[] =
+    category === 'avatar'     ? visibleAvatars :
+    category === 'background' ? backgroundTemplates :
+    category === 'camera'     ? cameraTemplates :
+    movementTemplates
+
+  function isSelected(t: MarketplaceTemplate) {
+    if (category === 'camera')     return t.id === cameraTemplateId
+    if (category === 'movement')   return t.id === movementTemplateId
+    if (category === 'avatar')     return avatarConfig?.type === 'preset' && avatarConfig.presetId === t.id
+    if (category === 'background') return backgroundConfig?.type === 'preset' && backgroundConfig.presetId === t.id
+    return false
+  }
+
+  function handleSelect(t: MarketplaceTemplate) {
+    if (category === 'avatar')     handleSelectAvatar(t)
+    if (category === 'background') handleSelectBackground(t)
+    if (category === 'camera')     handleSelectCamera(t.id)
+    if (category === 'movement')   handleSelectMovement(t.id)
+  }
+
   return (
-    <Link
-      href="/templates"
-      className={cn(
-        'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all border whitespace-nowrap',
-        'bg-brand-accent/10 border-brand-accent/20 text-brand-accent hover:bg-brand-accent/18 hover:border-brand-accent/35',
-      )}
-    >
-      <Settings2 size={11} />
-      <span>Change in Templates</span>
-    </Link>
+    <>
+      {/* Backdrop */}
+      <motion.div
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        transition={{ duration: 0.15 }}
+        className="fixed inset-0 bg-black/30 z-[300]"
+        onClick={onClose}
+      />
+
+      {/* Panel — desktop: right side panel | mobile: bottom sheet */}
+      <motion.aside
+        initial={{ x: '100%' }}
+        animate={{ x: 0 }}
+        exit={{ x: '100%' }}
+        transition={{ type: 'spring', damping: 32, stiffness: 300 }}
+        className={cn(
+          'fixed right-0 top-0 bottom-0 z-[400] flex flex-col',
+          'w-full sm:w-[320px]',
+          'bg-[#111119] border-l border-white/[0.07]',
+        )}
+        style={{ boxShadow: '-24px 0 64px rgba(0,0,0,0.55)' }}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06] shrink-0">
+          <div className="flex items-center gap-2">
+            <meta.icon size={14} className="text-brand-accent" />
+            <h3 className="text-sm font-semibold text-white">{meta.label}</h3>
+            <span className="text-[10px] text-white/30 font-mono">{templates.length} templates</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <a
+              href="/templates"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-1.5 rounded-lg text-white/25 hover:text-white/60 hover:bg-white/[0.06] transition-all"
+              title="Open full templates page"
+            >
+              <ExternalLink size={13} />
+            </a>
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-lg text-white/30 hover:text-white hover:bg-white/[0.07] transition-all"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+
+        {/* Avatar gender toggle */}
+        {category === 'avatar' && (
+          <div className="px-5 pt-3 pb-1 shrink-0">
+            <div className="flex gap-1 p-1 rounded-xl bg-white/[0.04] border border-white/[0.06]">
+              <button
+                type="button"
+                onClick={() => setAvatarGender('male')}
+                className={cn(
+                  'flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-medium transition-all',
+                  avatarGender === 'male'
+                    ? 'bg-brand-accent/20 text-brand-accent border border-brand-accent/30'
+                    : 'text-white/35 hover:text-white/60',
+                )}
+              >
+                <Mars size={11} /> Male
+              </button>
+              <button
+                type="button"
+                onClick={() => setAvatarGender('female')}
+                className={cn(
+                  'flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-medium transition-all',
+                  avatarGender === 'female'
+                    ? 'bg-brand-accent/20 text-brand-accent border border-brand-accent/30'
+                    : 'text-white/35 hover:text-white/60',
+                )}
+              >
+                <Venus size={11} /> Female
+              </button>
+            </div>
+
+            {/* Custom face upload */}
+            <label className="mt-2 flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-white/[0.12] bg-white/[0.02] py-2.5 text-[11px] text-white/35 transition-colors hover:border-brand-accent/30 hover:text-brand-accent/70">
+              <Upload size={11} />
+              {avatarConfig?.type === 'custom' ? 'Replace custom face' : 'Upload custom face'}
+              <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleCustomFace} />
+            </label>
+          </div>
+        )}
+
+        {/* Template grid */}
+        <div className="flex-1 overflow-y-auto min-h-0 px-4 py-3 scrollbar-brand">
+          {templates.length === 0 ? (
+            <p className="text-center text-[12px] text-white/25 py-10">No templates yet</p>
+          ) : (
+            <div className="grid grid-cols-2 gap-2.5">
+              {templates.map((t, i) => {
+                const selected = isSelected(t)
+                const saving = savingId === t.id
+                return (
+                  <div
+                    key={t.id}
+                    onClick={() => handleSelect(t)}
+                    className={cn(
+                      'group relative flex flex-col overflow-hidden rounded-xl border transition-all duration-150 cursor-pointer',
+                      selected
+                        ? 'border-brand-accent ring-1 ring-brand-accent/40 shadow-md shadow-brand-accent/10'
+                        : 'border-white/[0.08] hover:border-white/20',
+                    )}
+                  >
+                    <div className="relative aspect-[2/3] w-full overflow-hidden bg-white/5">
+                      {t.thumbnail_url ? (
+                        <>
+                          <img
+                            src={t.thumbnail_url}
+                            alt={t.title}
+                            loading={i < 4 ? 'eager' : 'lazy'}
+                            className={cn(
+                              'absolute inset-0 h-full w-full object-cover transition-opacity duration-200',
+                              t.preview_url ? 'group-hover:opacity-0' : '',
+                            )}
+                          />
+                          {t.preview_url && (
+                            <img
+                              src={t.preview_url}
+                              alt=""
+                              loading="lazy"
+                              className="absolute inset-0 h-full w-full object-cover opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+                            />
+                          )}
+                        </>
+                      ) : (
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <meta.icon size={24} className="text-white/10" />
+                        </div>
+                      )}
+
+                      {t.badge && (
+                        <div className="absolute left-1.5 top-1.5 rounded-full bg-brand-accent/90 px-1.5 py-0.5 text-[8px] font-semibold text-brand-bg">
+                          {t.badge}
+                        </div>
+                      )}
+
+                      {selected && <div className="absolute inset-0 bg-brand-accent/10" />}
+
+                      <div className={cn(
+                        'absolute inset-x-1.5 bottom-1.5 transition-all duration-150',
+                        selected
+                          ? 'opacity-100 translate-y-0'
+                          : 'opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0',
+                      )}>
+                        <div className={cn(
+                          'flex w-full items-center justify-center gap-1 rounded-lg py-1 text-[10px] font-bold uppercase tracking-wider',
+                          selected ? 'bg-brand-accent text-brand-bg' : 'bg-brand-accent text-brand-bg',
+                        )}>
+                          {saving ? '...' : selected ? <><CheckCircle2 size={10} /> Active</> : 'Use this'}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className={cn(
+                      'px-2 py-1.5 border-t text-[10px] font-medium truncate transition-colors',
+                      selected
+                        ? 'border-brand-accent/30 bg-brand-accent/8 text-brand-accent'
+                        : 'border-white/[0.06] bg-[#15151e] text-white/50',
+                    )}>
+                      {t.title}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      </motion.aside>
+    </>
   )
 }
 
@@ -228,7 +609,7 @@ function TemplateShortcut() {
 
 function CardComp({
   card, selected, isInConnectMode,
-  onPtrDown, onPortPtrDown, onVideoOpen, onPromptSave, onRegenerate, onDelete,
+  onPtrDown, onPortPtrDown, onVideoOpen, onPromptSave, onRegenerate, onDelete, onPreview,
 }: {
   card: Card
   selected: boolean
@@ -239,6 +620,7 @@ function CardComp({
   onPromptSave?: (id: string, p: string) => void
   onRegenerate?: (id: string) => void
   onDelete: (id: string) => void
+  onPreview?: (url: string, label: string) => void
 }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(card.type === 'generated' ? card.prompt : '')
@@ -290,25 +672,16 @@ function CardComp({
             <img src={card.imageUrl} alt="" className="w-full h-full object-cover" draggable={false} />
           ) : null}
 
-          {/* Action overlay */}
+          {/* Action overlay — delete only */}
           <div className={cn(
-            'absolute inset-0 flex items-start justify-end gap-1 p-2 transition-opacity duration-150',
+            'absolute inset-0 flex items-start justify-end p-2 transition-opacity duration-150',
             hover || selected ? 'opacity-100' : 'opacity-0',
           )}>
-            {card.type === 'generated' && !card.isLoading && !card.hasError && (
-              <button
-                onPointerDown={e => e.stopPropagation()}
-                onClick={() => onVideoOpen?.(card as GeneratedCard)}
-                className="p-1.5 rounded-lg bg-black/75 border border-white/10 text-white/50 hover:text-white hover:bg-brand-accent/40 hover:border-brand-accent/30 transition-all"
-                title="Create video"
-              >
-                <Film size={11} />
-              </button>
-            )}
             <button
               onPointerDown={e => e.stopPropagation()}
               onClick={() => onDelete(card.id)}
               className="p-1.5 rounded-lg bg-black/75 border border-white/10 text-white/30 hover:text-red-400 hover:border-red-500/20 hover:bg-red-500/10 transition-all"
+              title="Delete"
             >
               <X size={11} />
             </button>
@@ -366,22 +739,23 @@ function CardComp({
           {card.type === 'product' ? (
             <p className="text-[11px] text-white/35 truncate font-mono mt-1">{card.fileName}</p>
           ) : editing ? (
-            <div onPointerDown={e => e.stopPropagation()} className="flex gap-1.5">
-              <input
+            <div onPointerDown={e => e.stopPropagation()} className="flex flex-col gap-1.5">
+              <textarea
                 autoFocus
+                rows={3}
                 value={draft}
                 onChange={e => setDraft(e.target.value)}
                 onKeyDown={e => {
-                  if (e.key === 'Enter') { onPromptSave?.(card.id, draft); setEditing(false) }
+                  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onPromptSave?.(card.id, draft); setEditing(false) }
                   if (e.key === 'Escape') setEditing(false)
                 }}
-                className="flex-1 min-w-0 bg-white/[0.05] border border-brand-accent/30 rounded-lg px-2 py-1 text-[11px] text-white outline-none font-mono"
+                className="w-full resize-none text-[11px] text-white/70 font-mono bg-white/[0.04] border border-white/[0.08] focus:border-brand-accent/40 focus:bg-white/[0.06] rounded-lg px-3 py-2 leading-relaxed outline-none transition-all placeholder:text-white/20"
               />
               <button
                 onClick={() => { onPromptSave?.(card.id, draft); setEditing(false) }}
-                className="shrink-0 p-1.5 rounded-lg bg-brand-accent/20 text-brand-accent hover:bg-brand-accent/30 transition-colors"
+                className="self-end flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-brand-accent/20 text-brand-accent hover:bg-brand-accent/30 transition-colors text-[10px] font-medium"
               >
-                <Check size={10} />
+                <Check size={10} /> Save
               </button>
             </div>
           ) : (
@@ -409,6 +783,47 @@ function CardComp({
           )}
         </div>
       </motion.div>
+
+      {/* Right-side action sidebar — outside overflow-hidden image area */}
+      <div
+        className={cn(
+          'absolute flex flex-col gap-1.5 transition-opacity duration-150',
+          hover || selected ? 'opacity-100' : 'opacity-0 pointer-events-none',
+        )}
+        style={{ top: 8, left: CARD_W + 8 }}
+      >
+        {card.type === 'generated' && !card.isLoading && !card.hasError && (
+          <button
+            onPointerDown={e => e.stopPropagation()}
+            onClick={() => onVideoOpen?.(card as GeneratedCard)}
+            className="p-2 rounded-xl bg-[#1b1b2e]/90 border border-white/10 text-white/50 hover:text-white hover:bg-brand-accent/40 hover:border-brand-accent/30 transition-all backdrop-blur-sm"
+            title="Create video"
+          >
+            <Film size={13} />
+          </button>
+        )}
+        {card.type === 'generated' && !card.isLoading && !card.hasError && card.imageUrl && (
+          <a
+            onPointerDown={e => e.stopPropagation()}
+            href={card.imageUrl}
+            download={`genetrify-${card.id}.png`}
+            className="p-2 rounded-xl bg-[#1b1b2e]/90 border border-white/10 text-white/50 hover:text-emerald-400 hover:bg-emerald-500/10 hover:border-emerald-500/20 transition-all backdrop-blur-sm"
+            title="Download image"
+          >
+            <Download size={13} />
+          </a>
+        )}
+        {card.imageUrl && !(card.type === 'generated' && (card.isLoading || card.hasError)) && (
+          <button
+            onPointerDown={e => e.stopPropagation()}
+            onClick={() => onPreview?.(card.imageUrl, card.type === 'product' ? card.fileName : card.prompt)}
+            className="p-2 rounded-xl bg-[#1b1b2e]/90 border border-white/10 text-white/50 hover:text-white hover:bg-white/10 hover:border-white/20 transition-all backdrop-blur-sm"
+            title="Preview image"
+          >
+            <Maximize2 size={13} />
+          </button>
+        )}
+      </div>
     </div>
   )
 }
@@ -416,10 +831,14 @@ function CardComp({
 // ── StudioCanvas ──────────────────────────────────────────────────────────────
 
 export function StudioCanvas({
+  userId,
   cameraTemplates,
   movementTemplates,
+  avatarTemplates,
+  backgroundTemplates,
 }: StudioCanvasProps) {
   const { avatarConfig, backgroundConfig, cameraTemplateId, movementTemplateId } = usePreferences()
+  const [activeTemplatePanel, setActiveTemplatePanel] = useState<TemplateCategory | null>(null)
 
   const [cards, setCards]             = useState<Card[]>([])
   const [connections, setConnections] = useState<Connection[]>([])
@@ -429,8 +848,13 @@ export function StudioCanvas({
   const [prompt, setPrompt]           = useState('')
   const [isGenerating, setIsGenerating] = useState(false)
   const [videoCard, setVideoCard]     = useState<GeneratedCard | null>(null)
+  const [videoPrompt, setVideoPrompt] = useState('')
+  const [selectedVideoModel, setSelectedVideoModel] = useState<VideoModel>(VIDEO_MODELS[0])
+  const [previewImage, setPreviewImage] = useState<{ url: string; label: string } | null>(null)
   const [videoMovement, setVideoMovement] = useState(movementTemplateId)
   const [isCreatingVideo, setIsCreatingVideo] = useState(false)
+  const [videoError, setVideoError] = useState('')
+  const [videoResult, setVideoResult] = useState<{ videoUrl: string; fileName: string; storageFileId?: string | null } | null>(null)
   const [zoom, setZoom] = useState(1)
   const [pan, setPan] = useState({ x: 0, y: 0 })
 
@@ -451,15 +875,38 @@ export function StudioCanvas({
   const dragStart         = useRef({ x: 0, y: 0 })
   const cardStartPos      = useRef<Map<string, { x: number; y: number }>>(new Map())
   const panStart          = useRef({ x: 0, y: 0 })
+  const panRef            = useRef({ x: 0, y: 0 })
+  const zoomRef           = useRef(1)
   const didDrag           = useRef(false)
+  const storageKeyRef     = useRef(getStudioStateKey(userId))
+  const previousCardsRef  = useRef<Card[]>([])
 
   useEffect(() => { cardsRef.current = cards },            [cards])
   useEffect(() => { selectedRef.current = selectedIds },   [selectedIds])
   useEffect(() => { connectionsRef.current = connections }, [connections])
   useEffect(() => { connectingRef.current = connectingFrom }, [connectingFrom])
+  useEffect(() => { panRef.current = pan },                [pan])
+  useEffect(() => { zoomRef.current = zoom },              [zoom])
   useEffect(() => {
-    loadStudioState()
+    const storageKey = getStudioStateKey(userId)
+    const previousCards = cardsRef.current
+
+    storageKeyRef.current = storageKey
+    hydratedRef.current = false
+    revokeProductObjectUrls(previousCards)
+
+    setCards([])
+    setConnections([])
+    setSelectedIds(new Set())
+    setPrompt('')
+    setZoom(1)
+    setPan({ x: 0, y: 0 })
+
+    let cancelled = false
+
+    loadStudioState(storageKey)
       .then(saved => {
+        if (cancelled || storageKeyRef.current !== storageKey) return
         if (!saved) return
         const restoredCards = saved.cards.map(card => {
           if (card.type === 'product') {
@@ -478,12 +925,18 @@ export function StudioCanvas({
         setPan(saved.pan ?? { x: 0, y: 0 })
       })
       .catch(() => {
-        clearStudioState().catch(() => {})
+        clearStudioState(storageKey).catch(() => {})
       })
       .finally(() => {
-        hydratedRef.current = true
+        if (!cancelled && storageKeyRef.current === storageKey) {
+          hydratedRef.current = true
+        }
       })
-  }, [])
+
+    return () => {
+      cancelled = true
+    }
+  }, [userId])
   useEffect(() => {
     if (!hydratedRef.current) return
     const payload: PersistedStudioState = {
@@ -506,6 +959,11 @@ export function StudioCanvas({
           imageUrl: card.imageUrl,
           prompt: card.prompt,
           sourceIds: card.sourceIds,
+          projectId: card.projectId,
+          generatedImageId: card.generatedImageId,
+          videoUrl: card.videoUrl,
+          videoFileName: card.videoFileName,
+          videoStorageFileId: card.videoStorageFileId,
           isLoading: card.isLoading,
           hasError: card.hasError,
         } satisfies PersistedGeneratedCard
@@ -516,8 +974,23 @@ export function StudioCanvas({
       zoom,
       pan,
     }
-    saveStudioState(payload).catch(() => {})
+    saveStudioState(storageKeyRef.current, payload).catch(() => {})
   }, [cards, connections, pan, prompt, selectedIds, zoom])
+  useEffect(() => {
+    const previousCards = previousCardsRef.current
+    const removedCards = previousCards.filter(prev =>
+      prev.type === 'product' && !cards.some(card => card.id === prev.id && card.type === 'product')
+    )
+    if (removedCards.length > 0) {
+      revokeProductObjectUrls(removedCards)
+    }
+    previousCardsRef.current = cards
+  }, [cards])
+  useEffect(() => {
+    return () => {
+      revokeProductObjectUrls(cardsRef.current)
+    }
+  }, [])
   useEffect(() => {
     const el = promptInputRef.current
     if (!el) return
@@ -533,6 +1006,26 @@ export function StudioCanvas({
     const r = canvas.getBoundingClientRect()
     return { x: (cx - r.left - pan.x) / zoom, y: (cy - r.top - pan.y) / zoom }
   }, [pan.x, pan.y, zoom])
+
+  const zoomTo = useCallback((nextZoom: number, anchor?: { clientX: number; clientY: number }) => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    const r = canvas.getBoundingClientRect()
+    const clampedZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, Number(nextZoom.toFixed(3))))
+    const currentZoom = zoomRef.current
+    const currentPan = panRef.current
+    const anchorClientX = anchor?.clientX ?? r.left + r.width / 2
+    const anchorClientY = anchor?.clientY ?? r.top + r.height / 2
+    const worldX = (anchorClientX - r.left - currentPan.x) / currentZoom
+    const worldY = (anchorClientY - r.top - currentPan.y) / currentZoom
+
+    setZoom(clampedZoom)
+    setPan({
+      x: anchorClientX - r.left - worldX * clampedZoom,
+      y: anchorClientY - r.top - worldY * clampedZoom,
+    })
+  }, [])
 
   // ── Global pointer move/up ───────────────────────────────────────────────────
   useEffect(() => {
@@ -567,7 +1060,7 @@ export function StudioCanvas({
         setCards(prev => prev.map(c => {
           const s = cardStartPos.current.get(c.id)
           if (!s) return c
-          return { ...c, x: Math.max(0, s.x + dx), y: Math.max(0, s.y + dy) }
+          return { ...c, x: s.x + dx, y: s.y + dy }
         }))
       }
     }
@@ -613,10 +1106,12 @@ export function StudioCanvas({
     if (e.shiftKey) {
       setSelectedIds(new Set())
       const pos = toCanvas(e.clientX, e.clientY)
+      if (!pos) return
       dragMode.current = 'select'
       dragStart.current = pos
       setSelBox({ x1: pos.x, y1: pos.y, x2: pos.x, y2: pos.y })
     } else {
+      setSelectedIds(new Set())
       dragMode.current = 'pan'
       dragStart.current = { x: e.clientX, y: e.clientY }
       panStart.current = pan
@@ -673,11 +1168,19 @@ export function StudioCanvas({
     const toAdd = imgs.slice(0, MAX_PRODUCTS - existing)
     if (!toAdd.length) return
 
+    // Place near viewport center when no explicit drop position given
+    const r = canvasRef.current?.getBoundingClientRect()
+    const vpCx = r ? (r.width  / 2 - panRef.current.x) / zoomRef.current : CANVAS_W / 2
+    const vpCy = r ? (r.height / 2 - panRef.current.y) / zoomRef.current : CANVAS_H / 2
+    const totalW = toAdd.length * CARD_W + (toAdd.length - 1) * GAP
+    const baseX = dropX ?? vpCx - totalW / 2
+    const baseY = dropY ?? vpCy - CARD_H / 2
+
     const nextCards = toAdd.map((file, i) => ({
       id: uid(),
       type: 'product' as const,
-      x: dropX != null ? dropX + i * (CARD_W + GAP) : 60 + (existing + i) * (CARD_W + GAP),
-      y: dropY != null ? dropY : 80,
+      x: baseX + i * (CARD_W + GAP),
+      y: baseY,
       imageUrl: URL.createObjectURL(file),
       fileName: file.name,
       file,
@@ -693,10 +1196,18 @@ export function StudioCanvas({
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault(); setIsDragOver(false)
     const r = canvasRef.current?.getBoundingClientRect()
-    const x = r ? Math.max(0, (e.clientX - r.left - pan.x) / zoom - CARD_W / 2) : 60
-    const y = r ? Math.max(0, (e.clientY - r.top - pan.y) / zoom - CARD_H / 2) : 80
+    const x = r ? (e.clientX - r.left - pan.x) / zoom - CARD_W / 2 : CANVAS_W / 2
+    const y = r ? (e.clientY - r.top  - pan.y) / zoom - CARD_H / 2 : CANVAS_H / 2
     addFiles(Array.from(e.dataTransfer.files), x, y)
   }, [addFiles, pan.x, pan.y, zoom])
+
+  const onCanvasWheel = useCallback((e: React.WheelEvent) => {
+    if (!e.ctrlKey && !e.metaKey) return
+    e.preventDefault()
+    const intensity = e.deltaMode === 1 ? 0.08 : 0.0025
+    const scale = Math.exp(-e.deltaY * intensity)
+    zoomTo(zoomRef.current * scale, { clientX: e.clientX, clientY: e.clientY })
+  }, [zoomTo])
 
   // ── Generate ──────────────────────────────────────────────────────────────────
   const handleGenerate = useCallback(async () => {
@@ -736,13 +1247,15 @@ export function StudioCanvas({
       if (!genRes.ok) throw new Error('Generate failed')
 
       let imageUrl = ''
+      let generatedImageId: string | undefined
       for await (const evt of readNDJSON(genRes)) {
-        if (evt.type === 'image' && (evt as { image?: { url?: string } }).image?.url) {
+        if (evt.type === 'image' && (evt as { image?: { id?: string; url?: string } }).image?.url) {
           imageUrl = (evt as { image: { url: string } }).image.url
+          generatedImageId = (evt as { image: { id?: string } }).image.id
         }
       }
       setCards(prev => prev.map(c =>
-        c.id === pid ? { ...c, imageUrl, isLoading: false, hasError: !imageUrl } : c
+        c.id === pid ? { ...c, imageUrl, projectId, generatedImageId, isLoading: false, hasError: !imageUrl } : c
       ))
     } catch {
       setCards(prev => prev.map(c => c.id === pid ? { ...c, isLoading: false, hasError: true } : c))
@@ -758,6 +1271,18 @@ export function StudioCanvas({
     setSelectedIds(prev => { const n = new Set(prev); n.delete(id); return n })
   }, [])
 
+  const clearCanvas = useCallback(() => {
+    revokeProductObjectUrls(cardsRef.current)
+    setCards([])
+    setConnections([])
+    setSelectedIds(new Set())
+    setPrompt('')
+    setVideoCard(null)
+    setVideoError('')
+    setVideoResult(null)
+    clearStudioState(storageKeyRef.current).catch(() => {})
+  }, [])
+
   const savePrompt = useCallback((id: string, p: string) => {
     setCards(prev => prev.map(c => c.id === id ? { ...c, prompt: p } : c))
   }, [])
@@ -769,6 +1294,37 @@ export function StudioCanvas({
     setSelectedIds(new Set(c.sourceIds))
   }, [])
 
+  // ── Fit-to-content ────────────────────────────────────────────────────────────
+  const fitToContent = useCallback(() => {
+    const r = canvasRef.current?.getBoundingClientRect()
+    if (!r) return
+    if (cardsRef.current.length === 0) {
+      // No cards — go to world center
+      zoomTo(1)
+      return
+    }
+    const allBounds = {
+      left:   Math.min(...cardsRef.current.map(c => c.x)),
+      top:    Math.min(...cardsRef.current.map(c => c.y)),
+      right:  Math.max(...cardsRef.current.map(c => c.x + CARD_W)),
+      bottom: Math.max(...cardsRef.current.map(c => c.y + CARD_H)),
+    }
+    const pad = 60
+    const contentW = allBounds.right  - allBounds.left + pad * 2
+    const contentH = allBounds.bottom - allBounds.top  + pad * 2
+    const fittedZoom = Math.min(
+      r.width  / contentW,
+      r.height / contentH,
+      MAX_ZOOM,
+    )
+    const z = Math.max(MIN_ZOOM, fittedZoom)
+    setZoom(z)
+    setPan({
+      x: r.width  / 2 - (allBounds.left + allBounds.right)  / 2 * z,
+      y: r.height / 2 - (allBounds.top  + allBounds.bottom) / 2 * z,
+    })
+  }, [zoomTo])
+
   // ── Derived state ─────────────────────────────────────────────────────────────
   const selCards    = cards.filter(c => selectedIds.has(c.id))
   const selProducts = selCards.filter(c => c.type === 'product')
@@ -777,13 +1333,78 @@ export function StudioCanvas({
   const panelCx     = bounds ? (bounds.left + bounds.right) / 2 : 0
   const panelY      = bounds ? bounds.bottom + 18 : 0
   const avatarLabel = avatarConfig
-    ? `${avatarConfig.gender === 'woman' ? 'Female' : 'Male'} ? ${avatarConfig.style ?? 'casual'}`
+    ? `${avatarConfig.gender === 'woman' ? 'Female' : 'Male'} - ${avatarConfig.style ?? 'casual'}`
     : 'Choose avatar'
   const backgroundLabel = backgroundConfig?.roomAesthetic
     ? backgroundConfig.roomAesthetic.charAt(0).toUpperCase() + backgroundConfig.roomAesthetic.slice(1)
     : 'Choose BG'
   const cameraLabel = cameraTemplates.find(t => t.id === cameraTemplateId)?.title ?? 'Choose camera'
   const movementLabel = movementTemplates.find(t => t.id === movementTemplateId)?.title ?? 'Choose movement'
+
+  const handleCreateVideo = useCallback(async () => {
+    if (!videoCard?.projectId || !videoCard.generatedImageId || !videoCard.imageUrl) {
+      setVideoError('This generated image is missing export metadata. Regenerate it before creating a video.')
+      return
+    }
+
+    setIsCreatingVideo(true)
+    setVideoError('')
+    setVideoResult(null)
+
+    try {
+      const movementTemplate = movementTemplates.find(template => template.id === videoMovement)
+      const motionPrompt = buildStudioVideoPrompt(videoPrompt || videoCard.prompt, movementTemplate, avatarConfig, backgroundConfig)
+      const exportRes = await fetch('/api/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId: videoCard.projectId,
+          imageIds: [videoCard.generatedImageId],
+          imageUrls: [videoCard.imageUrl],
+          motionPrompt,
+          videoModelId: selectedVideoModel.id,
+        }),
+      })
+
+      if (!exportRes.ok) {
+        const error = await exportRes.json().catch(() => null)
+        throw new Error(error?.error ?? 'Video generation failed')
+      }
+
+      let createdVideo: { videoUrl: string; filename: string; storageFileId?: string | null } | null = null
+      for await (const event of readNDJSON(exportRes)) {
+        if (event.type === 'video') {
+          createdVideo = event.video as { videoUrl: string; filename: string; storageFileId?: string | null }
+        } else if (event.type === 'video_error') {
+          throw new Error(typeof event.error === 'string' ? event.error : 'Video generation failed')
+        }
+      }
+
+      if (!createdVideo) {
+        throw new Error('Video generation did not return a result')
+      }
+
+      setVideoResult({
+        videoUrl: createdVideo.videoUrl,
+        fileName: createdVideo.filename,
+        storageFileId: createdVideo.storageFileId,
+      })
+      setCards(prev => prev.map(card =>
+        card.id === videoCard.id
+          ? {
+              ...card,
+              videoUrl: createdVideo.videoUrl,
+              videoFileName: createdVideo.filename,
+              videoStorageFileId: createdVideo.storageFileId ?? null,
+            }
+          : card
+      ))
+    } catch (error) {
+      setVideoError(error instanceof Error ? error.message : 'Video generation failed')
+    } finally {
+      setIsCreatingVideo(false)
+    }
+  }, [avatarConfig, backgroundConfig, movementTemplates, selectedVideoModel.id, videoCard, videoMovement, videoPrompt])
 
   // ── SVG connection paths ──────────────────────────────────────────────────────
   const renderConnections = () => {
@@ -840,11 +1461,10 @@ export function StudioCanvas({
 
         {/* Settings chips */}
         <div className="flex items-center gap-1 overflow-x-auto">
-          <StatusChip icon={User} label="Avatar" value={avatarLabel} />
-          <StatusChip icon={Layers} label="BG" value={backgroundLabel} />
-          <StatusChip icon={Camera} label="Camera" value={cameraLabel} />
-          <StatusChip icon={Wind} label="Movement" value={movementLabel} />
-          <TemplateShortcut />
+          <StatusChip icon={User} label="Avatar" value={avatarLabel} active={activeTemplatePanel === 'avatar'} onClick={() => setActiveTemplatePanel(p => p === 'avatar' ? null : 'avatar')} />
+          <StatusChip icon={Layers} label="BG" value={backgroundLabel} active={activeTemplatePanel === 'background'} onClick={() => setActiveTemplatePanel(p => p === 'background' ? null : 'background')} />
+          <StatusChip icon={Camera} label="Camera" value={cameraLabel} active={activeTemplatePanel === 'camera'} onClick={() => setActiveTemplatePanel(p => p === 'camera' ? null : 'camera')} />
+          <StatusChip icon={Wind} label="Movement" value={movementLabel} active={activeTemplatePanel === 'movement'} onClick={() => setActiveTemplatePanel(p => p === 'movement' ? null : 'movement')} />
         </div>
 
         {/* Right controls */}
@@ -858,7 +1478,7 @@ export function StudioCanvas({
           </button>
           {cards.length > 0 && (
             <button
-              onClick={() => { setCards([]); setConnections([]); setSelectedIds(new Set()) }}
+              onClick={clearCanvas}
               className="flex items-center h-7 px-2.5 rounded-lg text-[11px] border bg-white/[0.04] border-white/[0.08] text-white/35 hover:text-white/70 hover:bg-white/[0.08] transition-all"
               title="Clear canvas"
             >
@@ -886,15 +1506,19 @@ export function StudioCanvas({
           cursor: connectingFrom ? 'crosshair' : dragMode.current === 'pan' ? 'grabbing' : 'grab',
         }}
         onPointerDown={onCanvasPtrDown}
+        onWheel={onCanvasWheel}
         onDragOver={onDragOver}
         onDragLeave={onDragLeave}
         onDrop={onDrop}
       >
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(168,85,247,0.06),transparent_55%)]" />
+        <div className="pointer-events-none absolute left-3 top-3 z-[120] rounded-xl border border-white/[0.08] bg-[#120f1d]/85 px-3 py-2 text-[11px] text-white/45 shadow-[0_8px_24px_rgba(0,0,0,0.35)] backdrop-blur-sm">
+          Shift + drag selects. Ctrl/Cmd + wheel zooms.
+        </div>
         <div className="absolute top-3 right-3 z-[120] flex items-center gap-1.5 rounded-xl border border-white/[0.08] bg-[#120f1d]/85 px-2 py-2 shadow-[0_8px_24px_rgba(0,0,0,0.35)] backdrop-blur-sm">
           <button
             type="button"
-            onClick={() => setZoom(prev => Math.max(MIN_ZOOM, Number((prev - ZOOM_STEP).toFixed(2))))}
+            onClick={() => zoomTo(zoomRef.current - ZOOM_STEP)}
             disabled={zoom <= MIN_ZOOM}
             className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.03] text-white/60 transition-colors hover:bg-white/[0.08] hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
             title="Zoom out"
@@ -903,7 +1527,7 @@ export function StudioCanvas({
           </button>
           <button
             type="button"
-            onClick={() => setZoom(1)}
+            onClick={() => zoomTo(1)}
             className="min-w-[3rem] rounded-lg border border-white/[0.08] bg-white/[0.03] px-2 py-1 text-[11px] font-medium text-white/70 transition-colors hover:bg-white/[0.08] hover:text-white"
             title="Reset zoom"
           >
@@ -911,15 +1535,15 @@ export function StudioCanvas({
           </button>
           <button
             type="button"
-            onClick={() => setPan({ x: 0, y: 0 })}
+            onClick={fitToContent}
             className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-2 py-1 text-[11px] font-medium text-white/55 transition-colors hover:bg-white/[0.08] hover:text-white"
-            title="Center canvas"
+            title="Fit content to view"
           >
-            Center
+            Fit
           </button>
           <button
             type="button"
-            onClick={() => setZoom(prev => Math.min(MAX_ZOOM, Number((prev + ZOOM_STEP).toFixed(2))))}
+            onClick={() => zoomTo(zoomRef.current + ZOOM_STEP)}
             disabled={zoom >= MAX_ZOOM}
             className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.03] text-white/60 transition-colors hover:bg-white/[0.08] hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
             title="Zoom in"
@@ -931,8 +1555,8 @@ export function StudioCanvas({
           className="absolute inset-0 origin-top-left"
           style={{
             transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
-            width: `${100 / zoom}%`,
-            height: `${100 / zoom}%`,
+            width:  CANVAS_W,
+            height: CANVAS_H,
           }}
         >
         {/* Drop highlight */}
@@ -968,7 +1592,7 @@ export function StudioCanvas({
                   <Upload size={22} className="text-white/18" />
                 </button>
                 <p className="text-sm text-white/22 mb-1 font-medium">Drop product images or click to upload</p>
-                <p className="text-xs text-white/12">Up to 5 products · Drag port handles to connect cards</p>
+                <p className="text-xs text-white/12">Up to 5 products - drag port handles to connect cards</p>
               </div>
             </motion.div>
           )}
@@ -1008,11 +1632,25 @@ export function StudioCanvas({
             onPtrDown={onCardPtrDown}
             onPortPtrDown={onPortPtrDown}
             onVideoOpen={card.type === 'generated'
-              ? c => { setVideoCard(c as GeneratedCard); setVideoMovement(movementTemplateId) }
+              ? c => {
+                  const generatedCard = c as GeneratedCard
+                  setVideoCard(generatedCard)
+                  setVideoPrompt(generatedCard.prompt)
+                  setVideoMovement(movementTemplateId)
+                  setVideoError('')
+                  setVideoResult(generatedCard.videoUrl
+                    ? {
+                        videoUrl: generatedCard.videoUrl,
+                        fileName: generatedCard.videoFileName ?? 'genetrify-video.mp4',
+                        storageFileId: generatedCard.videoStorageFileId ?? null,
+                      }
+                    : null)
+                }
               : undefined}
             onPromptSave={savePrompt}
             onRegenerate={handleRegenerate}
             onDelete={deleteCard}
+            onPreview={(url, label) => setPreviewImage({ url, label })}
           />
         ))}
 
@@ -1057,7 +1695,7 @@ export function StudioCanvas({
                       ? 'Select product cards to generate'
                       : selProducts.length === 1
                       ? 'Generate model for this product'
-                      : `Generate outfit · ${selProducts.length} connected items`}
+                      : `Generate outfit - ${selProducts.length} connected items`}
                   </span>
                 </div>
                 <div className="flex gap-2 items-end">
@@ -1086,7 +1724,7 @@ export function StudioCanvas({
                     )}
                   >
                     <Sparkles size={11} />
-                    {isGenerating ? '…' : 'Go'}
+                    {isGenerating ? '...' : 'Go'}
                   </button>
                 </div>
               </div>
@@ -1095,6 +1733,21 @@ export function StudioCanvas({
         </AnimatePresence>
         </div>
       </div>
+
+      {/* ── Template panel ────────────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {activeTemplatePanel && (
+          <TemplatePanel
+            key={activeTemplatePanel}
+            category={activeTemplatePanel}
+            avatarTemplates={avatarTemplates}
+            backgroundTemplates={backgroundTemplates}
+            cameraTemplates={cameraTemplates}
+            movementTemplates={movementTemplates}
+            onClose={() => setActiveTemplatePanel(null)}
+          />
+        )}
+      </AnimatePresence>
 
       {/* ── Video side panel ──────────────────────────────────────────────────── */}
       <AnimatePresence>
@@ -1128,42 +1781,119 @@ export function StudioCanvas({
                 </div>
               </div>
 
-              <div className="px-5 pb-3 shrink-0">
-                <p className="text-[9px] text-white/22 font-mono uppercase tracking-widest mb-1.5">Prompt</p>
-                <p className="text-[11px] text-white/35 font-mono bg-white/[0.03] border border-white/[0.05] rounded-lg px-3 py-2 leading-relaxed line-clamp-3">
-                  {videoCard.prompt}
-                </p>
-              </div>
-
-              <div className="px-5 pb-4 shrink-0">
-                <p className="text-[9px] text-white/22 font-mono uppercase tracking-widest mb-2">Movement</p>
-                <div className="flex flex-col gap-1.5">
-                  {movementTemplates.map(t => (
-                    <button
-                      key={t.id}
-                      onClick={() => setVideoMovement(t.id)}
-                      className={cn(
-                        'px-3 py-2 rounded-lg text-[11px] text-left transition-all border',
-                        videoMovement === t.id
-                          ? 'bg-brand-accent/12 border-brand-accent/35 text-brand-accent font-medium'
-                          : 'bg-white/[0.03] border-white/[0.07] text-white/38 hover:bg-white/[0.06] hover:text-white/65',
-                      )}
-                    >
-                      {t.title}
-                    </button>
-                  ))}
+              <div className="flex-1 overflow-y-auto min-h-0 px-5 pb-3 flex flex-col gap-4 scrollbar-brand">
+                {/* Prompt */}
+                <div>
+                  <p className="text-[9px] text-white/22 font-mono uppercase tracking-widest mb-1.5">Prompt</p>
+                  <textarea
+                    value={videoPrompt}
+                    onChange={e => setVideoPrompt(e.target.value)}
+                    rows={3}
+                    placeholder="Describe the motion or scene..."
+                    className="w-full resize-none text-[11px] text-white/70 font-mono bg-white/[0.04] border border-white/[0.08] focus:border-brand-accent/40 focus:bg-white/[0.06] rounded-lg px-3 py-2 leading-relaxed outline-none transition-all placeholder:text-white/20"
+                  />
                 </div>
+
+                {/* Model selector */}
+                <div>
+                  <p className="text-[9px] text-white/22 font-mono uppercase tracking-widest mb-2">Model</p>
+                  <div className="flex flex-col gap-1.5">
+                    {VIDEO_MODELS.map(m => (
+                      <button
+                        key={m.id}
+                        onClick={() => setSelectedVideoModel(m)}
+                        className={cn(
+                          'px-3 py-2 rounded-lg text-left transition-all border',
+                          selectedVideoModel.id === m.id
+                            ? 'bg-brand-accent/12 border-brand-accent/35'
+                            : 'bg-white/[0.03] border-white/[0.07] hover:bg-white/[0.06] hover:border-white/[0.12]',
+                        )}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className={cn(
+                            'text-[11px] font-medium',
+                            selectedVideoModel.id === m.id ? 'text-brand-accent' : 'text-white/55',
+                          )}>
+                            {m.name}
+                          </span>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <span className={cn(
+                              'text-[9px] px-1.5 py-0.5 rounded-full font-mono',
+                              m.qualityLabel === 'Elite'
+                                ? 'bg-amber-500/15 text-amber-400 border border-amber-500/25'
+                                : m.qualityLabel === 'Pro'
+                                  ? 'bg-violet-500/15 text-violet-400 border border-violet-500/25'
+                                  : 'bg-white/[0.06] text-white/35 border border-white/[0.08]',
+                            )}>
+                              {m.qualityLabel}
+                            </span>
+                            <span className="flex items-center gap-0.5 text-[10px] text-white/30 font-mono">
+                              <Zap size={9} className="text-yellow-500/60" />
+                              {m.tokenCost}
+                            </span>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Movement */}
+                <div>
+                  <p className="text-[9px] text-white/22 font-mono uppercase tracking-widest mb-2">Movement</p>
+                  <div className="flex flex-col gap-1.5">
+                    {movementTemplates.map(t => (
+                      <button
+                        key={t.id}
+                        onClick={() => setVideoMovement(t.id)}
+                        className={cn(
+                          'px-3 py-2 rounded-lg text-[11px] text-left transition-all border',
+                          videoMovement === t.id
+                            ? 'bg-brand-accent/12 border-brand-accent/35 text-brand-accent font-medium'
+                            : 'bg-white/[0.03] border-white/[0.07] text-white/38 hover:bg-white/[0.06] hover:text-white/65',
+                        )}
+                      >
+                        {t.title}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {videoError && (
+                  <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-[11px] text-red-200">
+                    {videoError}
+                  </div>
+                )}
+
+                {videoResult && (
+                  <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-3 space-y-2">
+                    <p className="text-[11px] font-medium text-emerald-200">Video ready</p>
+                    <div className="rounded-lg overflow-hidden border border-white/10 bg-black">
+                      <video src={videoResult.videoUrl} controls playsInline className="w-full max-h-48 object-cover" />
+                    </div>
+                    <a
+                      href={videoResult.videoUrl}
+                      download={videoResult.fileName}
+                      className="inline-flex items-center gap-1.5 text-[11px] text-emerald-100 hover:text-white"
+                    >
+                      <Download size={11} />
+                      Download video
+                    </a>
+                  </div>
+                )}
               </div>
 
-              <div className="px-5 mt-auto pb-6 shrink-0">
+              <div className="px-5 pt-3 pb-6 border-t border-white/[0.06] shrink-0">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-[10px] text-white/28 font-mono">Cost</span>
+                  <span className="flex items-center gap-1 text-[11px] font-semibold text-white/60 font-mono">
+                    <Zap size={10} className="text-yellow-400/70" />
+                    {selectedVideoModel.tokenCost} tokens
+                  </span>
+                </div>
                 <button
-                  onClick={async () => {
-                    setIsCreatingVideo(true)
-                    // TODO: wire to video generation API with videoMovement
-                    await new Promise(r => setTimeout(r, 2000))
-                    setIsCreatingVideo(false)
-                  }}
-                  disabled={isCreatingVideo}
+                  onClick={handleCreateVideo}
+                  disabled={isCreatingVideo || !videoCard}
                   className={cn(
                     'w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold transition-all',
                     isCreatingVideo
@@ -1172,12 +1902,51 @@ export function StudioCanvas({
                   )}
                 >
                   {isCreatingVideo
-                    ? <><div className="w-3.5 h-3.5 rounded-full border-[1.5px] border-white/20 border-t-white animate-spin" />Creating…</>
+                    ? <><div className="w-3.5 h-3.5 rounded-full border-[1.5px] border-white/20 border-t-white animate-spin" />Creating...</>
                     : <><Film size={14} />Create Video</>}
                 </button>
               </div>
             </motion.aside>
           </>
+        )}
+      </AnimatePresence>
+
+      {/* ── Image preview lightbox ────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {previewImage && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            className="fixed inset-0 z-[500] flex items-center justify-center p-6 bg-black/80 backdrop-blur-sm"
+            onClick={() => setPreviewImage(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.92, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.92, opacity: 0 }}
+              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+              className="relative max-w-3xl w-full rounded-2xl overflow-hidden border border-white/[0.1] shadow-[0_32px_80px_rgba(0,0,0,0.8)]"
+              onClick={e => e.stopPropagation()}
+            >
+              <img
+                src={previewImage.url}
+                alt={previewImage.label}
+                className="w-full max-h-[80vh] object-contain bg-[#0e0c1a]"
+                draggable={false}
+              />
+              <div className="absolute bottom-0 inset-x-0 flex items-center justify-between px-4 py-3 bg-gradient-to-t from-black/80 to-transparent">
+                <p className="text-[11px] text-white/50 font-mono truncate max-w-[80%]">{previewImage.label}</p>
+                <button
+                  onClick={() => setPreviewImage(null)}
+                  className="p-1.5 rounded-lg bg-white/[0.08] border border-white/10 text-white/50 hover:text-white hover:bg-white/[0.14] transition-all"
+                >
+                  <X size={13} />
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
 
@@ -1188,3 +1957,4 @@ export function StudioCanvas({
     </div>
   )
 }
+
