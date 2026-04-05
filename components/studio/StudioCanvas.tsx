@@ -27,6 +27,7 @@ import {
 import { cn } from "@/lib/utils";
 import { usePreferences } from "@/lib/context/preferences-context";
 import type { MarketplaceTemplate } from "@/lib/types/marketplace";
+import type { AvatarConfig, BackgroundConfig } from "@/lib/types/preferences";
 import {
   buildAvatarConfigFromTemplate,
   buildBackgroundConfigFromTemplate,
