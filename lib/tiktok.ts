@@ -249,14 +249,16 @@ export async function fetchTikTokPublishStatus(accessToken: string, publishId: s
 export async function uploadVideoToTikTok(uploadUrl: string, buffer: Buffer, mimeType: string) {
   const minChunkSize = 5 * 1024 * 1024
   const maxChunkSize = 64 * 1024 * 1024
-  const chunkSize = buffer.byteLength < minChunkSize
+  const chunkSize = buffer.byteLength <= maxChunkSize
     ? buffer.byteLength
-    : Math.min(Math.max(minChunkSize, 10 * 1024 * 1024), maxChunkSize, buffer.byteLength)
+    : maxChunkSize
 
   let offset = 0
   while (offset < buffer.byteLength) {
     const remainingAfterThisChunk = buffer.byteLength - (offset + chunkSize)
-    const shouldMergeRemainder = remainingAfterThisChunk > 0 && remainingAfterThisChunk < minChunkSize
+    const shouldMergeRemainder = buffer.byteLength > maxChunkSize
+      && remainingAfterThisChunk > 0
+      && remainingAfterThisChunk < minChunkSize
     const end = shouldMergeRemainder
       ? buffer.byteLength
       : Math.min(offset + chunkSize, buffer.byteLength)
