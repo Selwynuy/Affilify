@@ -69,11 +69,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'TikTok upload failed: video file is empty.' }, { status: 400 })
     }
 
-    const minChunkSize = 5 * 1024 * 1024
-    const chunkSize = buffer.byteLength < minChunkSize
+    const maxChunkSize = 64 * 1024 * 1024
+    const chunkSize = buffer.byteLength <= maxChunkSize
       ? buffer.byteLength
-      : Math.min(10 * 1024 * 1024, buffer.byteLength)
-    const totalChunkCount = buffer.byteLength < minChunkSize
+      : maxChunkSize
+    const totalChunkCount = buffer.byteLength <= maxChunkSize
       ? 1
       : Math.max(1, Math.floor(buffer.byteLength / chunkSize))
 
