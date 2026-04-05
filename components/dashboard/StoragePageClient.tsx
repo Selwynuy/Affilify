@@ -36,6 +36,7 @@ function Lightbox({ file, onClose }: { file: StorageFile; onClose: () => void })
               <TikTokShareButton
                 storageFileId={file.id}
                 fileName={file.file_name}
+                fileUrl={file.public_url}
                 buttonLabel="Share to TikTok"
               />
             )}
@@ -381,6 +382,7 @@ export function StoragePageClient({ initialData }: { initialData: StoragePageDat
                     <TikTokShareButton
                       storageFileId={file.id}
                       fileName={file.file_name}
+                      fileUrl={file.public_url}
                       buttonLabel="Share"
                       className="h-8 rounded-lg bg-transparent hover:bg-white/5 text-brand-text/25 hover:text-brand-text border border-transparent hover:border-white/8 px-2"
                     />
