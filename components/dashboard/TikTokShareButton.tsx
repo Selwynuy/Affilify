@@ -57,7 +57,7 @@ export function TikTokShareButton({
 
     try {
       const res = await fetch('/api/tiktok/account')
-      const json = await res.json()
+      const json = await res.json().catch(() => null)
       if (!res.ok) throw new Error(json.error ?? 'Could not load TikTok status')
 
       setAccount(json)
