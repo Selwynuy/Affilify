@@ -79,7 +79,8 @@
       "Bash(find /d/Projects/affilify/app/api -type f -name \"route.ts\" -exec wc -l {} +)",
       "Bash(git log:*)",
       "Bash(git ls-tree:*)",
-      "Bash(ls app/\\\\\\(auth\\\\\\)/)"
+      "Bash(ls app/\\\\\\(auth\\\\\\)/)",
+      "Bash(git check-ignore:*)"
     ]
   }
 }

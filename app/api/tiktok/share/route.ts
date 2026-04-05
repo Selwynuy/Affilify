@@ -8,6 +8,7 @@ import {
   queryTikTokCreatorInfo,
   uploadVideoToTikTok,
 } from '@/lib/tiktok'
+import { isSafeHttpUrl, isUuid, parseInteger, sanitizeText, verifySameOrigin } from '@/lib/security'
 
 function getShareErrorStatus(message: string) {
   const normalized = message.toLowerCase()
@@ -29,6 +30,9 @@ function getShareErrorStatus(message: string) {
 
 export async function POST(req: NextRequest) {
   try {
+    const originError = verifySameOrigin(req)
+    if (originError) return originError
+
     const supabase = await createClient()
     const {
       data: { user },
@@ -36,17 +40,16 @@ export async function POST(req: NextRequest) {
 
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const {
-      storageFileId,
-      title,
-      privacyLevel,
-      disableComment,
-      disableDuet,
-      disableStitch,
-      brandContentToggle,
-      brandOrganicToggle,
-      videoCoverTimestampMs,
-    } = await req.json()
+    const payload = await req.json()
+    const storageFileId = isUuid(payload?.storageFileId) ? payload.storageFileId : null
+    const title = sanitizeText(payload?.title, { maxLength: 150 })
+    const privacyLevel = sanitizeText(payload?.privacyLevel, { maxLength: 40 })
+    const disableComment = payload?.disableComment
+    const disableDuet = payload?.disableDuet
+    const disableStitch = payload?.disableStitch
+    const brandContentToggle = payload?.brandContentToggle
+    const brandOrganicToggle = payload?.brandOrganicToggle
+    const videoCoverTimestampMs = parseInteger(payload?.videoCoverTimestampMs)
 
     if (!storageFileId) {
       return NextResponse.json({ error: 'storageFileId is required' }, { status: 400 })
@@ -66,6 +69,9 @@ export async function POST(req: NextRequest) {
 
     const sourceUrl = file.public_url || file.storage_path
     if (!sourceUrl) return NextResponse.json({ error: 'Video URL missing' }, { status: 400 })
+    if (!isSafeHttpUrl(sourceUrl)) {
+      return NextResponse.json({ error: 'Unsafe video URL' }, { status: 400 })
+    }
 
     const { accessToken } = await getValidTikTokAccessToken(user.id)
     const creatorInfo = await queryTikTokCreatorInfo(accessToken)
@@ -105,7 +111,9 @@ export async function POST(req: NextRequest) {
         brand_content_toggle: Boolean(brandContentToggle),
         brand_organic_toggle: Boolean(brandOrganicToggle),
         is_aigc: true,
-        video_cover_timestamp_ms: typeof videoCoverTimestampMs === 'number' ? videoCoverTimestampMs : undefined,
+        video_cover_timestamp_ms: typeof videoCoverTimestampMs === 'number' && videoCoverTimestampMs >= 0
+          ? videoCoverTimestampMs
+          : undefined,
       },
       source_info: {
         source: 'FILE_UPLOAD',

@@ -23,19 +23,20 @@ export async function deductTokens(
   description: string,
   projectId?: string,
 ): Promise<boolean> {
-  const balance = await getTokenBalance(userId)
-  if (balance < amount) return false
-
   const admin = createAdminClient()
-  const { error } = await admin.from('token_ledger').insert({
-    user_id: userId,
-    amount: -amount,
-    type,
-    description,
-    project_id: projectId ?? null,
+  const { data, error } = await admin.rpc('consume_tokens', {
+    p_user_id: userId,
+    p_amount: amount,
+    p_type: type,
+    p_description: description,
+    p_project_id: projectId ?? null,
   })
 
-  return !error
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return Boolean(data)
 }
 
 /** Grants the monthly token allocation for a user's plan. Called by Stripe webhook. */

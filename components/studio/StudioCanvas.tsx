@@ -28,6 +28,11 @@ import { cn } from "@/lib/utils";
 import { usePreferences } from "@/lib/context/preferences-context";
 import type { MarketplaceTemplate } from "@/lib/types/marketplace";
 import type { AvatarConfig, BackgroundConfig } from "@/lib/types/preferences";
+import {
+  buildAvatarConfigFromTemplate,
+  buildBackgroundConfigFromTemplate,
+  buildCustomAvatarConfig,
+} from "@/lib/preferences";
 import { VIDEO_MODELS } from "@/lib/data/plans";
 import type { VideoModel } from "@/lib/types/billing";
 
@@ -424,16 +429,8 @@ function TemplatePanel({
   function handleSelectAvatar(template: MarketplaceTemplate) {
     if (isPending) return;
     setSavingId(template.id);
-    const config: AvatarConfig = {
-      type: "preset",
-      presetId: template.id,
-      gender: template.config.gender === "woman" ? "woman" : "man",
-      style: ["streetwear", "luxury", "minimal"].includes(
-        template.config.style as string,
-      )
-        ? (template.config.style as AvatarConfig["style"])
-        : "casual",
-    };
+    const config = buildAvatarConfigFromTemplate(template);
+    if (!config) return;
     setAvatarConfig(config);
     savePrefs({ avatar_config: config });
     onClose();
@@ -442,14 +439,8 @@ function TemplatePanel({
   function handleSelectBackground(template: MarketplaceTemplate) {
     if (isPending) return;
     setSavingId(template.id);
-    const config: BackgroundConfig = {
-      type: "preset",
-      presetId: template.id,
-      roomAesthetic: String(template.config.roomAesthetic ?? ""),
-      roomColors: String(template.config.roomColors ?? ""),
-      roomElements: String(template.config.roomElements ?? ""),
-      thumbnailUrl: template.thumbnail_url ?? undefined,
-    };
+    const config = buildBackgroundConfigFromTemplate(template);
+    if (!config) return;
     setBackgroundConfig(config);
     savePrefs({ background_config: config });
     onClose();
@@ -499,13 +490,7 @@ function TemplatePanel({
       });
       const data = await res.json();
       if (res.ok && data.faceUrl) {
-        const config: AvatarConfig = {
-          type: "custom",
-          gender: "man",
-          style: "casual",
-          faceUrl: data.faceUrl,
-          facePath: data.facePath,
-        };
+        const config = buildCustomAvatarConfig(data.faceUrl, data.facePath);
         setAvatarConfig(config);
         await fetch("/api/preferences", {
           method: "POST",

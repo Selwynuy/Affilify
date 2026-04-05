@@ -1,7 +1,7 @@
 export type PlanId = 'starter' | 'growth' | 'pro' | 'business'
 export type BillingInterval = 'monthly'
 export type SubscriptionStatus = 'active' | 'past_due' | 'canceled' | 'unpaid' | 'incomplete' | 'incomplete_cancelled'
-export type LedgerType = 'grant' | 'topup' | 'image_gen' | 'video_gen' | 'refund' | 'rollover'
+export type LedgerType = 'grant' | 'topup' | 'image_gen' | 'video_gen' | 'model_gen' | 'refund' | 'rollover'
 
 export interface Plan {
   id: PlanId

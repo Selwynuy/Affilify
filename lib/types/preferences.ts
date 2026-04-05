@@ -1,6 +1,10 @@
 export interface AvatarConfig {
-  type: 'custom' | 'preset'
+  type: 'custom' | 'preset' | 'user_model'
   presetId?: string
+  /** Only for type: 'user_model' — references a row in user_models table */
+  userModelId?: string
+  /** Storage path of the user model image in the 'generated' bucket */
+  userModelStoragePath?: string
   gender: 'man' | 'woman'
   style: 'casual' | 'streetwear' | 'luxury' | 'minimal'
   // Only set for custom uploads — storage path + short-lived signed URL
@@ -19,7 +23,6 @@ export interface BackgroundConfig {
 }
 
 export interface UserPreferences {
-  onboarding_completed: boolean
   avatar_config: AvatarConfig | null
   background_config: BackgroundConfig | null
   camera_template_id: string | null

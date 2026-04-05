@@ -7,13 +7,17 @@
  * Returns the updated subscription status.
  */
 
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { cancelSubscription } from '@/lib/billing/paymongo'
 import { logger } from '@/lib/logger'
+import { verifySameOrigin } from '@/lib/security'
 
-export async function POST() {
+export async function POST(req: NextRequest) {
+  const originError = verifySameOrigin(req)
+  if (originError) return originError
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

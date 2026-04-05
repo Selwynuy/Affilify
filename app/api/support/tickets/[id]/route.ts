@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { isUuid, sanitizeText, verifySameOrigin } from '@/lib/security'
 
 // GET /api/support/tickets/[id] — ticket detail + messages
 export async function GET(
@@ -8,6 +9,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params
+  if (!isUuid(id)) return NextResponse.json({ error: 'Invalid ticket id' }, { status: 400 })
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -37,12 +39,17 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const originError = verifySameOrigin(req)
+  if (originError) return originError
+
   const { id } = await params
+  if (!isUuid(id)) return NextResponse.json({ error: 'Invalid ticket id' }, { status: 400 })
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { body } = await req.json()
+  const payload = await req.json()
+  const body = sanitizeText(payload?.body, { maxLength: 4000, allowNewlines: true })
   if (!body?.trim()) return NextResponse.json({ error: 'body is required' }, { status: 400 })
 
   const admin = createAdminClient()

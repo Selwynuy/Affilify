@@ -4,12 +4,13 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { deductTokens, getTokenBalance } from '@/lib/billing/tokens'
 import { TOKEN_COSTS } from '@/lib/data/plans'
 import { logger } from '@/lib/logger'
-import { rateLimit } from '@/lib/rate-limit'
+import { rateLimit } from '@/lib/db-rate-limit'
 import {
   getMarketplaceTemplateDefaults,
   getPublishedMarketplaceTemplateById,
   getTemplateConfigValue,
 } from '@/lib/data/marketplace-templates'
+import { isUuid, sanitizeText, verifySameOrigin } from '@/lib/security'
 
 const GEMINI_MODEL = 'gemini-3.1-flash-image-preview'
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`
@@ -53,12 +54,15 @@ function encode(obj: unknown): Uint8Array {
 }
 
 export async function POST(req: NextRequest) {
+  const originError = verifySameOrigin(req)
+  if (originError) return originError
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
 
   // Rate limit: 10 generations per user per minute
-  const rl = rateLimit(`generate:${user.id}`, { limit: 10, windowMs: 60_000 })
+  const rl = await rateLimit(`generate:${user.id}`, { limit: 10, windowMs: 60_000 })
   if (!rl.allowed) {
     logger.warn('Rate limit hit on /api/generate', { userId: user.id })
     return new Response(JSON.stringify({ error: 'Too many requests. Please wait before generating again.' }), {
@@ -67,7 +71,10 @@ export async function POST(req: NextRequest) {
     })
   }
 
-  const { projectId, productDescription, cameraTemplateId } = await req.json()
+  const body = await req.json()
+  const projectId = isUuid(body?.projectId) ? body.projectId : null
+  const productDescription = sanitizeText(body?.productDescription, { maxLength: 500, allowNewlines: true })
+  const cameraTemplateId = isUuid(body?.cameraTemplateId) ? body.cameraTemplateId : null
   if (!projectId) return new Response(JSON.stringify({ error: 'projectId required' }), { status: 400 })
 
   // Token check
@@ -114,9 +121,10 @@ export async function POST(req: NextRequest) {
     'cameraAnglePrompt',
     'at eye level, centered on the subject',
   )
-  const isPreset = avatar.type === 'preset'
+  // preset and user_model both use avatarReferenceB64; custom uses faceB64
+  const usesReference = avatar.type === 'preset' || avatar.type === 'user_model'
   const validProductRows = productRows.filter(r => r.b64_data && r.mime_type)
-  const hasAvatarReference = isPreset
+  const hasAvatarReference = usesReference
     ? Boolean(avatarReferenceB64 && avatarReferenceMime)
     : Boolean(faceB64 && faceMime)
   const hasBackgroundReference = Boolean(backgroundReferenceB64 && backgroundReferenceMime)
@@ -131,9 +139,9 @@ export async function POST(req: NextRequest) {
   const parts: unknown[] = []
 
   // 1. Avatar image
-  if (!isPreset && faceB64 && faceMime) {
+  if (!usesReference && faceB64 && faceMime) {
     parts.push({ inlineData: { mimeType: faceMime, data: faceB64 } })
-  } else if (isPreset && avatarReferenceB64 && avatarReferenceMime) {
+  } else if (usesReference && avatarReferenceB64 && avatarReferenceMime) {
     parts.push({ inlineData: { mimeType: avatarReferenceMime, data: avatarReferenceB64 } })
   }
 
@@ -213,7 +221,14 @@ export async function POST(req: NextRequest) {
 
           if (imgRow) {
             successCount++
-            await deductTokens(user.id, TOKEN_COSTS.image_gen, 'image_gen', 'Image generation', projectId)
+            const charged = await deductTokens(user.id, TOKEN_COSTS.image_gen, 'image_gen', 'Image generation', projectId)
+            if (!charged) {
+              logger.warn('Token deduction rejected after image generation', { userId: user.id, projectId })
+              await admin.from('project_images').delete().eq('id', imgRow.id)
+              await admin.storage.from('generated').remove([storagePath])
+              controller.enqueue(encode({ type: 'image_error', index: i, error: 'Insufficient tokens.' }))
+              continue
+            }
             // Generate a long-lived signed URL for storage/download (7 days)
             const { data: signed } = await admin.storage.from('generated').createSignedUrl(storagePath, 60 * 60 * 24 * 7)
             const signedUrl = signed?.signedUrl ?? null

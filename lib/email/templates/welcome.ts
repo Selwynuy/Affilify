@@ -13,9 +13,9 @@ export function welcomeEmail(email: string): { subject: string; html: string } {
       </p>
       <p style="margin:0;font-size:14px;color:#EEEEEE66;line-height:1.6;">
         <strong style="color:#EEEEEE99;">What to do first:</strong><br/>
-        1. Complete your avatar setup (face upload, style preferences)<br/>
+        1. Open the studio and review your default avatar/background<br/>
         2. Upload 1&ndash;5 product images<br/>
-        3. Generate images &rarr; select your favourites &rarr; export videos
+        3. Generate an image &rarr; approve it &rarr; export your video
       </p>
       ${ctaButton('Open Genetrify', 'https://genetrify.com/dashboard')}
     `),

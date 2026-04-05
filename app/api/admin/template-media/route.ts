@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyAdmin } from '@/lib/admin/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { assertAllowedMimeType, verifySameOrigin } from '@/lib/security'
 
 const BUCKET = 'uploads'
 const TEMPLATE_MEDIA_PREFIX = 'marketplace-templates'
+const MAX_TEMPLATE_MEDIA_BYTES = 20 * 1024 * 1024
 
 function sanitizeFilename(name: string) {
   const cleaned = name
@@ -16,6 +18,9 @@ function sanitizeFilename(name: string) {
 }
 
 export async function POST(request: NextRequest) {
+  const originError = verifySameOrigin(request)
+  if (originError) return originError
+
   const user = await verifyAdmin()
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -27,6 +32,9 @@ export async function POST(request: NextRequest) {
 
   if (!(file instanceof File)) {
     return NextResponse.json({ error: 'Missing file' }, { status: 400 })
+  }
+  if (file.size > MAX_TEMPLATE_MEDIA_BYTES) {
+    return NextResponse.json({ error: 'File exceeds 20MB limit' }, { status: 400 })
   }
 
   if (kind !== 'thumbnail' && kind !== 'preview' && kind !== 'reference') {
@@ -46,6 +54,9 @@ export async function POST(request: NextRequest) {
 
   if (kind === 'preview' && !isImage && !isVideo) {
     return NextResponse.json({ error: 'Preview must be an image or video' }, { status: 400 })
+  }
+  if (isImage && !assertAllowedMimeType(file.type, 'image')) {
+    return NextResponse.json({ error: 'Unsupported image type' }, { status: 400 })
   }
 
   const ext = file.name.includes('.') ? file.name.split('.').pop()?.toLowerCase() : undefined

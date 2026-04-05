@@ -20,14 +20,19 @@ import { createCustomer, createSetupIntent, createPaymentIntent } from '@/lib/bi
 import { getPlan, TOPUP_PACKS } from '@/lib/data/plans'
 import type { PlanId } from '@/lib/types/billing'
 import { logger } from '@/lib/logger'
+import { sanitizeText, verifySameOrigin } from '@/lib/security'
 
 export async function POST(req: NextRequest) {
+  const originError = verifySameOrigin(req)
+  if (originError) return originError
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json()
-  const { planId, topupPlanId } = body
+  const planId = sanitizeText(body?.planId, { maxLength: 20 }) as PlanId
+  const topupPlanId = sanitizeText(body?.topupPlanId, { maxLength: 20 }) as PlanId
 
   // ── Top-up purchase (one-time payment intent) ──────────────────────────────
   if (topupPlanId) {

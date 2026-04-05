@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifyAdmin } from '@/lib/admin/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { TicketStatus } from '@/lib/types/support'
+import { isUuid, sanitizeText, verifySameOrigin } from '@/lib/security'
 
 // GET — ticket detail + messages (admin)
 export async function GET(
@@ -9,6 +10,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params
+  if (!isUuid(id)) return NextResponse.json({ error: 'Invalid ticket id' }, { status: 400 })
   const user = await verifyAdmin()
   if (!user) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
@@ -36,20 +38,26 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const originError = verifySameOrigin(req)
+  if (originError) return originError
+
   const { id } = await params
+  if (!isUuid(id)) return NextResponse.json({ error: 'Invalid ticket id' }, { status: 400 })
   const user = await verifyAdmin()
   if (!user) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  const { status, reply } = await req.json()
+  const payload = await req.json()
+  const status = sanitizeText(payload?.status, { maxLength: 20 })
+  const reply = sanitizeText(payload?.reply, { maxLength: 4000, allowNewlines: true })
   const admin = createAdminClient()
 
   const VALID_STATUSES: TicketStatus[] = ['open', 'in_progress', 'resolved', 'closed']
 
   if (status) {
-    if (!VALID_STATUSES.includes(status)) {
+    if (!VALID_STATUSES.includes(status as TicketStatus)) {
       return NextResponse.json({ error: 'Invalid status' }, { status: 400 })
     }
-    await admin.from('support_tickets').update({ status }).eq('id', id)
+    await admin.from('support_tickets').update({ status: status as TicketStatus }).eq('id', id)
   }
 
   if (reply?.trim()) {

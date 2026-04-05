@@ -83,6 +83,7 @@ export function isPlanAtLeast(userPlanId: PlanId, requiredPlanId: PlanId): boole
 // Token costs
 export const TOKEN_COSTS = {
   image_gen: 8,    // Gemini image generation
+  model_gen: 20,   // Gemini standalone model photo generation
 } as const
 
 // Top-up packs — 1,000 tokens at plan-tiered PHP rates
