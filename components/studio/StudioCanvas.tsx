@@ -11,9 +11,6 @@ import {
   User,
   Layers,
   Wind,
-  Pencil,
-  Check,
-  RefreshCw,
   Trash2,
   AlertCircle,
   ZoomIn,
@@ -64,10 +61,14 @@ interface GeneratedCard extends CardBase {
 
 type Card = ProductCard | GeneratedCard;
 
+type Side = "left" | "right" | "top" | "bottom";
+
 interface Connection {
   id: string;
   from: string;
+  fromSide: Side;
   to: string;
+  toSide: Side;
 }
 interface SelBox {
   x1: number;
@@ -116,10 +117,10 @@ export interface StudioCanvasProps {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const CARD_W = 196;
-const CARD_IMG_H = 220;
+const CARD_IMG_H = 320;
 const CARD_FOOT_H = 56;
 const CARD_H = CARD_IMG_H + CARD_FOOT_H;
-const PORT_R = 6; // port circle radius
+const PORT_R = 9; // port circle radius
 const DRAG_THRESH = 5;
 const MAX_PRODUCTS = 5;
 const GAP = 22;
@@ -172,13 +173,49 @@ function selBounds(cards: Card[], ids: Set<string>) {
   };
 }
 
-/** Right-edge port position of a card */
-function outPort(c: Card) {
-  return { x: c.x + CARD_W + PORT_R, y: c.y + CARD_IMG_H / 2 };
+function portPos(c: Card, side: Side) {
+  const cx = c.x + CARD_W / 2;
+  const cy = c.y + CARD_IMG_H / 2;
+  switch (side) {
+    case "right":
+      return { x: c.x + CARD_W + PORT_R, y: cy };
+    case "left":
+      return { x: c.x - PORT_R, y: cy };
+    case "top":
+      return { x: cx, y: c.y - PORT_R };
+    case "bottom":
+      return { x: cx, y: c.y + CARD_IMG_H + PORT_R };
+  }
 }
-/** Left-edge port position of a card */
-function inPort(c: Card) {
-  return { x: c.x - PORT_R, y: c.y + CARD_IMG_H / 2 };
+
+function nearestSide(c: Card, pos: { x: number; y: number }): Side {
+  const sides: Side[] = ["left", "right", "top", "bottom"];
+  let best: Side = "left";
+  let bestDist = Infinity;
+  for (const s of sides) {
+    const p = portPos(c, s);
+    const d = (p.x - pos.x) ** 2 + (p.y - pos.y) ** 2;
+    if (d < bestDist) {
+      bestDist = d;
+      best = s;
+    }
+  }
+  return best;
+}
+
+function portBezier(
+  p1: { x: number; y: number },
+  side1: Side,
+  p2: { x: number; y: number },
+  side2: Side,
+) {
+  const dist = Math.max(Math.abs(p2.x - p1.x), Math.abs(p2.y - p1.y));
+  const t = Math.max(dist * 0.5, 40);
+  const dx1 = side1 === "right" ? t : side1 === "left" ? -t : 0;
+  const dy1 = side1 === "bottom" ? t : side1 === "top" ? -t : 0;
+  const dx2 = side2 === "right" ? t : side2 === "left" ? -t : 0;
+  const dy2 = side2 === "bottom" ? t : side2 === "top" ? -t : 0;
+  return `M ${p1.x} ${p1.y} C ${p1.x + dx1} ${p1.y + dy1} ${p2.x + dx2} ${p2.y + dy2} ${p2.x} ${p2.y}`;
 }
 
 /** Transitively expand a set of card IDs via connections */
@@ -747,8 +784,6 @@ function CardComp({
   onPtrDown,
   onPortPtrDown,
   onVideoOpen,
-  onPromptSave,
-  onRegenerate,
   onDelete,
   onPreview,
 }: {
@@ -756,17 +791,11 @@ function CardComp({
   selected: boolean;
   isInConnectMode: boolean;
   onPtrDown: (e: React.PointerEvent, id: string) => void;
-  onPortPtrDown: (e: React.PointerEvent, id: string) => void;
+  onPortPtrDown: (e: React.PointerEvent, id: string, side: Side) => void;
   onVideoOpen?: (c: GeneratedCard) => void;
-  onPromptSave?: (id: string, p: string) => void;
-  onRegenerate?: (id: string) => void;
   onDelete: (id: string) => void;
   onPreview?: (url: string, label: string) => void;
 }) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(
-    card.type === "generated" ? card.prompt : "",
-  );
   const [hover, setHover] = useState(false);
 
   return (
@@ -799,7 +828,12 @@ function CardComp({
       >
         {/* Image */}
         <div
-          className="relative bg-[#1b1b24] rounded-t-2xl overflow-hidden"
+          className={cn(
+            "relative bg-[#1b1b24] overflow-hidden",
+            card.type === "generated" && !(card as GeneratedCard).prompt
+              ? "rounded-2xl"
+              : "rounded-t-2xl",
+          )}
           style={{ height: CARD_IMG_H }}
         >
           {card.type === "generated" && card.isLoading ? (
@@ -823,7 +857,10 @@ function CardComp({
             <img
               src={card.imageUrl}
               alt=""
-              className="w-full h-full object-cover"
+              className={cn(
+                "w-full h-full",
+                card.type === "generated" ? "object-contain" : "object-cover",
+              )}
               draggable={false}
             />
           ) : null}
@@ -859,108 +896,80 @@ function CardComp({
             </span>
           </div>
 
-          {/* ── Connection port (product only) ─────────────────────────────── */}
-          {card.type === "product" && (
-            <motion.div
-              animate={{
-                opacity: hover || selected || isInConnectMode ? 1 : 0,
-                scale: hover || selected || isInConnectMode ? 1 : 0.5,
-              }}
-              transition={{ duration: 0.15 }}
-              data-port
-              data-card-id={card.id}
-              style={{
-                position: "absolute",
-                right: -PORT_R,
-                top: CARD_IMG_H / 2 - PORT_R,
-                width: PORT_R * 2,
-                height: PORT_R * 2,
-                borderRadius: "50%",
-                background:
-                  "radial-gradient(circle at 40% 35%, #a78bfa, #7c3aed)",
-                border: "2px solid #0b0b0f",
-                cursor: "crosshair",
-                zIndex: 200,
-                boxShadow: "0 0 8px rgba(139,92,246,0.6)",
-              }}
-              onPointerDown={(e) => {
-                e.stopPropagation();
-                onPortPtrDown(e, card.id);
-              }}
-              title="Drag to connect"
-            />
-          )}
+          {/* ── Connection ports (product only) ────────────────────────────── */}
+          {card.type === "product" &&
+            (
+              [
+                {
+                  side: "right" as Side,
+                  style: { right: -PORT_R, top: CARD_IMG_H / 2 - PORT_R },
+                },
+                {
+                  side: "left" as Side,
+                  style: { left: -PORT_R, top: CARD_IMG_H / 2 - PORT_R },
+                },
+                {
+                  side: "top" as Side,
+                  style: { left: CARD_W / 2 - PORT_R, top: -PORT_R },
+                },
+                {
+                  side: "bottom" as Side,
+                  style: {
+                    left: CARD_W / 2 - PORT_R,
+                    top: CARD_IMG_H - PORT_R,
+                  },
+                },
+              ] satisfies { side: Side; style: React.CSSProperties }[]
+            ).map(({ side, style }) => (
+              <motion.div
+                key={side}
+                animate={{
+                  opacity: hover || selected || isInConnectMode ? 1 : 0,
+                  scale: hover || selected || isInConnectMode ? 1 : 0.5,
+                }}
+                transition={{ duration: 0.15 }}
+                data-port
+                data-card-id={card.id}
+                data-port-side={side}
+                style={{
+                  position: "absolute",
+                  ...style,
+                  width: PORT_R * 2,
+                  height: PORT_R * 2,
+                  borderRadius: "50%",
+                  background:
+                    "radial-gradient(circle at 40% 35%, #a78bfa, #7c3aed)",
+                  border: "2px solid #0b0b0f",
+                  cursor: "crosshair",
+                  zIndex: 200,
+                  boxShadow: "0 0 8px rgba(139,92,246,0.6)",
+                }}
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                  onPortPtrDown(e, card.id, side);
+                }}
+                title="Drag to connect"
+              />
+            ))}
         </div>
 
         {/* Footer */}
-        <div
-          className="bg-[#15151e] px-3 py-2.5 rounded-b-2xl"
-          style={{ minHeight: CARD_FOOT_H }}
-        >
-          {card.type === "product" ? (
-            <p className="text-[11px] text-white/35 truncate font-mono mt-1">
-              {card.fileName}
-            </p>
-          ) : editing ? (
-            <div
-              onPointerDown={(e) => e.stopPropagation()}
-              className="flex flex-col gap-1.5"
-            >
-              <textarea
-                autoFocus
-                rows={3}
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    onPromptSave?.(card.id, draft);
-                    setEditing(false);
-                  }
-                  if (e.key === "Escape") setEditing(false);
-                }}
-                className="w-full resize-none text-[11px] text-white/70 font-mono bg-white/[0.04] border border-white/[0.08] focus:border-brand-accent/40 focus:bg-white/[0.06] rounded-lg px-3 py-2 leading-relaxed outline-none transition-all placeholder:text-white/20"
-              />
-              <button
-                onClick={() => {
-                  onPromptSave?.(card.id, draft);
-                  setEditing(false);
-                }}
-                className="self-end flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-brand-accent/20 text-brand-accent hover:bg-brand-accent/30 transition-colors text-[10px] font-medium"
-              >
-                <Check size={10} /> Save
-              </button>
-            </div>
-          ) : (
-            <div
-              onPointerDown={(e) => e.stopPropagation()}
-              className="flex items-start gap-1"
-            >
-              <p className="flex-1 text-[11px] text-white/35 line-clamp-2 font-mono leading-relaxed">
+        {(card.type === "product" || (card as GeneratedCard).prompt) && (
+          <div
+            className="bg-[#15151e] px-3 py-2.5 rounded-b-2xl"
+            style={{ minHeight: card.type === "product" ? CARD_FOOT_H : undefined }}
+          >
+            {card.type === "product" ? (
+              <p className="text-[11px] text-white/35 truncate font-mono mt-1">
+                {card.fileName}
+              </p>
+            ) : (
+              <p className="text-[11px] text-white/30 line-clamp-2 font-mono leading-relaxed">
                 {(card as GeneratedCard).prompt}
               </p>
-              <div className="flex flex-col gap-0.5 shrink-0 mt-0.5">
-                <button
-                  onClick={() => {
-                    setDraft((card as GeneratedCard).prompt);
-                    setEditing(true);
-                  }}
-                  className="p-0.5 rounded text-white/20 hover:text-white/55 transition-colors"
-                  title="Edit prompt"
-                >
-                  <Pencil size={9} />
-                </button>
-                <button
-                  onClick={() => onRegenerate?.(card.id)}
-                  className="p-0.5 rounded text-white/20 hover:text-brand-accent transition-colors"
-                  title="Regenerate"
-                >
-                  <RefreshCw size={9} />
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
       </motion.div>
 
       {/* Right-side action sidebar — outside overflow-hidden image area */}
@@ -1016,6 +1025,95 @@ function CardComp({
   );
 }
 
+// ── CtxPanel (shared between desktop inline + mobile bottom sheet) ────────────
+
+function CtxPanel({
+  selCards,
+  selProducts,
+  prompt,
+  isGenerating,
+  promptInputRef,
+  onPromptChange,
+  onGenerate,
+}: {
+  selCards: Card[];
+  selProducts: Card[];
+  prompt: string;
+  isGenerating: boolean;
+  promptInputRef?: React.RefObject<HTMLTextAreaElement | null>;
+  onPromptChange: (v: string) => void;
+  onGenerate: () => void;
+}) {
+  const canGenerate =
+    selProducts.length > 0 || selCards.some((c) => c.type === "generated");
+  const isRegenerate =
+    selProducts.length === 0 && selCards.some((c) => c.type === "generated");
+
+  return (
+    <div className="w-full sm:w-[272px] bg-[#12121b] border border-white/[0.09] rounded-2xl shadow-[0_24px_64px_rgba(0,0,0,0.7)] p-3">
+      <div className="flex items-center gap-2 mb-2.5">
+        <div className="flex -space-x-2">
+          {selCards.slice(0, 3).map((c, i) => (
+            <div
+              key={c.id}
+              className="w-5 h-5 rounded-full overflow-hidden border-[1.5px] border-[#12121b] bg-white/10"
+              style={{ zIndex: 3 - i }}
+            >
+              {c.imageUrl && (
+                <img src={c.imageUrl} alt="" className="w-full h-full object-cover" />
+              )}
+            </div>
+          ))}
+        </div>
+        <span className="text-[10px] text-white/30 leading-snug">
+          {isRegenerate
+            ? "Edit prompt and Go to regenerate"
+            : selProducts.length === 0
+              ? "Select product cards to generate"
+              : selProducts.length === 1
+                ? "Generate model for this product"
+                : `Generate outfit - ${selProducts.length} connected items`}
+        </span>
+      </div>
+      <div className="flex gap-2 items-end">
+        <textarea
+          ref={promptInputRef}
+          value={prompt}
+          onChange={(e) => onPromptChange(e.target.value)}
+          rows={2}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              onGenerate();
+            }
+          }}
+          placeholder={
+            isRegenerate
+              ? "Edit prompt to regenerate..."
+              : selProducts.length > 1
+                ? "Describe the outfit..."
+                : "Describe the product..."
+          }
+          className="flex-1 min-w-0 max-h-40 min-h-[44px] resize-none overflow-hidden bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2 text-xs leading-relaxed text-white placeholder-white/20 outline-none focus:border-brand-accent/40 transition-colors font-mono [scrollbar-width:thin] [scrollbar-color:rgba(168,85,247,0.5)_transparent]"
+        />
+        <button
+          onClick={onGenerate}
+          disabled={isGenerating || !canGenerate}
+          className={cn(
+            "shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all",
+            isGenerating || !canGenerate
+              ? "bg-white/[0.04] text-white/[0.18] cursor-not-allowed"
+              : "bg-brand-accent text-white hover:bg-brand-accent-hover shadow-[0_0_18px_rgba(139,92,246,0.38)]",
+          )}
+        >
+          <Sparkles size={11} />
+          {isGenerating ? "..." : "Go"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── StudioCanvas ──────────────────────────────────────────────────────────────
 
 export function StudioCanvas({
@@ -1046,6 +1144,9 @@ export function StudioCanvas({
   const [selectedVideoModel, setSelectedVideoModel] = useState<VideoModel>(
     VIDEO_MODELS[0],
   );
+  const [selectedDuration, setSelectedDuration] = useState<number>(
+    VIDEO_MODELS[0].defaultDuration,
+  );
   const [previewImage, setPreviewImage] = useState<{
     url: string;
     label: string;
@@ -1063,7 +1164,10 @@ export function StudioCanvas({
   const [isMouseInCanvas, setIsMouseInCanvas] = useState(false);
 
   // Connection-draw state
-  const [connectingFrom, setConnectingFrom] = useState<string | null>(null);
+  const [connectingFrom, setConnectingFrom] = useState<{
+    id: string;
+    side: Side;
+  } | null>(null);
   const [pendingEnd, setPendingEnd] = useState<{ x: number; y: number } | null>(
     null,
   );
@@ -1264,6 +1368,19 @@ export function StudioCanvas({
     [],
   );
 
+  // ── Pre-fill prompt when a generated card is selected ────────────────────────
+  useEffect(() => {
+    if (selectedIds.size === 0) return;
+    const hasProduct = cards.some(
+      (c) => c.type === "product" && selectedIds.has(c.id),
+    );
+    if (hasProduct) return;
+    const genCard = cards.find(
+      (c) => c.type === "generated" && selectedIds.has(c.id),
+    ) as GeneratedCard | undefined;
+    if (genCard) setPrompt(genCard.prompt);
+  }, [selectedIds]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Global pointer move/up ───────────────────────────────────────────────────
   useEffect(() => {
     const onMove = (e: PointerEvent) => {
@@ -1321,7 +1438,9 @@ export function StudioCanvas({
           setPendingEnd(null);
           return;
         }
-        const fromId = connectingRef.current;
+        const cf = connectingRef.current;
+        const fromId = cf?.id;
+        const fromSide = cf?.side ?? "right";
         const target = cardsRef.current.find(
           (c) =>
             c.type === "product" &&
@@ -1331,17 +1450,19 @@ export function StudioCanvas({
             pos.y >= c.y &&
             pos.y <= c.y + CARD_H,
         );
-        if (target) {
+        if (target && fromId) {
           const dup = connectionsRef.current.some(
             (cn) =>
               (cn.from === fromId && cn.to === target.id) ||
               (cn.from === target.id && cn.to === fromId),
           );
-          if (!dup)
+          if (!dup) {
+            const toSide = nearestSide(target, pos);
             setConnections((prev) => [
               ...prev,
-              { id: uid(), from: fromId, to: target.id },
+              { id: uid(), from: fromId, fromSide, to: target.id, toSide },
             ]);
+          }
         }
         setConnectingFrom(null);
         setPendingEnd(null);
@@ -1428,11 +1549,11 @@ export function StudioCanvas({
   );
 
   const onPortPtrDown = useCallback(
-    (e: React.PointerEvent, cardId: string) => {
+    (e: React.PointerEvent, cardId: string, side: Side) => {
       e.stopPropagation();
       const pos = toCanvas(e.clientX, e.clientY);
       if (!pos) return;
-      setConnectingFrom(cardId);
+      setConnectingFrom({ id: cardId, side });
       setPendingEnd(pos);
     },
     [toCanvas],
@@ -1518,9 +1639,22 @@ export function StudioCanvas({
   const handleGenerate = useCallback(async () => {
     // Expand selection to include connected group
     const expanded = expandGroup(selectedRef.current, connectionsRef.current);
-    const productCards = cardsRef.current.filter(
+    let productCards = cardsRef.current.filter(
       (c) => expanded.has(c.id) && c.type === "product",
     ) as ProductCard[];
+
+    // If no products selected, check if a generated card is selected — regenerate from its sources
+    if (!productCards.length) {
+      const genCard = cardsRef.current.find(
+        (c) => c.type === "generated" && selectedRef.current.has(c.id),
+      ) as GeneratedCard | undefined;
+      if (genCard) {
+        productCards = cardsRef.current.filter(
+          (c) => c.type === "product" && genCard.sourceIds.includes(c.id),
+        ) as ProductCard[];
+      }
+    }
+
     if (!productCards.length) return;
     const normalizedPrompt = prompt.trim();
 
@@ -1622,20 +1756,6 @@ export function StudioCanvas({
     clearStudioState(storageKeyRef.current).catch(() => {});
   }, []);
 
-  const savePrompt = useCallback((id: string, p: string) => {
-    setCards((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, prompt: p } : c)),
-    );
-  }, []);
-
-  const handleRegenerate = useCallback((id: string) => {
-    const c = cardsRef.current.find((x) => x.id === id) as
-      | GeneratedCard
-      | undefined;
-    if (!c) return;
-    setPrompt(c.prompt);
-    setSelectedIds(new Set(c.sourceIds));
-  }, []);
 
   // ── Fit-to-content ────────────────────────────────────────────────────────────
   const fitToContent = useCallback(() => {
@@ -1724,6 +1844,7 @@ export function StudioCanvas({
           imageUrls: [videoCard.imageUrl],
           motionPrompt,
           videoModelId: selectedVideoModel.id,
+          duration: selectedDuration,
         }),
       });
 
@@ -1785,6 +1906,7 @@ export function StudioCanvas({
     avatarConfig,
     backgroundConfig,
     movementTemplates,
+    selectedDuration,
     selectedVideoModel.id,
     videoCard,
     videoMovement,
@@ -1800,10 +1922,11 @@ export function StudioCanvas({
       const to = productCards.find((c) => c.id === conn.to);
       if (!from || !to) return null;
 
-      const p1 = outPort(from);
-      const p2 = inPort(to);
-      const cx = (p1.x + p2.x) / 2;
-      const d = `M ${p1.x} ${p1.y} C ${cx} ${p1.y} ${cx} ${p2.y} ${p2.x} ${p2.y}`;
+      const fromSide: Side = conn.fromSide ?? "right";
+      const toSide: Side = conn.toSide ?? "left";
+      const p1 = portPos(from, fromSide);
+      const p2 = portPos(to, toSide);
+      const d = portBezier(p1, fromSide, p2, toSide);
 
       return (
         <g key={conn.id}>
@@ -1841,80 +1964,6 @@ export function StudioCanvas({
       className="flex-1 flex flex-col overflow-hidden min-h-0 pt-14 lg:pt-0"
       style={{ background: "#0b0b0f", fontFamily: "var(--font-sans)" }}
     >
-      {/* ── Top bar ───────────────────────────────────────────────────────────── */}
-      <header className="shrink-0 flex items-center gap-1 sm:gap-1.5 px-3 sm:px-4 h-12 border-b border-white/[0.06] bg-[#110d1d]/92 backdrop-blur-md z-40">
-        {/* Brand */}
-        <div className="flex items-center gap-2 mr-1 shrink-0">
-          <div className="w-5 h-5 rounded-md bg-brand-accent/20 border border-brand-accent/25 flex items-center justify-center">
-            <Sparkles size={9} className="text-brand-accent" />
-          </div>
-        </div>
-
-        {/* Settings chips */}
-        <div className="flex items-center gap-1 overflow-x-auto">
-          <StatusChip
-            icon={User}
-            label="Avatar"
-            value={avatarLabel}
-            active={activeTemplatePanel === "avatar"}
-            onClick={() =>
-              setActiveTemplatePanel((p) => (p === "avatar" ? null : "avatar"))
-            }
-          />
-          <StatusChip
-            icon={Layers}
-            label="BG"
-            value={backgroundLabel}
-            active={activeTemplatePanel === "background"}
-            onClick={() =>
-              setActiveTemplatePanel((p) =>
-                p === "background" ? null : "background",
-              )
-            }
-          />
-          <StatusChip
-            icon={Camera}
-            label="Camera"
-            value={cameraLabel}
-            active={activeTemplatePanel === "camera"}
-            onClick={() =>
-              setActiveTemplatePanel((p) => (p === "camera" ? null : "camera"))
-            }
-          />
-          <StatusChip
-            icon={Wind}
-            label="Movement"
-            value={movementLabel}
-            active={activeTemplatePanel === "movement"}
-            onClick={() =>
-              setActiveTemplatePanel((p) =>
-                p === "movement" ? null : "movement",
-              )
-            }
-          />
-        </div>
-
-        {/* Right controls */}
-        <div className="ml-auto flex items-center gap-1.5 shrink-0">
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-1.5 h-7 px-3 rounded-lg text-[11px] font-medium bg-brand-accent/10 border border-brand-accent/25 text-brand-accent hover:bg-brand-accent/20 transition-all"
-          >
-            <Upload size={11} />
-            <span className="hidden sm:inline">Upload</span>
-          </button>
-          {cards.length > 0 && (
-            <button
-              onClick={clearCanvas}
-              className="flex items-center h-7 px-2.5 rounded-lg text-[11px] border bg-white/[0.04] border-white/[0.08] text-white/35 hover:text-white/70 hover:bg-white/[0.08] transition-all"
-              title="Clear canvas"
-            >
-              <Trash2 size={11} />
-            </button>
-          )}
-        </div>
-      </header>
-
       {/* ── Canvas ────────────────────────────────────────────────────────────── */}
       <div
         ref={canvasRef}
@@ -1946,11 +1995,78 @@ export function StudioCanvas({
         onDrop={onDrop}
       >
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(168,85,247,0.06),transparent_55%)]" />
-        <div className="pointer-events-none absolute left-3 top-3 z-[120] rounded-xl border border-white/[0.08] bg-[#120f1d]/85 px-3 py-2 text-[11px] text-white/45 shadow-[0_8px_24px_rgba(0,0,0,0.35)] backdrop-blur-sm">
-          Shift + drag selects. Ctrl/Cmd + wheel zooms (when mouse is over
-          canvas).
+        {/* Top-left controls */}
+        <div className="absolute left-3 top-3 z-120 flex flex-col gap-2 items-start">
+          {/* Upload + Clear + desktop chips row */}
+          <div className="flex items-center gap-1.5 rounded-xl border border-white/8 bg-[#120f1d]/85 px-2 py-1.5 shadow-[0_8px_24px_rgba(0,0,0,0.35)] backdrop-blur-sm">
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-[11px] font-medium bg-brand-accent/10 border border-brand-accent/25 text-brand-accent hover:bg-brand-accent/20 transition-all"
+            >
+              <Upload size={11} />
+              <span className="hidden sm:inline">Upload</span>
+            </button>
+            {cards.length > 0 && (
+              <button
+                onClick={clearCanvas}
+                className="flex items-center h-7 px-2.5 rounded-lg text-[11px] border bg-white/4 border-white/8 text-white/35 hover:text-white/70 hover:bg-white/8 transition-all"
+                title="Clear canvas"
+              >
+                <Trash2 size={11} />
+              </button>
+            )}
+            {/* Settings chips — desktop only */}
+            <div className="hidden sm:flex items-center gap-1 ml-1 pl-1.5 border-l border-white/8">
+              <StatusChip
+                icon={User}
+                label="Avatar"
+                value={avatarLabel}
+                active={activeTemplatePanel === "avatar"}
+                onClick={() =>
+                  setActiveTemplatePanel((p) => (p === "avatar" ? null : "avatar"))
+                }
+              />
+              <StatusChip
+                icon={Layers}
+                label="BG"
+                value={backgroundLabel}
+                active={activeTemplatePanel === "background"}
+                onClick={() =>
+                  setActiveTemplatePanel((p) =>
+                    p === "background" ? null : "background",
+                  )
+                }
+              />
+              <StatusChip
+                icon={Camera}
+                label="Camera"
+                value={cameraLabel}
+                active={activeTemplatePanel === "camera"}
+                onClick={() =>
+                  setActiveTemplatePanel((p) => (p === "camera" ? null : "camera"))
+                }
+              />
+              <StatusChip
+                icon={Wind}
+                label="Movement"
+                value={movementLabel}
+                active={activeTemplatePanel === "movement"}
+                onClick={() =>
+                  setActiveTemplatePanel((p) =>
+                    p === "movement" ? null : "movement",
+                  )
+                }
+              />
+            </div>
+          </div>
+          {/* Hint — desktop only */}
+          <div className="hidden sm:block pointer-events-none rounded-xl border border-white/8 bg-[#120f1d]/85 px-3 py-2 text-[11px] text-white/45 shadow-[0_8px_24px_rgba(0,0,0,0.35)] backdrop-blur-sm">
+            Shift + drag selects. Ctrl/Cmd + wheel zooms (when mouse is over canvas).
+          </div>
         </div>
-        <div className="absolute top-3 right-3 z-[120] flex items-center gap-1.5 rounded-xl border border-white/[0.08] bg-[#120f1d]/85 px-2 py-2 shadow-[0_8px_24px_rgba(0,0,0,0.35)] backdrop-blur-sm">
+
+        {/* Zoom controls */}
+        <div className="absolute top-3 right-3 z-[120] flex items-center gap-1 sm:gap-1.5 rounded-xl border border-white/[0.08] bg-[#120f1d]/85 px-1.5 sm:px-2 py-1.5 sm:py-2 shadow-[0_8px_24px_rgba(0,0,0,0.35)] backdrop-blur-sm">
           <button
             type="button"
             onClick={() => zoomTo(zoomRef.current - ZOOM_STEP)}
@@ -1963,7 +2079,7 @@ export function StudioCanvas({
           <button
             type="button"
             onClick={() => zoomTo(1)}
-            className="min-w-[3rem] rounded-lg border border-white/[0.08] bg-white/[0.03] px-2 py-1 text-[11px] font-medium text-white/70 transition-colors hover:bg-white/[0.08] hover:text-white"
+            className="hidden sm:block min-w-[3rem] rounded-lg border border-white/[0.08] bg-white/[0.03] px-2 py-1 text-[11px] font-medium text-white/70 transition-colors hover:bg-white/[0.08] hover:text-white"
             title="Reset zoom"
           >
             {Math.round(zoom * 100)}%
@@ -1971,7 +2087,7 @@ export function StudioCanvas({
           <button
             type="button"
             onClick={fitToContent}
-            className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-2 py-1 text-[11px] font-medium text-white/55 transition-colors hover:bg-white/[0.08] hover:text-white"
+            className="hidden sm:block rounded-lg border border-white/[0.08] bg-white/[0.03] px-2 py-1 text-[11px] font-medium text-white/55 transition-colors hover:bg-white/[0.08] hover:text-white"
             title="Fit content to view"
           >
             Fit
@@ -2061,13 +2177,17 @@ export function StudioCanvas({
             {connectingFrom &&
               pendingEnd &&
               (() => {
-                const from = cards.find((c) => c.id === connectingFrom);
+                const from = cards.find((c) => c.id === connectingFrom.id);
                 if (!from) return null;
-                const p1 = outPort(from);
-                const cx = (p1.x + pendingEnd.x) / 2;
+                const p1 = portPos(from, connectingFrom.side);
                 return (
                   <path
-                    d={`M ${p1.x} ${p1.y} C ${cx} ${p1.y} ${cx} ${pendingEnd.y} ${pendingEnd.x} ${pendingEnd.y}`}
+                    d={portBezier(
+                      p1,
+                      connectingFrom.side,
+                      pendingEnd,
+                      nearestSide(from, pendingEnd),
+                    )}
                     stroke="rgba(139,92,246,0.35)"
                     strokeWidth="1.5"
                     fill="none"
@@ -2109,8 +2229,6 @@ export function StudioCanvas({
                     }
                   : undefined
               }
-              onPromptSave={savePrompt}
-              onRegenerate={handleRegenerate}
               onDelete={deleteCard}
               onPreview={(url, label) => setPreviewImage({ url, label })}
             />
@@ -2131,14 +2249,16 @@ export function StudioCanvas({
           )}
 
           {/* ── Contextual panel ──────────────────────────────────────────────── */}
+          {/* ── Contextual panel — desktop (follows selection in canvas space) ── */}
           <AnimatePresence>
             {showPanel && (
               <motion.div
-                key="ctx-panel"
+                key="ctx-panel-desktop"
                 initial={{ opacity: 0, y: -8, scale: 0.96 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -8, scale: 0.96 }}
                 transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
+                className="hidden sm:block"
                 style={{
                   position: "absolute",
                   left: panelCx,
@@ -2148,73 +2268,87 @@ export function StudioCanvas({
                 }}
                 onPointerDown={(e) => e.stopPropagation()}
               >
-                <div className="w-[272px] bg-[#12121b] border border-white/[0.09] rounded-2xl shadow-[0_24px_64px_rgba(0,0,0,0.7)] p-3">
-                  {/* Selection summary */}
-                  <div className="flex items-center gap-2 mb-2.5">
-                    <div className="flex -space-x-2">
-                      {selCards.slice(0, 3).map((c, i) => (
-                        <div
-                          key={c.id}
-                          className="w-5 h-5 rounded-full overflow-hidden border-[1.5px] border-[#12121b] bg-white/10"
-                          style={{ zIndex: 3 - i }}
-                        >
-                          {c.imageUrl && (
-                            <img
-                              src={c.imageUrl}
-                              alt=""
-                              className="w-full h-full object-cover"
-                            />
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                    <span className="text-[10px] text-white/30 leading-snug">
-                      {selProducts.length === 0
-                        ? "Select product cards to generate"
-                        : selProducts.length === 1
-                          ? "Generate model for this product"
-                          : `Generate outfit - ${selProducts.length} connected items`}
-                    </span>
-                  </div>
-                  <div className="flex gap-2 items-end">
-                    <textarea
-                      ref={promptInputRef}
-                      value={prompt}
-                      onChange={(e) => setPrompt(e.target.value)}
-                      rows={2}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey) {
-                          e.preventDefault();
-                          handleGenerate();
-                        }
-                      }}
-                      placeholder={
-                        selProducts.length > 1
-                          ? "Describe the outfit..."
-                          : "Describe the product..."
-                      }
-                      className="flex-1 min-w-0 max-h-40 min-h-[44px] resize-none overflow-hidden bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2 text-xs leading-relaxed text-white placeholder-white/20 outline-none focus:border-brand-accent/40 transition-colors font-mono [scrollbar-width:thin] [scrollbar-color:rgba(168,85,247,0.5)_transparent]"
-                    />
-                    <button
-                      onClick={handleGenerate}
-                      disabled={isGenerating || !selProducts.length}
-                      className={cn(
-                        "shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all",
-                        isGenerating || !selProducts.length
-                          ? "bg-white/[0.04] text-white/18 cursor-not-allowed"
-                          : "bg-brand-accent text-white hover:bg-brand-accent-hover shadow-[0_0_18px_rgba(139,92,246,0.38)]",
-                      )}
-                    >
-                      <Sparkles size={11} />
-                      {isGenerating ? "..." : "Go"}
-                    </button>
-                  </div>
-                </div>
+                <CtxPanel
+                  selCards={selCards}
+                  selProducts={selProducts}
+                  prompt={prompt}
+                  isGenerating={isGenerating}
+                  promptInputRef={promptInputRef}
+                  onPromptChange={setPrompt}
+                  onGenerate={handleGenerate}
+                />
               </motion.div>
             )}
           </AnimatePresence>
         </div>
       </div>
+
+      {/* ── Settings toolbar — mobile floating pill ───────────────────────────── */}
+      <AnimatePresence>
+        {!showPanel && (
+          <motion.div
+            key="settings-pill"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+            transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
+            className="sm:hidden absolute bottom-4 left-1/2 -translate-x-1/2 z-200 flex items-center gap-0.5 px-1.5 py-1.5 rounded-2xl border border-white/10 bg-[#12121b]/95 backdrop-blur-md shadow-[0_8px_32px_rgba(0,0,0,0.5)]"
+          >
+            {(
+              [
+                { icon: User,   cat: "avatar"     as TemplateCategory, name: "Avatar"   },
+                { icon: Layers, cat: "background" as TemplateCategory, name: "BG"       },
+                { icon: Camera, cat: "camera"     as TemplateCategory, name: "Angle"    },
+                { icon: Wind,   cat: "movement"   as TemplateCategory, name: "Movement" },
+              ] as { icon: React.ElementType; cat: TemplateCategory; name: string }[]
+            ).map(({ icon: Icon, cat, name }) => {
+              const isActive = activeTemplatePanel === cat;
+              return (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() =>
+                    setActiveTemplatePanel((p) => (p === cat ? null : cat))
+                  }
+                  className={cn(
+                    "flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-all",
+                    isActive
+                      ? "bg-brand-accent/20 text-brand-accent"
+                      : "text-white/45 hover:text-white/70 hover:bg-white/6",
+                  )}
+                >
+                  <Icon size={16} />
+                  <span className="text-[9px] font-medium leading-none">{name}</span>
+                </button>
+              );
+            })}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Contextual panel — mobile (fixed bottom sheet) ───────────────────── */}
+      <AnimatePresence>
+        {showPanel && (
+          <motion.div
+            key="ctx-panel-mobile"
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 16 }}
+            transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+            className="sm:hidden absolute bottom-4 left-3 right-3 z-200"
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            <CtxPanel
+              selCards={selCards}
+              selProducts={selProducts}
+              prompt={prompt}
+              isGenerating={isGenerating}
+              onPromptChange={setPrompt}
+              onGenerate={handleGenerate}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ── Template panel ────────────────────────────────────────────────────── */}
       <AnimatePresence>
@@ -2231,215 +2365,213 @@ export function StudioCanvas({
         )}
       </AnimatePresence>
 
-      {/* ── Video side panel ──────────────────────────────────────────────────── */}
+      {/* ── Video modal ───────────────────────────────────────────────────────── */}
       <AnimatePresence>
         {videoCard && (
           <>
+            {/* Backdrop */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.15 }}
-              className="fixed inset-0 bg-black/25 z-[300]"
+              transition={{ duration: 0.18 }}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[400]"
               onClick={() => setVideoCard(null)}
             />
-            <motion.aside
-              initial={{ x: "100%" }}
-              animate={{ x: 0 }}
-              exit={{ x: "100%" }}
-              transition={{ type: "spring", damping: 30, stiffness: 280 }}
-              className="fixed right-0 top-0 bottom-0 w-[268px] flex flex-col bg-[#111119] border-l border-white/[0.07] z-[400]"
-              style={{ boxShadow: "-24px 0 64px rgba(0,0,0,0.5)" }}
-            >
-              <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06] shrink-0">
-                <div>
-                  <h3 className="text-sm font-semibold text-white">
-                    Create Video
-                  </h3>
-                  <p className="text-[11px] text-white/30 mt-0.5">
-                    Animate this image
-                  </p>
-                </div>
-                <button
-                  onClick={() => setVideoCard(null)}
-                  className="p-1.5 rounded-lg text-white/30 hover:text-white hover:bg-white/[0.07] transition-all"
-                >
-                  <X size={14} />
-                </button>
-              </div>
 
-              <div className="px-5 pt-4 pb-3 shrink-0">
-                <div
-                  className="w-full rounded-xl overflow-hidden border border-white/[0.07]"
-                  style={{
-                    aspectRatio: "9/16",
-                    maxHeight: 172,
-                    display: "flex",
-                  }}
-                >
+            {/* Modal */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 12 }}
+              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+              className="fixed inset-0 z-[500] flex items-center justify-center p-4 sm:p-6 pointer-events-none"
+            >
+              <div
+                className="pointer-events-auto w-full max-w-2xl max-h-[90vh] flex flex-col sm:flex-row rounded-2xl overflow-hidden border border-white/[0.08] bg-[#111119]"
+                style={{ boxShadow: "0 32px 80px rgba(0,0,0,0.7)" }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Left — image preview */}
+                <div className="sm:w-52 shrink-0 bg-[#0d0d15] flex items-center justify-center">
                   <img
                     src={videoCard.imageUrl}
                     alt=""
-                    className="w-full object-cover"
-                  />
-                </div>
-              </div>
-
-              <div className="flex-1 overflow-y-auto min-h-0 px-5 pb-3 flex flex-col gap-4 scrollbar-brand">
-                {/* Prompt */}
-                <div>
-                  <p className="text-[9px] text-white/22 font-mono uppercase tracking-widest mb-1.5">
-                    Prompt
-                  </p>
-                  <textarea
-                    value={videoPrompt}
-                    onChange={(e) => setVideoPrompt(e.target.value)}
-                    rows={3}
-                    placeholder="Describe the motion or scene..."
-                    className="w-full resize-none text-[11px] text-white/70 font-mono bg-white/[0.04] border border-white/[0.08] focus:border-brand-accent/40 focus:bg-white/[0.06] rounded-lg px-3 py-2 leading-relaxed outline-none transition-all placeholder:text-white/20"
+                    className="w-full h-full object-contain"
                   />
                 </div>
 
-                {/* Model selector */}
-                <div>
-                  <p className="text-[9px] text-white/22 font-mono uppercase tracking-widest mb-2">
-                    Model
-                  </p>
-                  <div className="flex flex-col gap-1.5">
-                    {VIDEO_MODELS.map((m) => (
-                      <button
-                        key={m.id}
-                        onClick={() => setSelectedVideoModel(m)}
-                        className={cn(
-                          "px-3 py-2 rounded-lg text-left transition-all border",
-                          selectedVideoModel.id === m.id
-                            ? "bg-brand-accent/12 border-brand-accent/35"
-                            : "bg-white/[0.03] border-white/[0.07] hover:bg-white/[0.06] hover:border-white/[0.12]",
-                        )}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <span
-                            className={cn(
-                              "text-[11px] font-medium",
-                              selectedVideoModel.id === m.id
-                                ? "text-brand-accent"
-                                : "text-white/55",
-                            )}
-                          >
-                            {m.name}
-                          </span>
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <span
-                              className={cn(
-                                "text-[9px] px-1.5 py-0.5 rounded-full font-mono",
-                                m.qualityLabel === "Elite"
-                                  ? "bg-amber-500/15 text-amber-400 border border-amber-500/25"
-                                  : m.qualityLabel === "Pro"
-                                    ? "bg-violet-500/15 text-violet-400 border border-violet-500/25"
-                                    : "bg-white/[0.06] text-white/35 border border-white/[0.08]",
-                              )}
-                            >
-                              {m.qualityLabel}
-                            </span>
-                            <span className="flex items-center gap-0.5 text-[10px] text-white/30 font-mono">
-                              <Zap size={9} className="text-yellow-500/60" />
-                              {m.tokenCost}
-                            </span>
-                          </div>
-                        </div>
-                      </button>
-                    ))}
+                {/* Right — controls */}
+                <div className="flex-1 flex flex-col min-h-0">
+                  {/* Header */}
+                  <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06] shrink-0">
+                    <div>
+                      <h3 className="text-sm font-semibold text-white">Create Video</h3>
+                      <p className="text-[11px] text-white/30 mt-0.5">Animate this image</p>
+                    </div>
+                    <button
+                      onClick={() => setVideoCard(null)}
+                      className="p-1.5 rounded-lg text-white/30 hover:text-white hover:bg-white/[0.07] transition-all"
+                    >
+                      <X size={14} />
+                    </button>
                   </div>
-                </div>
 
-                {/* Movement */}
-                <div>
-                  <p className="text-[9px] text-white/22 font-mono uppercase tracking-widest mb-2">
-                    Movement
-                  </p>
-                  <div className="flex flex-col gap-1.5">
-                    {movementTemplates.map((t) => (
-                      <button
-                        key={t.id}
-                        onClick={() => setVideoMovement(t.id)}
-                        className={cn(
-                          "px-3 py-2 rounded-lg text-[11px] text-left transition-all border",
-                          videoMovement === t.id
-                            ? "bg-brand-accent/12 border-brand-accent/35 text-brand-accent font-medium"
-                            : "bg-white/[0.03] border-white/[0.07] text-white/38 hover:bg-white/[0.06] hover:text-white/65",
-                        )}
-                      >
-                        {t.title}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {videoError && (
-                  <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-[11px] text-red-200">
-                    {videoError}
-                  </div>
-                )}
-
-                {videoResult && (
-                  <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-3 space-y-2">
-                    <p className="text-[11px] font-medium text-emerald-200">
-                      Video ready
-                    </p>
-                    <div className="rounded-lg overflow-hidden border border-white/10 bg-black">
-                      <video
-                        src={videoResult.videoUrl}
-                        controls
-                        playsInline
-                        className="w-full max-h-48 object-cover"
+                  {/* Scrollable body */}
+                  <div className="flex-1 overflow-y-auto min-h-0 px-5 py-4 flex flex-col gap-4 scrollbar-brand">
+                    {/* Prompt */}
+                    <div>
+                      <p className="text-[9px] text-white/22 font-mono uppercase tracking-widest mb-1.5">Prompt</p>
+                      <textarea
+                        value={videoPrompt}
+                        onChange={(e) => setVideoPrompt(e.target.value)}
+                        rows={3}
+                        placeholder="Describe the motion or scene..."
+                        className="w-full resize-none text-[11px] text-white/70 font-mono bg-white/[0.04] border border-white/[0.08] focus:border-brand-accent/40 focus:bg-white/[0.06] rounded-lg px-3 py-2 leading-relaxed outline-none transition-all placeholder:text-white/20"
                       />
                     </div>
-                    <a
-                      href={videoResult.videoUrl}
-                      download={videoResult.fileName}
-                      className="inline-flex items-center gap-1.5 text-[11px] text-emerald-100 hover:text-white"
-                    >
-                      <Download size={11} />
-                      Download video
-                    </a>
-                  </div>
-                )}
-              </div>
 
-              <div className="px-5 pt-3 pb-6 border-t border-white/[0.06] shrink-0">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-[10px] text-white/28 font-mono">
-                    Cost
-                  </span>
-                  <span className="flex items-center gap-1 text-[11px] font-semibold text-white/60 font-mono">
-                    <Zap size={10} className="text-yellow-400/70" />
-                    {selectedVideoModel.tokenCost} tokens
-                  </span>
+                    {/* Model */}
+                    <div>
+                      <p className="text-[9px] text-white/22 font-mono uppercase tracking-widest mb-2">Model</p>
+                      <div className="flex flex-col gap-1.5">
+                        {VIDEO_MODELS.map((m) => (
+                          <button
+                            key={m.id}
+                            onClick={() => { setSelectedVideoModel(m); setSelectedDuration(m.defaultDuration); }}
+                            className={cn(
+                              "px-3 py-2 rounded-lg text-left transition-all border",
+                              selectedVideoModel.id === m.id
+                                ? "bg-brand-accent/12 border-brand-accent/35"
+                                : "bg-white/[0.03] border-white/[0.07] hover:bg-white/[0.06] hover:border-white/[0.12]",
+                            )}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className={cn("text-[11px] font-medium", selectedVideoModel.id === m.id ? "text-brand-accent" : "text-white/55")}>
+                                {m.name}
+                              </span>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <span className={cn(
+                                  "text-[9px] px-1.5 py-0.5 rounded-full font-mono",
+                                  m.qualityLabel === "Elite"
+                                    ? "bg-amber-500/15 text-amber-400 border border-amber-500/25"
+                                    : m.qualityLabel === "Pro"
+                                      ? "bg-violet-500/15 text-violet-400 border border-violet-500/25"
+                                      : "bg-white/[0.06] text-white/35 border border-white/[0.08]",
+                                )}>
+                                  {m.qualityLabel}
+                                </span>
+                                <span className="flex items-center gap-0.5 text-[10px] text-white/30 font-mono">
+                                  <Zap size={9} className="text-yellow-500/60" />{m.tokenCost}
+                                </span>
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Duration */}
+                    <div>
+                      <p className="text-[9px] text-white/22 font-mono uppercase tracking-widest mb-2">Duration</p>
+                      <div className="flex gap-1.5 flex-wrap">
+                        {selectedVideoModel.allowedDurations.map((d) => (
+                          <button
+                            key={d}
+                            onClick={() => setSelectedDuration(d)}
+                            className={cn(
+                              "px-3 py-1.5 rounded-lg text-[11px] font-mono border transition-all",
+                              selectedDuration === d
+                                ? "bg-brand-accent/12 border-brand-accent/35 text-brand-accent font-semibold"
+                                : "bg-white/[0.03] border-white/[0.07] text-white/38 hover:bg-white/[0.06] hover:text-white/65",
+                            )}
+                          >
+                            {d}s
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Movement */}
+                    <div>
+                      <p className="text-[9px] text-white/22 font-mono uppercase tracking-widest mb-2">Movement</p>
+                      <div className="flex flex-col gap-1.5">
+                        {movementTemplates.map((t) => (
+                          <button
+                            key={t.id}
+                            onClick={() => setVideoMovement(t.id)}
+                            className={cn(
+                              "px-3 py-2 rounded-lg text-[11px] text-left transition-all border",
+                              videoMovement === t.id
+                                ? "bg-brand-accent/12 border-brand-accent/35 text-brand-accent font-medium"
+                                : "bg-white/[0.03] border-white/[0.07] text-white/38 hover:bg-white/[0.06] hover:text-white/65",
+                            )}
+                          >
+                            {t.title}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {videoError && (
+                      <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-[11px] text-red-200">
+                        {videoError}
+                      </div>
+                    )}
+
+                    {videoResult && (
+                      <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-3 space-y-2">
+                        <p className="text-[11px] font-medium text-emerald-200">Video ready</p>
+                        <div className="rounded-lg overflow-hidden border border-white/10 bg-black">
+                          <video src={videoResult.videoUrl} controls playsInline className="w-full max-h-48 object-contain" />
+                        </div>
+                        <a
+                          href={videoResult.videoUrl}
+                          download={videoResult.fileName}
+                          className="inline-flex items-center gap-1.5 text-[11px] text-emerald-100 hover:text-white"
+                        >
+                          <Download size={11} />
+                          Download video
+                        </a>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Footer */}
+                  <div className="px-5 pt-3 pb-5 border-t border-white/[0.06] shrink-0">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-[10px] text-white/28 font-mono">Cost</span>
+                      <span className="flex items-center gap-1 text-[11px] font-semibold text-white/60 font-mono">
+                        <Zap size={10} className="text-yellow-400/70" />
+                        {selectedVideoModel.tokenCost} tokens
+                      </span>
+                    </div>
+                    <button
+                      onClick={handleCreateVideo}
+                      disabled={isCreatingVideo || !videoCard}
+                      className={cn(
+                        "w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold transition-all",
+                        isCreatingVideo
+                          ? "bg-white/[0.05] text-white/22 cursor-not-allowed"
+                          : "bg-gradient-to-r from-brand-accent to-violet-400 text-white hover:opacity-90 shadow-[0_4px_24px_rgba(139,92,246,0.35)]",
+                      )}
+                    >
+                      {isCreatingVideo ? (
+                        <>
+                          <div className="w-3.5 h-3.5 rounded-full border-[1.5px] border-white/20 border-t-white animate-spin" />
+                          Creating...
+                        </>
+                      ) : (
+                        <>
+                          <Film size={14} />
+                          Create Video
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
-                <button
-                  onClick={handleCreateVideo}
-                  disabled={isCreatingVideo || !videoCard}
-                  className={cn(
-                    "w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold transition-all",
-                    isCreatingVideo
-                      ? "bg-white/[0.05] text-white/22 cursor-not-allowed"
-                      : "bg-gradient-to-r from-brand-accent to-violet-400 text-white hover:opacity-90 shadow-[0_4px_24px_rgba(139,92,246,0.35)]",
-                  )}
-                >
-                  {isCreatingVideo ? (
-                    <>
-                      <div className="w-3.5 h-3.5 rounded-full border-[1.5px] border-white/20 border-t-white animate-spin" />
-                      Creating...
-                    </>
-                  ) : (
-                    <>
-                      <Film size={14} />
-                      Create Video
-                    </>
-                  )}
-                </button>
               </div>
-            </motion.aside>
+            </motion.div>
           </>
         )}
       </AnimatePresence>

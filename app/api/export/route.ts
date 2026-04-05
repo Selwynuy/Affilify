@@ -5,26 +5,77 @@ import { deductTokens, getTokenBalance, getUserPlanId } from '@/lib/billing/toke
 import { getAvailableModels, VIDEO_MODELS } from '@/lib/data/plans'
 import { logger } from '@/lib/logger'
 import { rateLimit } from '@/lib/rate-limit'
+import type { VideoModel } from '@/lib/types/billing'
 
 const REPLICATE_API_KEY = process.env.REPLICATE_API_KEY
 
-async function generateVideo(imageUrl: string, prompt: string, replicateSlug: string): Promise<string> {
+const WAN_FPS = 16
+
+function buildReplicateInput(
+  imageUrl: string,
+  prompt: string,
+  videoModel: VideoModel,
+  duration: number,
+): Record<string, unknown> {
+  switch (videoModel.id) {
+    case 'wan-480p':
+      return {
+        image: imageUrl,
+        prompt,
+        num_frames: duration * WAN_FPS,
+        frames_per_second: WAN_FPS,
+        max_area: '480x832',
+      }
+    case 'hailuo-fast':
+    case 'hailuo':
+      return {
+        first_frame_image: imageUrl,
+        prompt,
+        duration,
+      }
+    case 'kling-turbo':
+      return {
+        start_image: imageUrl,
+        prompt,
+        duration,
+      }
+    case 'kling-v3':
+      return {
+        start_image: imageUrl,
+        prompt,
+        duration,
+        mode: 'pro',
+        generate_audio: false,
+      }
+    case 'veo-fast':
+      return {
+        image: imageUrl,
+        prompt,
+        duration,
+        aspect_ratio: '9:16',
+        generate_audio: false,
+      }
+    default:
+      return {
+        start_image: imageUrl,
+        prompt,
+        duration,
+      }
+  }
+}
+
+async function generateVideo(imageUrl: string, prompt: string, videoModel: VideoModel, duration: number): Promise<string> {
   if (!REPLICATE_API_KEY) throw new Error('REPLICATE_API_KEY is not configured')
 
-  const submitRes = await fetch(`https://api.replicate.com/v1/models/${replicateSlug}/predictions`, {
+  const submitRes = await fetch('https://api.replicate.com/v1/predictions', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${REPLICATE_API_KEY}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      input: {
-        start_image: imageUrl,
-        prompt,
-        duration: 5,
-        aspect_ratio: '9:16',
-        mode: 'standard',
-      },
+      version: videoModel.replicateVersion,
+      input: buildReplicateInput(imageUrl, prompt, videoModel, duration),
     }),
   })
 
@@ -82,7 +133,7 @@ export async function POST(req: NextRequest) {
     })
   }
 
-  const { projectId, imageIds, imageUrls, motionPrompt, videoModelId } = await req.json()
+  const { projectId, imageIds, imageUrls, motionPrompt, videoModelId, duration: rawDuration } = await req.json()
   if (!projectId || !imageUrls?.length) {
     return new Response(JSON.stringify({ error: 'projectId and imageUrls required' }), { status: 400 })
   }
@@ -94,6 +145,17 @@ export async function POST(req: NextRequest) {
   const planId = await getUserPlanId(user.id)
   const availableModels = planId ? getAvailableModels(planId) : [VIDEO_MODELS[0]]
   const videoModel = availableModels.find((m) => m.id === videoModelId) ?? availableModels[0]
+
+  // Validate + resolve duration for this model
+  const requestedDuration = typeof rawDuration === 'number' && Number.isInteger(rawDuration)
+    ? rawDuration
+    : videoModel.defaultDuration
+  if (!videoModel.allowedDurations.includes(requestedDuration)) {
+    return new Response(JSON.stringify({
+      error: `Duration ${requestedDuration}s is not supported by ${videoModel.name}. Allowed: ${videoModel.allowedDurations.join(', ')}s`,
+    }), { status: 400 })
+  }
+  const duration = requestedDuration
   const tokenCostPerVideo = videoModel.tokenCost
 
   // Token check (for all videos in this batch)
@@ -131,7 +193,7 @@ export async function POST(req: NextRequest) {
             resolvedUrl = signed.signedUrl
           }
 
-          const videoUrl = await generateVideo(resolvedUrl, motionPrompt, videoModel.replicateSlug)
+          const videoUrl = await generateVideo(resolvedUrl, motionPrompt, videoModel, duration)
 
           await admin.from('project_videos').insert({
             project_id: projectId,
