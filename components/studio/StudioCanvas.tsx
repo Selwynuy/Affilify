@@ -1144,6 +1144,9 @@ export function StudioCanvas({
   const [selectedVideoModel, setSelectedVideoModel] = useState<VideoModel>(
     VIDEO_MODELS[0],
   );
+  const [selectedDuration, setSelectedDuration] = useState<number>(
+    VIDEO_MODELS[0].defaultDuration,
+  );
   const [previewImage, setPreviewImage] = useState<{
     url: string;
     label: string;
@@ -1841,6 +1844,7 @@ export function StudioCanvas({
           imageUrls: [videoCard.imageUrl],
           motionPrompt,
           videoModelId: selectedVideoModel.id,
+          duration: selectedDuration,
         }),
       });
 
@@ -1902,6 +1906,7 @@ export function StudioCanvas({
     avatarConfig,
     backgroundConfig,
     movementTemplates,
+    selectedDuration,
     selectedVideoModel.id,
     videoCard,
     videoMovement,
@@ -2433,7 +2438,7 @@ export function StudioCanvas({
                         {VIDEO_MODELS.map((m) => (
                           <button
                             key={m.id}
-                            onClick={() => setSelectedVideoModel(m)}
+                            onClick={() => { setSelectedVideoModel(m); setSelectedDuration(m.defaultDuration); }}
                             className={cn(
                               "px-3 py-2 rounded-lg text-left transition-all border",
                               selectedVideoModel.id === m.id
@@ -2461,6 +2466,27 @@ export function StudioCanvas({
                                 </span>
                               </div>
                             </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Duration */}
+                    <div>
+                      <p className="text-[9px] text-white/22 font-mono uppercase tracking-widest mb-2">Duration</p>
+                      <div className="flex gap-1.5 flex-wrap">
+                        {selectedVideoModel.allowedDurations.map((d) => (
+                          <button
+                            key={d}
+                            onClick={() => setSelectedDuration(d)}
+                            className={cn(
+                              "px-3 py-1.5 rounded-lg text-[11px] font-mono border transition-all",
+                              selectedDuration === d
+                                ? "bg-brand-accent/12 border-brand-accent/35 text-brand-accent font-semibold"
+                                : "bg-white/[0.03] border-white/[0.07] text-white/38 hover:bg-white/[0.06] hover:text-white/65",
+                            )}
+                          >
+                            {d}s
                           </button>
                         ))}
                       </div>

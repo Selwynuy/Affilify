@@ -46,8 +46,11 @@ export interface VideoModel {
   id: string
   name: string
   replicateSlug: string
+  replicateVersion: string
   tokenCost: number
   qualityLabel: string
   minPlanId: PlanId
   description: string
+  allowedDurations: number[]
+  defaultDuration: number
 }
