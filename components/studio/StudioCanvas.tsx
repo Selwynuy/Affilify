@@ -22,6 +22,7 @@ import {
   ExternalLink,
   Mars,
   Venus,
+  RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePreferences } from "@/lib/context/preferences-context";
@@ -369,9 +370,6 @@ function StatusChip({
       )}
     >
       <Icon size={11} />
-      <span className="hidden lg:inline text-current/60 mr-0.5 font-normal">
-        {label}:
-      </span>
       <span className="max-w-[110px] truncate">{value || "—"}</span>
     </button>
   );
@@ -2017,46 +2015,62 @@ export function StudioCanvas({
             )}
             {/* Settings chips — desktop only */}
             <div className="hidden sm:flex items-center gap-1 ml-1 pl-1.5 border-l border-white/8">
-              <StatusChip
-                icon={User}
-                label="Avatar"
-                value={avatarLabel}
-                active={activeTemplatePanel === "avatar"}
-                onClick={() =>
-                  setActiveTemplatePanel((p) => (p === "avatar" ? null : "avatar"))
-                }
-              />
-              <StatusChip
-                icon={Layers}
-                label="BG"
-                value={backgroundLabel}
-                active={activeTemplatePanel === "background"}
-                onClick={() =>
-                  setActiveTemplatePanel((p) =>
-                    p === "background" ? null : "background",
-                  )
-                }
-              />
-              <StatusChip
-                icon={Camera}
-                label="Camera"
-                value={cameraLabel}
-                active={activeTemplatePanel === "camera"}
-                onClick={() =>
-                  setActiveTemplatePanel((p) => (p === "camera" ? null : "camera"))
-                }
-              />
-              <StatusChip
-                icon={Wind}
-                label="Movement"
-                value={movementLabel}
-                active={activeTemplatePanel === "movement"}
-                onClick={() =>
-                  setActiveTemplatePanel((p) =>
-                    p === "movement" ? null : "movement",
-                  )
-                }
-              />
+              <button
+                type="button"
+                onClick={() => setActiveTemplatePanel((p) => (p === "avatar" ? null : "avatar"))}
+                className={cn(
+                  "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium border transition-all select-none cursor-pointer",
+                  activeTemplatePanel === "avatar"
+                    ? "bg-brand-accent/15 border-brand-accent/35 text-brand-accent"
+                    : "bg-white/4 border-white/8 text-white/55 hover:bg-white/[0.07] hover:border-white/[0.14] hover:text-white/75",
+                )}
+              >
+                <User size={11} />
+                <span>Avatar</span>
+                <RefreshCw size={9} className="opacity-60" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTemplatePanel((p) => (p === "background" ? null : "background"))}
+                className={cn(
+                  "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium border transition-all select-none cursor-pointer",
+                  activeTemplatePanel === "background"
+                    ? "bg-brand-accent/15 border-brand-accent/35 text-brand-accent"
+                    : "bg-white/4 border-white/8 text-white/55 hover:bg-white/[0.07] hover:border-white/[0.14] hover:text-white/75",
+                )}
+              >
+                <Layers size={11} />
+                <span>Background</span>
+                <RefreshCw size={9} className="opacity-60" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTemplatePanel((p) => (p === "camera" ? null : "camera"))}
+                className={cn(
+                  "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium border transition-all select-none cursor-pointer",
+                  activeTemplatePanel === "camera"
+                    ? "bg-brand-accent/15 border-brand-accent/35 text-brand-accent"
+                    : "bg-white/4 border-white/8 text-white/55 hover:bg-white/[0.07] hover:border-white/[0.14] hover:text-white/75",
+                )}
+              >
+                <Camera size={11} />
+                <span>Angle</span>
+                <RefreshCw size={9} className="opacity-60" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTemplatePanel((p) => (p === "movement" ? null : "movement"))}
+                className={cn(
+                  "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium border transition-all select-none cursor-pointer",
+                  activeTemplatePanel === "movement"
+                    ? "bg-brand-accent/15 border-brand-accent/35 text-brand-accent"
+                    : "bg-white/4 border-white/8 text-white/55 hover:bg-white/[0.07] hover:border-white/[0.14] hover:text-white/75",
+                )}
+              >
+                <Wind size={11} />
+                <span>Movement</span>
+                <RefreshCw size={9} className="opacity-60" />
+              </button>
             </div>
           </div>
           {/* Hint — desktop only */}
