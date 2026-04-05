@@ -25,11 +25,13 @@ interface TikTokAccountResponse {
 export function TikTokShareButton({
   storageFileId,
   fileName,
+  fileUrl,
   className,
   buttonLabel = 'Share to TikTok',
 }: {
   storageFileId: string
   fileName: string
+  fileUrl?: string | null
   className?: string
   buttonLabel?: string
 }) {
@@ -43,10 +45,11 @@ export function TikTokShareButton({
   const [publishId, setPublishId] = useState<string | null>(null)
   const [publishStatus, setPublishStatus] = useState<Record<string, unknown> | null>(null)
   const [title, setTitle] = useState('')
-  const [privacyLevel, setPrivacyLevel] = useState('SELF_ONLY')
-  const [disableComment, setDisableComment] = useState(false)
-  const [disableDuet, setDisableDuet] = useState(false)
-  const [disableStitch, setDisableStitch] = useState(false)
+  const [privacyLevel, setPrivacyLevel] = useState('')
+  const [allowComment, setAllowComment] = useState(true)
+  const [allowDuet, setAllowDuet] = useState(true)
+  const [allowStitch, setAllowStitch] = useState(true)
+  const [contentDisclosureEnabled, setContentDisclosureEnabled] = useState(false)
   const [brandContentToggle, setBrandContentToggle] = useState(false)
   const [brandOrganicToggle, setBrandOrganicToggle] = useState(false)
   const [consentChecked, setConsentChecked] = useState(false)
@@ -63,10 +66,10 @@ export function TikTokShareButton({
       setAccount(json)
       const creator = json.creator as TikTokCreator | undefined
       if (creator) {
-        setPrivacyLevel(creator.privacy_level_options[0] ?? 'SELF_ONLY')
-        setDisableComment(creator.comment_disabled)
-        setDisableDuet(creator.duet_disabled)
-        setDisableStitch(creator.stitch_disabled)
+        setPrivacyLevel(creator.privacy_level_options.length === 1 ? creator.privacy_level_options[0] ?? '' : '')
+        setAllowComment(!creator.comment_disabled)
+        setAllowDuet(!creator.duet_disabled)
+        setAllowStitch(!creator.stitch_disabled)
       }
     } catch (err) {
       setMessage(err instanceof Error ? err.message : 'Could not load TikTok status')
@@ -140,6 +143,13 @@ export function TikTokShareButton({
       setAccount({ connected: false })
       setPublishId(null)
       setPublishStatus(null)
+      setPrivacyLevel('')
+      setAllowComment(true)
+      setAllowDuet(true)
+      setAllowStitch(true)
+      setContentDisclosureEnabled(false)
+      setBrandContentToggle(false)
+      setBrandOrganicToggle(false)
       setConsentChecked(false)
     } catch (err) {
       setMessage(err instanceof Error ? err.message : 'Could not disconnect TikTok')
@@ -162,14 +172,14 @@ export function TikTokShareButton({
           storageFileId,
           title,
           privacyLevel,
-          disableComment,
-          disableDuet,
-          disableStitch,
-          brandContentToggle,
-          brandOrganicToggle,
+          disableComment: !allowComment,
+          disableDuet: !allowDuet,
+          disableStitch: !allowStitch,
+          brandContentToggle: contentDisclosureEnabled && brandContentToggle,
+          brandOrganicToggle: contentDisclosureEnabled && brandOrganicToggle,
         }),
       })
-      const json = await res.json()
+      const json = await res.json().catch(() => null)
       if (!res.ok) throw new Error(json.error ?? 'TikTok share failed')
 
       setPublishId(json.publishId)
@@ -184,6 +194,8 @@ export function TikTokShareButton({
 
   const creator = account?.creator
   const resolvedStatus = String(publishStatus?.publish_status ?? publishStatus?.status ?? '').toUpperCase()
+  const requiresExplicitPrivacy = (creator?.privacy_level_options?.length ?? 0) > 1
+  const canSubmit = consentChecked && Boolean(privacyLevel)
 
   return (
     <>
@@ -230,6 +242,12 @@ export function TikTokShareButton({
               </div>
             ) : (
               <div className="space-y-4">
+                {fileUrl && (
+                  <div className="rounded-xl overflow-hidden border border-white/8 bg-black">
+                    <video src={fileUrl} controls playsInline className="w-full max-h-72 object-contain" />
+                  </div>
+                )}
+
                 <div className="flex items-center justify-between gap-4 rounded-xl border border-white/8 bg-white/[0.03] p-4">
                   <div className="flex items-center gap-3 min-w-0">
                     {creator?.creator_avatar_url ? (
@@ -272,12 +290,22 @@ export function TikTokShareButton({
                       onChange={(e) => setPrivacyLevel(e.target.value)}
                       className="w-full rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5 text-sm text-white focus:outline-none focus:border-brand-accent/40"
                     >
-                      {(creator?.privacy_level_options ?? ['SELF_ONLY']).map((option) => (
+                      {requiresExplicitPrivacy && (
+                        <option value="" className="text-black">
+                          Select who can watch
+                        </option>
+                      )}
+                      {(creator?.privacy_level_options ?? []).map((option) => (
                         <option key={option} value={option} className="text-black">
                           {option}
                         </option>
                       ))}
                     </select>
+                    <p className="text-[11px] text-white/35">
+                      {creator?.privacy_level_options.includes('SELF_ONLY')
+                        ? 'For unaudited TikTok apps, select SELF_ONLY and use a private TikTok account during testing.'
+                        : 'Select one of the privacy options returned by TikTok for this account.'}
+                    </p>
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-[11px] uppercase tracking-[0.15em] text-white/35">AIGC label</label>
@@ -289,42 +317,65 @@ export function TikTokShareButton({
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-white/70">
                   <label className="flex items-center gap-2 rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2">
-                    <input type="checkbox" checked={disableComment} disabled={Boolean(creator?.comment_disabled)} onChange={(e) => setDisableComment(e.target.checked)} />
-                    Disable comments
+                    <input type="checkbox" checked={allowComment} disabled={Boolean(creator?.comment_disabled)} onChange={(e) => setAllowComment(e.target.checked)} />
+                    Allow comments
                   </label>
                   <label className="flex items-center gap-2 rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2">
-                    <input type="checkbox" checked={disableDuet} disabled={Boolean(creator?.duet_disabled)} onChange={(e) => setDisableDuet(e.target.checked)} />
-                    Disable duet
+                    <input type="checkbox" checked={allowDuet} disabled={Boolean(creator?.duet_disabled)} onChange={(e) => setAllowDuet(e.target.checked)} />
+                    Allow duet
                   </label>
                   <label className="flex items-center gap-2 rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2">
-                    <input type="checkbox" checked={disableStitch} disabled={Boolean(creator?.stitch_disabled)} onChange={(e) => setDisableStitch(e.target.checked)} />
-                    Disable stitch
-                  </label>
-                  <label className="flex items-center gap-2 rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2">
-                    <input type="checkbox" checked={brandContentToggle} onChange={(e) => setBrandContentToggle(e.target.checked)} />
-                    Paid partnership
+                    <input type="checkbox" checked={allowStitch} disabled={Boolean(creator?.stitch_disabled)} onChange={(e) => setAllowStitch(e.target.checked)} />
+                    Allow stitch
                   </label>
                   <label className="flex items-center gap-2 rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2 sm:col-span-2">
-                    <input type="checkbox" checked={brandOrganicToggle} onChange={(e) => setBrandOrganicToggle(e.target.checked)} />
-                    Promotes creator&apos;s own business
+                    <input
+                      type="checkbox"
+                      checked={contentDisclosureEnabled}
+                      onChange={(e) => {
+                        const checked = e.target.checked
+                        setContentDisclosureEnabled(checked)
+                        if (!checked) {
+                          setBrandContentToggle(false)
+                          setBrandOrganicToggle(false)
+                        }
+                      }}
+                    />
+                    This post promotes a brand, product, or service
                   </label>
                 </div>
 
+                {contentDisclosureEnabled && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-white/70">
+                    <label className="flex items-center gap-2 rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2">
+                      <input type="checkbox" checked={brandContentToggle} onChange={(e) => setBrandContentToggle(e.target.checked)} />
+                      Paid partnership
+                    </label>
+                    <label className="flex items-center gap-2 rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2">
+                      <input type="checkbox" checked={brandOrganicToggle} onChange={(e) => setBrandOrganicToggle(e.target.checked)} />
+                      Promotes my own business
+                    </label>
+                  </div>
+                )}
+
                 <label className="flex items-start gap-2 rounded-xl border border-white/8 bg-white/[0.03] px-3 py-3 text-sm text-white/70">
                   <input type="checkbox" className="mt-0.5" checked={consentChecked} onChange={(e) => setConsentChecked(e.target.checked)} />
-                  <span>I confirm this TikTok upload is intentional and I want Genetrify to send this video to my TikTok account.</span>
+                  <span>I confirm this upload is intentional, I have the rights to share this content and any included music, and I want Genetrify to send it to my TikTok account.</span>
                 </label>
 
                 <div className="flex items-center gap-2">
                   <Button
                     type="button"
                     onClick={shareToTikTok}
-                    disabled={sharing || !consentChecked}
+                    disabled={sharing || !canSubmit}
                     className="h-10 rounded-xl bg-brand-accent hover:bg-brand-accent-hover text-brand-bg text-sm font-semibold disabled:opacity-40"
                   >
                     {sharing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Music2 className="w-4 h-4" />}
                     {sharing ? 'Uploading...' : 'Post to TikTok'}
                   </Button>
+                  {!privacyLevel && (
+                    <span className="text-xs text-white/35">Choose a privacy setting first.</span>
+                  )}
                   {publishId && (
                     <span className="text-xs text-white/35">Publish ID: {publishId}</span>
                   )}

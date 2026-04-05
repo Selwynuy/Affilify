@@ -9,6 +9,24 @@ import {
   uploadVideoToTikTok,
 } from '@/lib/tiktok'
 
+function getShareErrorStatus(message: string) {
+  const normalized = message.toLowerCase()
+
+  if (
+    normalized.includes('content-sharing-guidelines')
+    || normalized.includes('privacy level')
+    || normalized.includes('invalid parameter')
+    || normalized.includes('invalid params')
+    || normalized.includes('invalid file')
+    || normalized.includes('unaudited')
+    || normalized.includes('private viewing mode')
+  ) {
+    return 400
+  }
+
+  return 500
+}
+
 export async function POST(req: NextRequest) {
   try {
     const supabase = await createClient()
@@ -112,8 +130,9 @@ export async function POST(req: NextRequest) {
       status: initialStatus,
     })
   } catch (err) {
+    const message = err instanceof Error ? err.message : 'TikTok share failed.'
     return NextResponse.json({
-      error: err instanceof Error ? err.message : 'TikTok share failed.',
-    }, { status: 500 })
+      error: message,
+    }, { status: getShareErrorStatus(message) })
   }
 }

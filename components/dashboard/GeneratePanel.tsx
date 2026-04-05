@@ -198,6 +198,7 @@ function HistorySection({ runs }: { runs: HistoryRun[] }) {
                     <TikTokShareButton
                       storageFileId={v.storageFileId}
                       fileName={v.filename}
+                      fileUrl={v.videoUrl}
                       buttonLabel="Share"
                       className="w-full h-7 rounded-md bg-white/[0.03] hover:bg-white/[0.06] text-white/55 border border-white/8 text-[10px]"
                     />
@@ -758,6 +759,7 @@ export function GeneratePanel({
                     <TikTokShareButton
                       storageFileId={v.storageFileId}
                       fileName={v.filename}
+                      fileUrl={v.videoUrl}
                       className="w-full"
                     />
                   )}
