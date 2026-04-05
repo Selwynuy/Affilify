@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { isUuid, verifySameOrigin } from '@/lib/security'
 
 export async function GET() {
   const supabase = await createClient()
@@ -22,6 +23,9 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const originError = verifySameOrigin(req)
+  if (originError) return originError
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -33,8 +37,8 @@ export async function POST(req: NextRequest) {
   if ('avatar_config' in body) update.avatar_config = body.avatar_config
   if ('background_config' in body) update.background_config = body.background_config
   if ('onboarding_completed' in body) update.onboarding_completed = body.onboarding_completed
-  if ('camera_template_id' in body) update.camera_template_id = body.camera_template_id
-  if ('movement_template_id' in body) update.movement_template_id = body.movement_template_id
+  if ('camera_template_id' in body) update.camera_template_id = isUuid(body.camera_template_id) ? body.camera_template_id : null
+  if ('movement_template_id' in body) update.movement_template_id = isUuid(body.movement_template_id) ? body.movement_template_id : null
 
   const { error } = await supabase
     .from('user_preferences')

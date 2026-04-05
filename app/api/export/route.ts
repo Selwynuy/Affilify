@@ -4,8 +4,9 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { deductTokens, getTokenBalance, getUserPlanId } from '@/lib/billing/tokens'
 import { getAvailableModels, VIDEO_MODELS } from '@/lib/data/plans'
 import { logger } from '@/lib/logger'
-import { rateLimit } from '@/lib/rate-limit'
+import { rateLimit } from '@/lib/db-rate-limit'
 import type { VideoModel } from '@/lib/types/billing'
+import { isUuid, parseInteger, sanitizeText, verifySameOrigin } from '@/lib/security'
 
 const REPLICATE_API_KEY = process.env.REPLICATE_API_KEY
 
@@ -119,12 +120,14 @@ function encode(obj: unknown): Uint8Array {
 }
 
 export async function POST(req: NextRequest) {
+  const originError = verifySameOrigin(req)
+  if (originError) return originError
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
 
-  // Rate limit: 5 export batches per user per minute (video gen is expensive)
-  const rl = rateLimit(`export:${user.id}`, { limit: 5, windowMs: 60_000 })
+  const rl = await rateLimit(`export:${user.id}`, { limit: 5, windowMs: 60_000 })
   if (!rl.allowed) {
     logger.warn('Rate limit hit on /api/export', { userId: user.id })
     return new Response(JSON.stringify({ error: 'Too many requests. Please wait before exporting again.' }), {
@@ -133,20 +136,26 @@ export async function POST(req: NextRequest) {
     })
   }
 
-  const { projectId, imageIds, imageUrls, motionPrompt, videoModelId, duration: rawDuration } = await req.json()
-  if (!projectId || !imageUrls?.length) {
-    return new Response(JSON.stringify({ error: 'projectId and imageUrls required' }), { status: 400 })
+  const body = await req.json()
+  const projectId = isUuid(body?.projectId) ? body.projectId : null
+  const imageIds = Array.isArray(body?.imageIds)
+    ? body.imageIds.filter((value: unknown): value is string => isUuid(typeof value === 'string' ? value : null))
+    : []
+  const motionPrompt = sanitizeText(body?.motionPrompt, { maxLength: 500, allowNewlines: true })
+  const videoModelId = typeof body?.videoModelId === 'string' ? body.videoModelId : ''
+  const rawDuration = parseInteger(body?.duration)
+
+  if (!projectId || imageIds.length === 0) {
+    return new Response(JSON.stringify({ error: 'projectId and imageIds required' }), { status: 400 })
   }
   if (!motionPrompt) {
     return new Response(JSON.stringify({ error: 'motionPrompt required' }), { status: 400 })
   }
 
-  // Resolve video model — validate plan access
   const planId = await getUserPlanId(user.id)
   const availableModels = planId ? getAvailableModels(planId) : [VIDEO_MODELS[0]]
   const videoModel = availableModels.find((m) => m.id === videoModelId) ?? availableModels[0]
 
-  // Validate + resolve duration for this model
   const requestedDuration = typeof rawDuration === 'number' && Number.isInteger(rawDuration)
     ? rawDuration
     : videoModel.defaultDuration
@@ -158,8 +167,7 @@ export async function POST(req: NextRequest) {
   const duration = requestedDuration
   const tokenCostPerVideo = videoModel.tokenCost
 
-  // Token check (for all videos in this batch)
-  const totalTokensNeeded = tokenCostPerVideo * imageUrls.length
+  const totalTokensNeeded = tokenCostPerVideo * imageIds.length
   const balance = await getTokenBalance(user.id)
   if (balance < totalTokensNeeded) {
     return new Response(JSON.stringify({
@@ -168,44 +176,64 @@ export async function POST(req: NextRequest) {
   }
 
   const admin = createAdminClient()
+  const { data: images, error: imageError } = await admin
+    .from('project_images')
+    .select('id, storage_path, url')
+    .eq('project_id', projectId)
+    .eq('user_id', user.id)
+    .eq('kind', 'generated')
+    .in('id', imageIds)
+
+  if (imageError) {
+    return new Response(JSON.stringify({ error: imageError.message }), { status: 500 })
+  }
+  if (!images || images.length !== imageIds.length) {
+    return new Response(JSON.stringify({ error: 'One or more selected images were not found' }), { status: 404 })
+  }
+
+  const imageMap = new Map<string, (typeof images)[number]>(images.map((image) => [image.id, image]))
+  const orderedImages = imageIds
+    .map((id: string) => imageMap.get(id))
+    .filter((image: (typeof images)[number] | undefined): image is (typeof images)[number] => Boolean(image))
 
   const stream = new ReadableStream({
     async start(controller) {
       let successCount = 0
 
-      for (let i = 0; i < imageUrls.length; i++) {
-        const imageUrl: string = imageUrls[i]
-        const imageId: string = imageIds?.[i] ?? String(i)
-
-        controller.enqueue(encode({ type: 'progress', index: i, total: imageUrls.length }))
+      for (let i = 0; i < orderedImages.length; i++) {
+        const image = orderedImages[i]!
+        controller.enqueue(encode({ type: 'progress', index: i, total: orderedImages.length }))
 
         try {
-          let resolvedUrl = imageUrl
-          if (imageUrl.startsWith('data:')) {
-            const [meta, b64] = imageUrl.split(',')
-            const mimeType = meta.split(':')[1].split(';')[0]
-            const ext = mimeType === 'image/png' ? 'png' : 'jpg'
-            const path = `${user.id}/${projectId}/export-input-${i}.${ext}`
-            const buffer = Buffer.from(b64, 'base64')
-            await admin.storage.from('generated').upload(path, buffer, { contentType: mimeType, upsert: true })
-            const { data: signed } = await admin.storage.from('generated').createSignedUrl(path, 60 * 60)
-            if (!signed?.signedUrl) throw new Error('Failed to get signed URL for image')
-            resolvedUrl = signed.signedUrl
-          }
+          const sourcePath = image.storage_path || image.url
+          if (!sourcePath) throw new Error('Generated image source missing')
 
-          const videoUrl = await generateVideo(resolvedUrl, motionPrompt, videoModel, duration)
+          const { data: signed } = await admin.storage.from('generated').createSignedUrl(sourcePath, 60 * 30)
+          if (!signed?.signedUrl) throw new Error('Failed to create export image URL')
+
+          const videoUrl = await generateVideo(signed.signedUrl, motionPrompt, videoModel, duration)
 
           await admin.from('project_videos').insert({
             project_id: projectId,
             user_id: user.id,
-            image_id: imageId,
+            image_id: image.id,
             status: 'ready',
             url: videoUrl,
           })
 
+          const charged = await deductTokens(user.id, tokenCostPerVideo, 'video_gen', `Video generation - ${videoModel.name}`, projectId)
+          if (!charged) {
+            logger.warn('Token deduction rejected after video generation', { userId: user.id, projectId, imageId: image.id })
+            await admin.from('project_videos').delete().eq('project_id', projectId).eq('image_id', image.id).eq('url', videoUrl)
+            controller.enqueue(encode({
+              type: 'video_error',
+              index: i,
+              error: 'Insufficient tokens.',
+            }))
+            continue
+          }
+
           successCount++
-          await deductTokens(user.id, tokenCostPerVideo, 'video_gen', `Video generation — ${videoModel.name}`, projectId)
-          // Track in storage_files (external URL, size unknown — use 0 as placeholder)
           const storageFileName = `genetrify-video-${i + 1}.mp4`
           const { data: storageFile, error: storageFileError } = await admin.from('storage_files').insert({
             user_id: user.id,
@@ -217,11 +245,12 @@ export async function POST(req: NextRequest) {
             size_bytes: 0,
           }).select('id').single()
           if (storageFileError) throw new Error(storageFileError.message)
+
           controller.enqueue(encode({
             type: 'video',
             index: i,
-            total: imageUrls.length,
-            video: { videoUrl, imageId, filename: storageFileName, storageFileId: storageFile.id },
+            total: orderedImages.length,
+            video: { videoUrl, imageId: image.id, filename: storageFileName, storageFileId: storageFile.id },
           }))
         } catch (e) {
           logger.error('Video generation failed', { userId: user.id, projectId, index: i }, e)
@@ -237,7 +266,7 @@ export async function POST(req: NextRequest) {
         await admin.from('projects').update({ status: 'videos_ready' }).eq('id', projectId)
       }
 
-      controller.enqueue(encode({ type: 'done', total: imageUrls.length, success: successCount }))
+      controller.enqueue(encode({ type: 'done', total: orderedImages.length, success: successCount }))
       controller.close()
     },
   })

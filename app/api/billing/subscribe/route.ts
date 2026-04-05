@@ -14,13 +14,20 @@ import { createSubscription } from '@/lib/billing/paymongo'
 import { getPlan } from '@/lib/data/plans'
 import type { PlanId } from '@/lib/types/billing'
 import { logger } from '@/lib/logger'
+import { sanitizeText, verifySameOrigin } from '@/lib/security'
 
 export async function POST(req: NextRequest) {
+  const originError = verifySameOrigin(req)
+  if (originError) return originError
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { customerId, planId, paymentMethodId } = await req.json()
+  const body = await req.json()
+  const customerId = sanitizeText(body?.customerId, { maxLength: 100 })
+  const planId = sanitizeText(body?.planId, { maxLength: 20 })
+  const paymentMethodId = sanitizeText(body?.paymentMethodId, { maxLength: 100 })
 
   if (!customerId || !planId || !paymentMethodId) {
     return NextResponse.json({ error: 'customerId, planId, and paymentMethodId required' }, { status: 400 })
