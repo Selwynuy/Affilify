@@ -255,7 +255,11 @@ export async function uploadVideoToTikTok(uploadUrl: string, buffer: Buffer, mim
 
   let offset = 0
   while (offset < buffer.byteLength) {
-    const end = Math.min(offset + chunkSize, buffer.byteLength)
+    const remainingAfterThisChunk = buffer.byteLength - (offset + chunkSize)
+    const shouldMergeRemainder = remainingAfterThisChunk > 0 && remainingAfterThisChunk < minChunkSize
+    const end = shouldMergeRemainder
+      ? buffer.byteLength
+      : Math.min(offset + chunkSize, buffer.byteLength)
     const chunk = buffer.subarray(offset, end)
 
     const response = await fetch(uploadUrl, {
