@@ -121,9 +121,10 @@ export async function POST(req: NextRequest) {
     'cameraAnglePrompt',
     'at eye level, centered on the subject',
   )
-  const isPreset = avatar.type === 'preset'
+  // preset and user_model both use avatarReferenceB64; custom uses faceB64
+  const usesReference = avatar.type === 'preset' || avatar.type === 'user_model'
   const validProductRows = productRows.filter(r => r.b64_data && r.mime_type)
-  const hasAvatarReference = isPreset
+  const hasAvatarReference = usesReference
     ? Boolean(avatarReferenceB64 && avatarReferenceMime)
     : Boolean(faceB64 && faceMime)
   const hasBackgroundReference = Boolean(backgroundReferenceB64 && backgroundReferenceMime)
@@ -138,9 +139,9 @@ export async function POST(req: NextRequest) {
   const parts: unknown[] = []
 
   // 1. Avatar image
-  if (!isPreset && faceB64 && faceMime) {
+  if (!usesReference && faceB64 && faceMime) {
     parts.push({ inlineData: { mimeType: faceMime, data: faceB64 } })
-  } else if (isPreset && avatarReferenceB64 && avatarReferenceMime) {
+  } else if (usesReference && avatarReferenceB64 && avatarReferenceMime) {
     parts.push({ inlineData: { mimeType: avatarReferenceMime, data: avatarReferenceB64 } })
   }
 

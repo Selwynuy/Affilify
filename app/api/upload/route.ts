@@ -165,6 +165,20 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // For user_model type, load the model image from storage as avatar reference
+    let userModelReferenceB64: string | undefined
+    let userModelReferenceMime: string | undefined
+    if (ac.type === 'user_model' && ac.userModelStoragePath) {
+      const { data: modelFile } = await admin.storage
+        .from('generated')
+        .download(ac.userModelStoragePath as string)
+      if (modelFile) {
+        const buffer = await modelFile.arrayBuffer()
+        userModelReferenceB64 = Buffer.from(buffer).toString('base64')
+        userModelReferenceMime = modelFile.type || 'image/jpeg'
+      }
+    }
+
     const avatarTemplate = ac.type === 'preset'
       ? await getPublishedMarketplaceTemplateById(String(ac.presetId ?? ''))
       : null
@@ -175,6 +189,12 @@ export async function POST(req: NextRequest) {
     if (ac.type === 'preset' && !avatarTemplate?.reference_url) {
       return NextResponse.json(
         { error: 'Selected avatar is missing a full-resolution reference image.' },
+        { status: 400 },
+      )
+    }
+    if (ac.type === 'user_model' && (!userModelReferenceB64 || !userModelReferenceMime)) {
+      return NextResponse.json(
+        { error: 'Selected model image could not be loaded. Try generating a new model.' },
         { status: 400 },
       )
     }
@@ -222,6 +242,8 @@ export async function POST(req: NextRequest) {
     avatar = {
       type: ac.type,
       presetId: ac.presetId,
+      userModelId: ac.userModelId,
+      userModelStoragePath: ac.userModelStoragePath,
       promptHint,
       skinTone: getTemplateConfigValue(avatarTemplate, 'skinTone'),
       hairDescription: getTemplateConfigValue(avatarTemplate, 'hairDescription'),
@@ -233,9 +255,10 @@ export async function POST(req: NextRequest) {
       facePath: ac.facePath,
       faceB64,
       faceMime,
+      // For user_model type, the generated model image serves as the avatar reference
+      avatarReferenceB64: ac.type === 'user_model' ? userModelReferenceB64 : avatarReferenceB64,
+      avatarReferenceMime: ac.type === 'user_model' ? userModelReferenceMime : avatarReferenceMime,
       avatarReferenceUrl,
-      avatarReferenceB64,
-      avatarReferenceMime,
       backgroundPresetId: bc.presetId,
       backgroundReferenceUrl,
       backgroundReferenceB64,

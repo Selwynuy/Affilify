@@ -40,3 +40,18 @@ export function buildCustomAvatarConfig(faceUrl: string, facePath: string, gende
     facePath,
   }
 }
+
+export function buildUserModelAvatarConfig(
+  userModelId: string,
+  storagePath: string,
+  gender: AvatarConfig['gender'],
+  style: AvatarConfig['style'] = 'casual',
+): AvatarConfig {
+  return {
+    type: 'user_model',
+    userModelId,
+    userModelStoragePath: storagePath,
+    gender,
+    style,
+  }
+}
