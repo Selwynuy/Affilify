@@ -9,6 +9,10 @@ import {
   getMarketplaceTemplateDefaults,
   getPublishedMarketplaceTemplateGroups,
 } from '@/lib/data/marketplace-templates'
+import {
+  buildAvatarConfigFromTemplate,
+  buildBackgroundConfigFromTemplate,
+} from '@/lib/preferences'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await verifySession()
@@ -17,13 +21,27 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const supabase = await createClient()
   const { data: prefs } = await supabase
     .from('user_preferences')
-    .select('onboarding_completed, avatar_config, background_config, camera_template_id, movement_template_id')
+    .select('avatar_config, background_config, camera_template_id, movement_template_id')
     .eq('user_id', session.user.id)
     .single()
 
   const templateDefaults = await getMarketplaceTemplateDefaults()
-  const { camera: cameraTemplates, movement: movementTemplates } =
+  const {
+    avatar: avatarTemplates,
+    background: backgroundTemplates,
+    camera: cameraTemplates,
+    movement: movementTemplates,
+  } =
     await getPublishedMarketplaceTemplateGroups()
+
+  const defaultAvatarTemplate =
+    avatarTemplates.find((template) => template.id === templateDefaults.avatarTemplateId)
+    ?? avatarTemplates[0]
+    ?? null
+  const defaultBackgroundTemplate =
+    backgroundTemplates.find((template) => template.id === templateDefaults.backgroundTemplateId)
+    ?? backgroundTemplates[0]
+    ?? null
 
   const preferredCameraTemplateId = typeof prefs?.camera_template_id === 'string'
     ? prefs.camera_template_id
@@ -39,15 +57,16 @@ export default async function DashboardLayout({ children }: { children: React.Re
     ? preferredMovementTemplateId!
     : templateDefaults.movementTemplateId
 
-  if (!prefs || !prefs.onboarding_completed) {
-    redirect('/onboarding')
-  }
+  const initialAvatarConfig =
+    (prefs?.avatar_config as AvatarConfig | null) ?? buildAvatarConfigFromTemplate(defaultAvatarTemplate)
+  const initialBackgroundConfig =
+    (prefs?.background_config as BackgroundConfig | null) ?? buildBackgroundConfigFromTemplate(defaultBackgroundTemplate)
 
   return (
     <TokenProvider>
       <PreferencesProvider
-        initialAvatarConfig={(prefs.avatar_config as AvatarConfig) ?? null}
-        initialBackgroundConfig={(prefs.background_config as BackgroundConfig) ?? null}
+        initialAvatarConfig={initialAvatarConfig}
+        initialBackgroundConfig={initialBackgroundConfig}
         initialCameraTemplateId={initialCameraTemplateId}
         initialMovementTemplateId={initialMovementTemplateId}
       >

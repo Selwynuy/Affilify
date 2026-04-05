@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { usePreferences } from '@/lib/context/preferences-context'
 import { useTokens } from '@/lib/context/token-context'
-import type { AvatarConfig, BackgroundConfig } from '@/lib/types/preferences'
+import { buildAvatarConfigFromTemplate, buildBackgroundConfigFromTemplate } from '@/lib/preferences'
 import {
   ImagePlus, X, Download,
   Zap, Sparkles, Video, RotateCcw, ChevronDown, CheckCircle2,
@@ -274,6 +274,10 @@ export function GeneratePanel({
 
   const isGenerating = stage === 'uploading' || stage === 'generating' || stage === 'making-videos'
   const canGenerate = productFiles.length > 0 && !!avatarConfig && !!backgroundConfig && !isGenerating && stage !== 'reviewing'
+  const missingSetup = [
+    !avatarConfig ? 'avatar' : null,
+    !backgroundConfig ? 'background' : null,
+  ].filter(Boolean) as string[]
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const newFiles = Array.from(e.target.files ?? [])
@@ -430,18 +434,8 @@ export function GeneratePanel({
   async function handleAvatarChange(id: string) {
     const template = avatarTemplates.find((item) => item.id === id)
     if (!template) return
-    const style =
-      template.config.style === 'streetwear' ||
-      template.config.style === 'luxury' ||
-      template.config.style === 'minimal'
-        ? template.config.style
-        : 'casual'
-    const config: AvatarConfig = {
-      type: 'preset' as const,
-      presetId: template.id,
-      gender: template.config.gender === 'woman' ? 'woman' : 'man',
-      style,
-    }
+    const config = buildAvatarConfigFromTemplate(template)
+    if (!config) return
     setAvatarConfig(config)
     fetch('/api/preferences', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ avatar_config: config }) })
   }
@@ -449,14 +443,8 @@ export function GeneratePanel({
   async function handleBackgroundChange(id: string) {
     const template = backgroundTemplates.find((item) => item.id === id)
     if (!template) return
-    const config: BackgroundConfig = {
-      type: 'preset' as const,
-      presetId: template.id,
-      roomAesthetic: String(template.config.roomAesthetic ?? ''),
-      roomColors: String(template.config.roomColors ?? ''),
-      roomElements: String(template.config.roomElements ?? ''),
-      thumbnailUrl: template.thumbnail_url ?? undefined,
-    }
+    const config = buildBackgroundConfigFromTemplate(template)
+    if (!config) return
     setBackgroundConfig(config)
     fetch('/api/preferences', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ background_config: config }) })
   }
@@ -485,11 +473,11 @@ export function GeneratePanel({
       <div className="flex flex-col gap-4 flex-1 min-w-0">
 
       {/* 3. AVATAR / BACKGROUND WARNING */}
-      {!avatarConfig && (
+      {missingSetup.length > 0 && (
         <div className="flex items-center gap-2 text-sm text-amber-400 bg-amber-500/8 border border-amber-500/20 rounded-xl px-4 py-3">
           <AlertCircle className="w-4 h-4 shrink-0" />
           <span>
-            <Link href="/templates" className="underline underline-offset-2 hover:text-amber-300">Set up your avatar and background</Link> before generating.
+            Choose your {missingSetup.join(' and ')} in the sidebar or <Link href="/templates" className="underline underline-offset-2 hover:text-amber-300">browse templates</Link> before generating.
           </span>
         </div>
       )}

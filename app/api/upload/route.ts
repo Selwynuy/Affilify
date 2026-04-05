@@ -2,9 +2,16 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import {
+  getMarketplaceTemplateDefaults,
+  getPublishedMarketplaceTemplateGroups,
   getPublishedMarketplaceTemplateById,
   getTemplateConfigValue,
 } from '@/lib/data/marketplace-templates'
+import type { AvatarConfig, BackgroundConfig } from '@/lib/types/preferences'
+import {
+  buildAvatarConfigFromTemplate,
+  buildBackgroundConfigFromTemplate,
+} from '@/lib/preferences'
 import {
   assertAllowedMimeType,
   getExtensionForMimeType,
@@ -117,12 +124,35 @@ export async function POST(req: NextRequest) {
       .eq('user_id', user.id)
       .single()
 
-    if (!prefs?.avatar_config) {
-      return NextResponse.json({ error: 'Avatar not configured. Please complete onboarding.' }, { status: 400 })
+    const templateDefaults = await getMarketplaceTemplateDefaults()
+    const {
+      avatar: avatarTemplates,
+      background: backgroundTemplates,
+    } = await getPublishedMarketplaceTemplateGroups()
+
+    const defaultAvatarTemplate =
+      avatarTemplates.find((template) => template.id === templateDefaults.avatarTemplateId)
+      ?? avatarTemplates[0]
+      ?? null
+    const defaultBackgroundTemplate =
+      backgroundTemplates.find((template) => template.id === templateDefaults.backgroundTemplateId)
+      ?? backgroundTemplates[0]
+      ?? null
+
+    const effectiveAvatarConfig =
+      (prefs?.avatar_config as AvatarConfig | null) ?? buildAvatarConfigFromTemplate(defaultAvatarTemplate)
+    const effectiveBackgroundConfig =
+      (prefs?.background_config as BackgroundConfig | null) ?? buildBackgroundConfigFromTemplate(defaultBackgroundTemplate)
+
+    if (!effectiveAvatarConfig) {
+      return NextResponse.json({ error: 'Avatar templates are unavailable right now.' }, { status: 400 })
+    }
+    if (!effectiveBackgroundConfig) {
+      return NextResponse.json({ error: 'Background templates are unavailable right now.' }, { status: 400 })
     }
 
-    const ac = prefs.avatar_config as Record<string, unknown>
-    const bc = (prefs.background_config ?? {}) as Record<string, unknown>
+    const ac = effectiveAvatarConfig as unknown as Record<string, unknown>
+    const bc = effectiveBackgroundConfig as unknown as Record<string, unknown>
 
     let faceB64: string | undefined
     let faceMime: string | undefined
