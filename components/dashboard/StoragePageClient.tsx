@@ -377,17 +377,6 @@ export function StoragePageClient({ initialData }: { initialData: StoragePageDat
                 </div>
               </div>
               <div className="flex items-center gap-1 shrink-0">
-                {file.file_type === 'generated_video' && (
-                  <div onClick={(e) => e.stopPropagation()}>
-                    <TikTokShareButton
-                      storageFileId={file.id}
-                      fileName={file.file_name}
-                      fileUrl={file.public_url}
-                      buttonLabel="Share"
-                      className="h-8 rounded-lg bg-transparent hover:bg-white/5 text-brand-text/25 hover:text-brand-text border border-transparent hover:border-white/8 px-2"
-                    />
-                  </div>
-                )}
                 {file.public_url ? (
                   <a href={file.public_url} download={file.file_name} onClick={(e) => e.stopPropagation()} className="p-2 rounded-lg text-brand-text/25 hover:text-brand-text hover:bg-white/5 transition-all" title="Download">
                     <Download className="w-3.5 h-3.5" />
@@ -395,6 +384,17 @@ export function StoragePageClient({ initialData }: { initialData: StoragePageDat
                 ) : (
                   <div className="p-2 opacity-20">
                     <Download className="w-3.5 h-3.5 text-brand-text/30" />
+                  </div>
+                )}
+                {file.file_type === 'generated_video' && (
+                  <div onClick={(e) => e.stopPropagation()}>
+                    <TikTokShareButton
+                      storageFileId={file.id}
+                      fileName={file.file_name}
+                      fileUrl={file.public_url}
+                      buttonLabel=""
+                      className="h-8 w-8 rounded-lg bg-transparent hover:bg-white/5 text-brand-text/25 hover:text-brand-text border border-transparent hover:border-white/8 px-0"
+                    />
                   </div>
                 )}
                 <button
