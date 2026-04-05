@@ -857,6 +857,7 @@ export function StudioCanvas({
   const [videoResult, setVideoResult] = useState<{ videoUrl: string; fileName: string; storageFileId?: string | null } | null>(null)
   const [zoom, setZoom] = useState(1)
   const [pan, setPan] = useState({ x: 0, y: 0 })
+  const [isMouseInCanvas, setIsMouseInCanvas] = useState(false)
 
   // Connection-draw state
   const [connectingFrom, setConnectingFrom] = useState<string | null>(null)
@@ -987,10 +988,15 @@ export function StudioCanvas({
     previousCardsRef.current = cards
   }, [cards])
   useEffect(() => {
-    return () => {
-      revokeProductObjectUrls(cardsRef.current)
+    const handleGlobalWheel = (e: WheelEvent) => {
+      if ((e.ctrlKey || e.metaKey) && isMouseInCanvas) {
+        e.preventDefault()
+      }
     }
-  }, [])
+
+    window.addEventListener('wheel', handleGlobalWheel, { passive: false })
+    return () => window.removeEventListener('wheel', handleGlobalWheel)
+  }, [isMouseInCanvas])
   useEffect(() => {
     const el = promptInputRef.current
     if (!el) return
@@ -1507,13 +1513,15 @@ export function StudioCanvas({
         }}
         onPointerDown={onCanvasPtrDown}
         onWheel={onCanvasWheel}
+        onMouseEnter={() => setIsMouseInCanvas(true)}
+        onMouseLeave={() => setIsMouseInCanvas(false)}
         onDragOver={onDragOver}
         onDragLeave={onDragLeave}
         onDrop={onDrop}
       >
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(168,85,247,0.06),transparent_55%)]" />
         <div className="pointer-events-none absolute left-3 top-3 z-[120] rounded-xl border border-white/[0.08] bg-[#120f1d]/85 px-3 py-2 text-[11px] text-white/45 shadow-[0_8px_24px_rgba(0,0,0,0.35)] backdrop-blur-sm">
-          Shift + drag selects. Ctrl/Cmd + wheel zooms.
+          Shift + drag selects. Ctrl/Cmd + wheel zooms (when mouse is over canvas).
         </div>
         <div className="absolute top-3 right-3 z-[120] flex items-center gap-1.5 rounded-xl border border-white/[0.08] bg-[#120f1d]/85 px-2 py-2 shadow-[0_8px_24px_rgba(0,0,0,0.35)] backdrop-blur-sm">
           <button
