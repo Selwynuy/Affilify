@@ -1,39 +1,43 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { getPlan } from '@/lib/data/plans'
-import type { PlanId } from '@/lib/types/billing'
 import {
   getPublishedMarketplaceTemplateById,
   getTemplateConfigValue,
 } from '@/lib/data/marketplace-templates'
 
-async function checkStorageLimit(userId: string, additionalBytes: number): Promise<{ ok: boolean; message?: string }> {
-  const admin = createAdminClient()
+async function readTemplateMediaAsBase64(url: string | null | undefined) {
+  if (!url) return { b64: undefined, mime: undefined }
 
-  const { data: sub } = await admin
-    .from('subscriptions')
-    .select('plan_id, status')
-    .eq('user_id', userId)
-    .single()
+  try {
+    const parsed = new URL(url, process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000')
 
-  const planId = (sub?.status === 'active' ? sub.plan_id : null) as PlanId | null
-  if (!planId) return { ok: true } // no plan = no limit enforced (onboarding uploads allowed)
+    if (parsed.pathname === '/api/template-media') {
+      const path = parsed.searchParams.get('path')?.trim()
+      if (!path) return { b64: undefined, mime: undefined }
 
-  const plan = getPlan(planId)
-  const limitBytes = plan.storageGb * 1024 * 1024 * 1024
+      const admin = createAdminClient()
+      const { data } = await admin.storage.from('uploads').download(path)
+      if (!data) return { b64: undefined, mime: undefined }
 
-  const { data: usage } = await admin
-    .from('user_storage_usage')
-    .select('total_bytes')
-    .eq('user_id', userId)
-    .single()
+      const buffer = await data.arrayBuffer()
+      return {
+        b64: Buffer.from(buffer).toString('base64'),
+        mime: data.type || 'image/jpeg',
+      }
+    }
 
-  const usedBytes = Number(usage?.total_bytes ?? 0)
-  if (usedBytes + additionalBytes > limitBytes) {
-    return { ok: false, message: `Storage limit reached (${plan.storageGb} GB). Delete files or upgrade your plan.` }
+    const response = await fetch(parsed.toString())
+    if (!response.ok) return { b64: undefined, mime: undefined }
+
+    const buffer = await response.arrayBuffer()
+    return {
+      b64: Buffer.from(buffer).toString('base64'),
+      mime: response.headers.get('content-type') || 'image/jpeg',
+    }
+  } catch {
+    return { b64: undefined, mime: undefined }
   }
-  return { ok: true }
 }
 
 export async function POST(req: NextRequest) {
@@ -102,6 +106,21 @@ export async function POST(req: NextRequest) {
     const avatarTemplate = ac.type === 'preset'
       ? await getPublishedMarketplaceTemplateById(String(ac.presetId ?? ''))
       : null
+    const backgroundTemplate = bc.presetId
+      ? await getPublishedMarketplaceTemplateById(String(bc.presetId))
+      : null
+    if (ac.type === 'preset' && !avatarTemplate?.reference_url) {
+      return NextResponse.json(
+        { error: 'Selected avatar is missing a full-resolution reference image.' },
+        { status: 400 },
+      )
+    }
+    if (!backgroundTemplate?.reference_url) {
+      return NextResponse.json(
+        { error: 'Selected background is missing a full-resolution reference image.' },
+        { status: 400 },
+      )
+    }
     const promptHint = ac.type === 'preset'
       ? getTemplateConfigValue(
         avatarTemplate,
@@ -109,6 +128,28 @@ export async function POST(req: NextRequest) {
         avatarTemplate?.description ?? avatarTemplate?.title ?? '',
       )
       : undefined
+    // Prefer reference_url (full-res, specifically for generation) over preview/thumbnail.
+    // thumbnail_url is only the small card image — it loses detail Gemini needs.
+    const avatarReferenceUrl = ac.type === 'preset'
+      ? avatarTemplate?.reference_url
+      : undefined
+    const backgroundReferenceUrl = backgroundTemplate.reference_url
+    const { b64: avatarReferenceB64, mime: avatarReferenceMime } =
+      await readTemplateMediaAsBase64(avatarReferenceUrl)
+    const { b64: backgroundReferenceB64, mime: backgroundReferenceMime } =
+      await readTemplateMediaAsBase64(backgroundReferenceUrl)
+    if (ac.type === 'preset' && (!avatarReferenceB64 || !avatarReferenceMime)) {
+      return NextResponse.json(
+        { error: 'Selected avatar full-resolution reference could not be loaded.' },
+        { status: 400 },
+      )
+    }
+    if (!backgroundReferenceB64 || !backgroundReferenceMime) {
+      return NextResponse.json(
+        { error: 'Selected background full-resolution reference could not be loaded.' },
+        { status: 400 },
+      )
+    }
 
     // Style → outfit defaults
     const styleOutfitMap: Record<string, { outfitTop: string; outfitBottom: string; shoes: string }> = {
@@ -124,12 +165,23 @@ export async function POST(req: NextRequest) {
       type: ac.type,
       presetId: ac.presetId,
       promptHint,
+      skinTone:        getTemplateConfigValue(avatarTemplate, 'skinTone'),
+      hairDescription: getTemplateConfigValue(avatarTemplate, 'hairDescription'),
+      faceFeatures:    getTemplateConfigValue(avatarTemplate, 'faceFeatures'),
+      bodyType:        getTemplateConfigValue(avatarTemplate, 'bodyType'),
       gender: String(ac.gender ?? 'man'),
       style: styleKey,
       faceUrl: ac.faceUrl,
       facePath: ac.facePath,
       faceB64,
       faceMime,
+      avatarReferenceUrl,
+      avatarReferenceB64,
+      avatarReferenceMime,
+      backgroundPresetId: bc.presetId,
+      backgroundReferenceUrl,
+      backgroundReferenceB64,
+      backgroundReferenceMime,
       roomAesthetic: String(bc.roomAesthetic ?? 'masculine'),
       roomColors: String(bc.roomColors ?? 'white and black'),
       roomElements: String(bc.roomElements ?? ''),
@@ -189,26 +241,16 @@ export async function POST(req: NextRequest) {
   // Upload product images
   const results: { kind: string; url: string; path: string }[] = []
   if (productFiles.length > 0) {
-    // Check storage limit before uploading
-    const totalNewBytes = productFiles.reduce((sum, f) => sum + f.size, 0)
-    const storageCheck = await checkStorageLimit(user.id, totalNewBytes)
-    if (!storageCheck.ok) return NextResponse.json({ error: storageCheck.message }, { status: 413 })
-
+    // Product inputs are transient generation references and should not count as
+    // persistent user storage unless we later add an explicit save action.
     await admin.from('project_images').delete().eq('project_id', pid).eq('kind', 'product')
 
     for (let i = 0; i < productFiles.length; i++) {
       const file = productFiles[i]
       const ext = file.name.split('.').pop()
-      const path = `${user.id}/${pid}/product-${i}.${ext}`
       const bytes = await file.arrayBuffer()
-      const { error } = await admin.storage.from('uploads').upload(path, bytes, {
-        contentType: file.type,
-        upsert: true,
-      })
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-      const { data: signed } = await admin.storage.from('uploads').createSignedUrl(path, 60 * 60)
-      const url = signed?.signedUrl ?? ''
+      const path = `transient://${user.id}/${pid}/product-${i}.${ext}`
+      const url = ''
       const b64 = Buffer.from(bytes).toString('base64')
 
       await admin.from('project_images').insert({
@@ -221,17 +263,6 @@ export async function POST(req: NextRequest) {
         b64_data: b64,
         mime_type: file.type,
       })
-
-      // Track in storage_files
-      await admin.from('storage_files').upsert({
-        user_id: user.id,
-        project_id: pid,
-        file_name: file.name || `product-${i}.${ext}`,
-        file_type: 'product_image',
-        storage_path: path,
-        public_url: url,
-        size_bytes: file.size,
-      }, { onConflict: 'storage_path' })
 
       results.push({ kind: 'product', url, path })
     }

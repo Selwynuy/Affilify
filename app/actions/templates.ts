@@ -19,6 +19,7 @@ function extractCommonFields(formData: FormData) {
     category:      (formData.get('category')       as TemplateCategory),
     thumbnail_url: (formData.get('thumbnail_url') as string)?.trim() || null,
     preview_url:   (formData.get('preview_url')   as string)?.trim() || null,
+    reference_url: (formData.get('reference_url') as string)?.trim() || null,
     badge:         (formData.get('badge')          as string)?.trim() || null,
     sort_order:    parseInt((formData.get('sort_order') as string) ?? '0', 10) || 0,
   }

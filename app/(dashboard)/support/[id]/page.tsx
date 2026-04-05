@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useTransition, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+import { PageWrapper } from '@/components/dashboard/PageWrapper'
 import { cn } from '@/lib/utils'
 import { ArrowLeft, Send, AlertCircle, Shield } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -56,10 +57,10 @@ export default function TicketDetailPage() {
 
   if (loading) {
     return (
-      <div className="max-w-2xl space-y-4">
+      <PageWrapper><div className="max-w-2xl space-y-4">
         <div className="h-8 w-32 rounded-lg bg-white/5 animate-pulse" />
         <div className="h-40 rounded-2xl bg-white/[0.02] animate-pulse" />
-      </div>
+      </div></PageWrapper>
     )
   }
 
@@ -68,7 +69,7 @@ export default function TicketDetailPage() {
   const isClosed = ticket.status === 'closed'
 
   return (
-    <div className="max-w-2xl space-y-6">
+    <PageWrapper><div className="max-w-2xl space-y-6">
       {/* Back */}
       <button
         onClick={() => router.push('/support')}
@@ -163,6 +164,6 @@ export default function TicketDetailPage() {
       ) : (
         <p className="text-center text-xs text-white/30 py-4">This ticket is closed. Open a new ticket if you need further assistance.</p>
       )}
-    </div>
+    </div></PageWrapper>
   )
 }

@@ -28,6 +28,13 @@ export async function GET() {
       .eq('status', 'ready')
       .order('created_at', { ascending: true })
 
+    const { data: storageFiles } = await admin
+      .from('storage_files')
+      .select('id, public_url, storage_path')
+      .eq('project_id', project.id)
+      .eq('user_id', user.id)
+      .eq('file_type', 'generated_video')
+
     return {
       projectId: project.id,
       createdAt: project.created_at,
@@ -35,6 +42,7 @@ export async function GET() {
         imageId: v.image_id ?? v.id,
         videoUrl: v.url,
         filename: `genetrify-video-${i + 1}.mp4`,
+        storageFileId: (storageFiles ?? []).find((file) => file.public_url === v.url || file.storage_path === v.url)?.id ?? null,
       })),
     }
   }))

@@ -1,20 +1,26 @@
-import { GeneratePanel } from '@/components/dashboard/GeneratePanel'
+import { StudioCanvas } from '@/components/studio/StudioCanvas'
+import { redirect } from 'next/navigation'
 import { getPublishedMarketplaceTemplateGroups } from '@/lib/data/marketplace-templates'
+import { verifySession } from '@/lib/dal'
+
+export const metadata = { title: 'Studio' }
 
 export default async function DashboardPage() {
-  const {
-    avatar: avatarTemplates,
-    background: backgroundTemplates,
-    camera: cameraTemplates,
-    movement: movementTemplates,
-  } = await getPublishedMarketplaceTemplateGroups()
+  const session = await verifySession()
+  if (!session) {
+    redirect('/login')
+  }
+
+  const { avatar, background, camera, movement } =
+    await getPublishedMarketplaceTemplateGroups()
 
   return (
-    <GeneratePanel
-      avatarTemplates={avatarTemplates}
-      backgroundTemplates={backgroundTemplates}
-      cameraTemplates={cameraTemplates}
-      movementTemplates={movementTemplates}
+    <StudioCanvas
+      userId={session.user.id}
+      avatarTemplates={avatar}
+      backgroundTemplates={background}
+      cameraTemplates={camera}
+      movementTemplates={movement}
     />
   )
 }

@@ -11,49 +11,41 @@ import {
   getTemplateConfigValue,
 } from '@/lib/data/marketplace-templates'
 
-const GEMINI_MODEL = 'gemini-2.5-flash-image'
+const GEMINI_MODEL = 'gemini-3.1-flash-image-preview'
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`
 const IMAGE_COUNT = 1
 
-const DEFAULT_TEMPLATE =
-  `A {{gender}} {{face_description}}, {{height}} cm tall and weighing {{weight}} kg, ` +
-  `stands in a modern, neatly arranged and {{room_aesthetic}} aesthetic room. ` +
-  `The camera is positioned {{camera_angle}}. ` +
-  `Use a {{focal_length}} focal length and an aperture of f/4-f/5.6 to keep the room details gently in focus. ` +
-  `They are wearing the exact clothing product shown in the product reference photo, and it must be clearly and prominently visible, worn naturally. ` +
-  `Their hands are in their pockets, gazing at the camera with an elegant and natural expression. ` +
-  `The room interior is dominated by {{room_colors}}, creating a clean, modern impression. ` +
-  `Room elements: {{room_elements}}. ` +
-  `{{product_note}}` +
-  `Visual style: Ultra-realistic fashion lifestyle photography, natural-blend studio lighting, soft shadows, symmetrical interiors. ` +
-  `Aspect ratio: 9:16 vertical portrait.`
-
-function fillTemplate(template: string, vars: Record<string, string | number>): string {
-  return template.replace(/\{\{(\w+)\}\}/g, (_, key) =>
-    key in vars ? String(vars[key]) : `{{${key}}}`
-  )
-}
-
 function buildPrompt(
-  avatar: Record<string, unknown>,
+  productCount: number,
   productDescription: string,
   cameraAnglePrompt: string,
-) {
-  const vars: Record<string, string | number> = {
-    gender:           String(avatar.gender ?? 'man'),
-    face_description: avatar.type === 'preset' && avatar.promptHint
-      ? String(avatar.promptHint)
-      : 'with a face like the one in the face reference photo',
-    height:           Number(avatar.height ?? 175),
-    weight:           Number(avatar.weight ?? 70),
-    room_aesthetic:   String(avatar.roomAesthetic ?? 'masculine'),
-    camera_angle:     cameraAnglePrompt,
-    focal_length:     String(avatar.focalLength ?? '35-50mm (natural, balanced)'),
-    room_colors:      String(avatar.roomColors ?? 'white and black'),
-    room_elements:    String(avatar.roomElements ?? 'a dark gray round shag rug, minimalist black-framed posters, warm LED strips'),
-    product_note:     productDescription ? `Product being showcased: ${productDescription}. ` : '',
+): string {
+  const lines: string[] = []
+
+  lines.push(`Use the attached avatar reference image strictly as the exact person.`)
+  lines.push(`Use the attached background reference image strictly as the exact background and scene.`)
+  lines.push(`Keep the background composition, room layout, decor, colors, lighting, and environment unchanged.`)
+  lines.push(`Do not replace, redesign, restyle, crop away, or reinterpret the background.`)
+  lines.push(`Only transform the avatar's outfit to match the attached product image input.`)
+  lines.push(`Do not add any extra products, accessories, garments, props, branding, or items that are not present in the user-provided product images.`)
+  lines.push(`Adjust the model's pose, hand placement, body angle, and styling presentation as needed to suit the transformed outfit naturally and make the outfit read clearly.`)
+  lines.push(`Do not rigidly copy the original reference pose if a better pose is needed for the outfit, but keep the result realistic, flattering, and ecommerce-appropriate.`)
+
+  if (productCount === 1) {
+    lines.push(`Apply the attached product image to the avatar's outfit accurately and naturally.`)
+  } else if (productCount > 1) {
+    lines.push(`Combine the attached product images into one coherent outfit on the avatar accurately and naturally.`)
   }
-  return fillTemplate(DEFAULT_TEMPLATE, vars)
+
+  if (productDescription) {
+    lines.push(`Follow these user outfit instructions strictly: ${productDescription}.`)
+  }
+
+  lines.push(`Camera angle: ${cameraAnglePrompt}.`)
+  lines.push(`Preserve the avatar identity, face, body proportions, and pose realism.`)
+  lines.push(`Output: photorealistic 9:16 vertical portrait, professional ecommerce quality.`)
+
+  return lines.join(' ')
 }
 
 function encode(obj: unknown): Uint8Array {
@@ -95,7 +87,14 @@ export async function POST(req: NextRequest) {
   if (projErr || !project) return new Response(JSON.stringify({ error: 'Project not found' }), { status: 404 })
 
   const avatar: Record<string, unknown> = project.avatar ?? {}
-  const { faceB64, faceMime } = avatar
+  const {
+    faceB64,
+    faceMime,
+    avatarReferenceB64,
+    avatarReferenceMime,
+    backgroundReferenceB64,
+    backgroundReferenceMime,
+  } = avatar
 
   const { data: productRows } = await admin
     .from('project_images')
@@ -115,18 +114,46 @@ export async function POST(req: NextRequest) {
     'cameraAnglePrompt',
     'at eye level, centered on the subject',
   )
-  const prompt = buildPrompt(avatar, productDescription || '', cameraAnglePrompt)
-  const parts: unknown[] = [{ text: prompt }]
-
   const isPreset = avatar.type === 'preset'
+  const validProductRows = productRows.filter(r => r.b64_data && r.mime_type)
+  const hasAvatarReference = isPreset
+    ? Boolean(avatarReferenceB64 && avatarReferenceMime)
+    : Boolean(faceB64 && faceMime)
+  const hasBackgroundReference = Boolean(backgroundReferenceB64 && backgroundReferenceMime)
+
+  if (!hasAvatarReference) {
+    return new Response(JSON.stringify({ error: 'Missing full-resolution avatar reference for generation' }), { status: 400 })
+  }
+  if (!hasBackgroundReference) {
+    return new Response(JSON.stringify({ error: 'Missing full-resolution background reference for generation' }), { status: 400 })
+  }
+
+  const parts: unknown[] = []
+
+  // 1. Avatar image
   if (!isPreset && faceB64 && faceMime) {
     parts.push({ inlineData: { mimeType: faceMime, data: faceB64 } })
+  } else if (isPreset && avatarReferenceB64 && avatarReferenceMime) {
+    parts.push({ inlineData: { mimeType: avatarReferenceMime, data: avatarReferenceB64 } })
   }
-  for (const row of productRows) {
-    if (row.b64_data && row.mime_type) {
-      parts.push({ inlineData: { mimeType: row.mime_type, data: row.b64_data } })
-    }
+
+  // 2. Background image
+  if (backgroundReferenceB64 && backgroundReferenceMime) {
+    parts.push({ inlineData: { mimeType: backgroundReferenceMime, data: backgroundReferenceB64 } })
   }
+
+  // 3. Product image(s)
+  for (const row of validProductRows) {
+    parts.push({ inlineData: { mimeType: row.mime_type, data: row.b64_data } })
+  }
+
+  // 4. Prompt last — exactly as a user would type it after attaching images
+  const prompt = buildPrompt(
+    validProductRows.length,
+    productDescription || '',
+    cameraAnglePrompt,
+  )
+  parts.push({ text: prompt })
 
   // Clear previous generated images
   await admin.from('project_images').delete().eq('project_id', projectId).eq('kind', 'generated')

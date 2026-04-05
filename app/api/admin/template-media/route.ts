@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Missing file' }, { status: 400 })
   }
 
-  if (kind !== 'thumbnail' && kind !== 'preview') {
+  if (kind !== 'thumbnail' && kind !== 'preview' && kind !== 'reference') {
     return NextResponse.json({ error: 'Invalid media kind' }, { status: 400 })
   }
 
@@ -38,6 +38,10 @@ export async function POST(request: NextRequest) {
 
   if (kind === 'thumbnail' && !isImage) {
     return NextResponse.json({ error: 'Thumbnail must be an image' }, { status: 400 })
+  }
+
+  if (kind === 'reference' && !isImage) {
+    return NextResponse.json({ error: 'Reference must be an image' }, { status: 400 })
   }
 
   if (kind === 'preview' && !isImage && !isVideo) {

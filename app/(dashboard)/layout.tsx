@@ -53,10 +53,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
       >
         <div className="flex h-screen overflow-hidden bg-brand-bg">
           <Sidebar />
-          <main className="flex-1 overflow-y-auto overflow-x-hidden pt-20 lg:pt-10 px-4 pb-10 sm:px-6 md:px-10 md:pt-10">
-            <div className="mx-auto w-full max-w-5xl">
-              {children}
-            </div>
+          <main className="flex-1 flex flex-col overflow-hidden min-h-0">
+            {children}
           </main>
         </div>
       </PreferencesProvider>
