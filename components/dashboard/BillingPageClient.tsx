@@ -1,267 +1,288 @@
 'use client'
 
-import { useState, useTransition } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useState, useTransition, useEffect, useRef } from 'react'
 import { cn } from '@/lib/utils'
-import { PLANS, TOPUP_PACKS } from '@/lib/data/plans'
+import { CREDIT_PACKS } from '@/lib/data/plans'
 import { Button } from '@/components/ui/button'
 import {
-  Zap, CheckCircle2, ArrowRight, RefreshCw, AlertTriangle, Sparkles, XCircle,
+  Zap, CheckCircle2, X, RefreshCw, Sparkles, Clock,
 } from 'lucide-react'
-import type { Plan, PlanId, Subscription } from '@/lib/types/billing'
+import type { CreditPack } from '@/lib/types/billing'
 
 interface BalanceData {
   balance: number
-  planId: PlanId | null
-  plan: Plan | null
-  subscription: Subscription | null
 }
 
 function phpFormat(centavos: number): string {
-  return 'PHP ' + (centavos / 100).toLocaleString('en-PH', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+  return '₱' + (centavos / 100).toLocaleString('en-PH', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+}
+
+interface QRModalProps {
+  qrCode: string
+  tokens: number
+  amountCentavos: number
+  packName: string
+  onClose: () => void
+  onRefresh: () => Promise<void>
+}
+
+const QR_EXPIRY_SECONDS = 1800 // 30 minutes
+
+function QRModal({ qrCode, tokens, amountCentavos, packName, onClose, onRefresh }: QRModalProps) {
+  const [secondsLeft, setSecondsLeft] = useState(QR_EXPIRY_SECONDS)
+  const [refreshing, setRefreshing] = useState(false)
+  const [paid, setPaid] = useState(false)
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  useEffect(() => {
+    intervalRef.current = setInterval(() => {
+      setSecondsLeft((s) => {
+        if (s <= 1) {
+          clearInterval(intervalRef.current!)
+          return 0
+        }
+        return s - 1
+      })
+    }, 1000)
+    return () => clearInterval(intervalRef.current!)
+  }, [])
+
+  const expired = secondsLeft === 0
+
+  const mins = Math.floor(secondsLeft / 60)
+  const secs = secondsLeft % 60
+  const timerLabel = `${mins}:${secs.toString().padStart(2, '0')}`
+
+  async function handleRefresh() {
+    setRefreshing(true)
+    await onRefresh()
+    setRefreshing(false)
+    setPaid(true)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+      <div className="relative w-full max-w-sm rounded-2xl border border-white/10 bg-[#1a1d22] shadow-2xl">
+        <button
+          onClick={onClose}
+          className="absolute right-4 top-4 text-white/30 hover:text-white/70 transition-colors"
+          aria-label="Close"
+        >
+          <X className="w-4 h-4" />
+        </button>
+
+        <div className="p-6 space-y-5">
+          <div className="space-y-1">
+            <p className="text-xs font-semibold uppercase tracking-widest text-white/30">Scan to pay</p>
+            <h2 className="text-xl font-bold text-white">{packName} Pack</h2>
+            <p className="text-sm text-white/50">{tokens.toLocaleString()} tokens · {phpFormat(amountCentavos)}</p>
+          </div>
+
+          {paid ? (
+            <div className="flex flex-col items-center gap-3 py-8">
+              <CheckCircle2 className="w-12 h-12 text-emerald-400" />
+              <p className="text-sm font-medium text-emerald-400">Payment received!</p>
+              <p className="text-xs text-white/40 text-center">Your tokens have been added. Close this window to continue.</p>
+              <Button onClick={onClose} className="mt-2 h-9 px-6 rounded-xl bg-brand-accent hover:bg-brand-accent-hover text-brand-bg font-bold text-sm">
+                Done
+              </Button>
+            </div>
+          ) : expired ? (
+            <div className="flex flex-col items-center gap-3 py-8">
+              <Clock className="w-10 h-10 text-amber-400" />
+              <p className="text-sm font-medium text-amber-400">QR code expired</p>
+              <p className="text-xs text-white/40 text-center">Generate a new one to continue.</p>
+              <Button onClick={onClose} className="mt-2 h-9 px-5 rounded-xl bg-white/10 hover:bg-white/15 text-white text-sm">
+                Close
+              </Button>
+            </div>
+          ) : (
+            <>
+              {/* QR code image */}
+              <div className="flex justify-center">
+                <div className="rounded-xl overflow-hidden border border-white/10 bg-white p-2">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={qrCode} alt="QRPH payment QR code" className="w-48 h-48 object-contain" />
+                </div>
+              </div>
+
+              {/* Timer */}
+              <div className="flex items-center justify-center gap-2 text-sm text-white/40">
+                <Clock className="w-3.5 h-3.5" />
+                <span>Expires in <span className={cn('font-mono font-semibold', secondsLeft < 120 ? 'text-amber-400' : 'text-white/60')}>{timerLabel}</span></span>
+              </div>
+
+              <div className="rounded-xl border border-white/[0.07] bg-white/3 px-4 py-3 space-y-1">
+                <p className="text-xs text-white/40 leading-relaxed">
+                  Open your banking app (BPI, BDO, GCash, Maya, etc.), scan this QR code, and complete the payment. Then tap the button below to confirm.
+                </p>
+              </div>
+
+              <Button
+                onClick={handleRefresh}
+                disabled={refreshing}
+                className="w-full h-10 rounded-xl bg-brand-accent hover:bg-brand-accent-hover text-brand-bg font-bold text-sm"
+              >
+                {refreshing
+                  ? <span className="flex items-center gap-2"><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Checking...</span>
+                  : "I've paid — Refresh balance"
+                }
+              </Button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  )
 }
 
 export function BillingPageClient({ initialData }: { initialData: BalanceData }) {
-  const searchParams = useSearchParams()
-  const [data, setData] = useState<BalanceData>(initialData)
+  const [balance, setBalance] = useState(initialData.balance ?? 0)
   const [isPending, startTransition] = useTransition()
   const [actionPending, setActionPending] = useState<string | null>(null)
-  const [cancelConfirm, setCancelConfirm] = useState(false)
-  const [cancelDone, setCancelDone] = useState(false)
-
-  const successMsg = searchParams.get('subscribed') === 'success'
-    ? 'Subscription activated! Your tokens have been credited.'
-    : searchParams.get('topup') === 'success'
-      ? 'Top-up successful! Tokens added to your balance.'
-      : null
+  const [qrData, setQrData] = useState<{
+    qrCode: string
+    tokens: number
+    amountCentavos: number
+    packName: string
+  } | null>(null)
 
   async function refreshBalance() {
     const res = await fetch('/api/billing/balance')
     const json = await res.json()
-    setData(json)
+    setBalance(json.balance ?? 0)
   }
 
-  function handleCheckout(planId: PlanId) {
-    setActionPending(planId)
+  function handleBuyPack(pack: CreditPack) {
+    setActionPending(pack.id)
     startTransition(async () => {
       const res = await fetch('/api/billing/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ planId }),
+        body: JSON.stringify({ packId: pack.id }),
       })
       const json = await res.json()
-      if (json.nextActionUrl) window.location.href = json.nextActionUrl
-      else if (json.error) alert(json.error)
-      setActionPending(null)
-    })
-  }
-
-  function handleTopup(planId: PlanId) {
-    setActionPending(`topup-${planId}`)
-    startTransition(async () => {
-      const res = await fetch('/api/billing/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topupPlanId: planId }),
-      })
-      const json = await res.json()
-      if (json.nextActionUrl) window.location.href = json.nextActionUrl
-      else if (json.error) alert(json.error)
-      setActionPending(null)
-    })
-  }
-
-  function handleCancel() {
-    setActionPending('cancel')
-    startTransition(async () => {
-      const res = await fetch('/api/billing/portal', { method: 'POST' })
-      const json = await res.json()
-      if (res.ok) {
-        setCancelDone(true)
-        setCancelConfirm(false)
-        await refreshBalance()
+      if (json.qrCode) {
+        setQrData({
+          qrCode: json.qrCode,
+          tokens: json.tokens,
+          amountCentavos: json.amountCentavos,
+          packName: json.packName,
+        })
       } else {
-        alert(json.error ?? 'Failed to cancel subscription')
+        alert(json.error ?? 'Failed to generate QR code. Please try again.')
       }
       setActionPending(null)
     })
   }
 
-  const currentPlanId = data.planId
-  const balance = data.balance ?? 0
-  const plan = data.plan
-  const tokensPerMonth = plan?.tokensPerMonth ?? 0
-  const usedPercent = tokensPerMonth > 0 ? Math.min(100, Math.round((1 - balance / tokensPerMonth) * 100)) : 0
+  const popularId = 'creator'
 
   return (
-    <div className="space-y-10 max-w-5xl">
+    <div className="space-y-10 max-w-4xl">
+      {qrData && (
+        <QRModal
+          {...qrData}
+          onClose={() => setQrData(null)}
+          onRefresh={refreshBalance}
+        />
+      )}
+
       <div className="space-y-1">
         <p className="text-[11px] font-black uppercase tracking-[0.2em] text-brand-text/30">Account</p>
         <h1 className="text-[32px] font-black uppercase text-brand-text leading-[0.85]" style={{ fontFamily: "'Bebas Neue', 'Arial Black', sans-serif", letterSpacing: '-0.01em' }}>Billing</h1>
-        <p className="text-sm text-brand-text/40">Manage your plan, tokens, and payment details.</p>
+        <p className="text-sm text-brand-text/40">Purchase token credits to start generating videos.</p>
       </div>
 
-      {successMsg && (
-        <div className="flex items-center gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3">
-          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-          <p className="text-sm text-emerald-400">{successMsg}</p>
-        </div>
-      )}
-
-      {cancelDone && (
-        <div className="flex items-center gap-3 rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3">
-          <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
-          <p className="text-sm text-amber-400">Subscription will cancel at the end of the current billing period.</p>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="rounded-2xl border border-white/[0.07] bg-brand-surface p-5 space-y-4">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-medium text-white/40 uppercase tracking-wider">Current Plan</p>
-            {currentPlanId && !cancelDone && (
-              <button onClick={() => setCancelConfirm(true)} className="text-xs text-white/30 hover:text-red-400 transition-colors">
-                Cancel plan
-              </button>
-            )}
-          </div>
-          <div className="space-y-1">
-            <p className="text-2xl font-bold text-white">{plan?.name ?? 'No plan'}</p>
-            {plan && <p className="text-sm text-white/40">{phpFormat(plan.monthlyPriceCentavos)}/mo · billed monthly</p>}
-            {data.subscription?.cancelAtPeriodEnd && (
-              <div className="flex items-center gap-1.5 text-xs text-amber-400 mt-2">
-                <AlertTriangle className="w-3 h-3" />
-                Cancels at end of billing period
-              </div>
-            )}
-            {data.subscription?.currentPeriodEnd && (
-              <p className="text-xs text-white/30 mt-1">
-                {data.subscription.cancelAtPeriodEnd ? 'Access until' : 'Renews'}{' '}
-                {new Date(data.subscription.currentPeriodEnd).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-              </p>
-            )}
-          </div>
-          {!currentPlanId && <p className="text-xs text-white/40">Subscribe below to start generating.</p>}
-
-          {cancelConfirm && (
-            <div className="mt-3 rounded-xl border border-red-500/20 bg-red-500/[0.07] p-4 space-y-3">
-              <div className="flex items-start gap-2">
-                <XCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
-                <p className="text-xs text-red-300 leading-relaxed">
-                  Your subscription will remain active until the end of the current period. No refunds are issued for partial months.
-                </p>
-              </div>
-              <div className="flex gap-2">
-                <Button onClick={handleCancel} disabled={isPending} className="h-8 px-3 text-xs bg-red-600/80 hover:bg-red-600 text-white rounded-lg">
-                  {actionPending === 'cancel' ? <RefreshCw className="w-3 h-3 animate-spin" /> : 'Confirm cancel'}
-                </Button>
-                <Button onClick={() => setCancelConfirm(false)} className="h-8 px-3 text-xs bg-white/5 hover:bg-white/10 text-white/60 rounded-lg">
-                  Keep plan
-                </Button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="rounded-2xl border border-white/[0.07] bg-brand-surface p-5 space-y-4">
+      {/* Token balance */}
+      <div className="rounded-2xl border border-white/[0.07] bg-brand-surface p-5 flex items-center justify-between gap-4">
+        <div className="space-y-0.5">
           <p className="text-xs font-medium text-white/40 uppercase tracking-wider">Token Balance</p>
-          <div className="space-y-1">
-            <p className="text-2xl font-bold text-white">{balance.toLocaleString()}</p>
-            <p className="text-sm text-white/40">
-              {tokensPerMonth > 0 ? `of ${tokensPerMonth.toLocaleString()} monthly tokens` : 'tokens remaining'}
-            </p>
-          </div>
-          {tokensPerMonth > 0 && (
-            <div className="space-y-1.5">
-              <div className="w-full h-1.5 rounded-full bg-white/5 overflow-hidden">
-                <div className={cn('h-full rounded-full transition-all duration-500', usedPercent > 80 ? 'bg-amber-500' : 'bg-brand-accent')} style={{ width: `${usedPercent}%` }} />
-              </div>
-              <p className="text-xs text-white/30">{usedPercent}% used this period</p>
-            </div>
-          )}
+          <p className="text-3xl font-bold text-white">{balance.toLocaleString()}</p>
+          <p className="text-sm text-white/30">tokens remaining</p>
         </div>
+        <button
+          onClick={refreshBalance}
+          disabled={isPending}
+          className="flex items-center gap-1.5 text-xs text-white/30 hover:text-white/60 transition-colors"
+          aria-label="Refresh balance"
+        >
+          <RefreshCw className="w-3 h-3" />
+          Refresh
+        </button>
       </div>
 
-      {currentPlanId && (
-        <div className="space-y-3">
-          <p className="text-xs font-medium text-white/40 uppercase tracking-wider">Need more tokens?</p>
-          <div className="flex flex-wrap gap-3">
-            {(() => {
-              const pack = TOPUP_PACKS.find((p) => p.planId === currentPlanId)
-              if (!pack) return null
-              return (
-                <button
-                  key={pack.planId}
-                  onClick={() => handleTopup(pack.planId)}
-                  disabled={isPending}
-                  className="flex items-center gap-3 rounded-xl border border-white/[0.07] bg-brand-surface hover:border-brand-accent/40 hover:bg-brand-accent/5 px-4 py-3 transition-all"
-                >
-                  <Zap className="w-4 h-4 text-brand-accent shrink-0" />
-                  <div className="text-left">
-                    <p className="text-sm font-medium text-white">+1,000 tokens</p>
-                    <p className="text-xs text-white/40">{phpFormat(pack.priceCentavos)} one-time</p>
-                  </div>
-                  <ArrowRight className="w-3.5 h-3.5 text-white/30 ml-2" />
-                </button>
-              )
-            })()}
-          </div>
-        </div>
-      )}
-
-      <div className="space-y-5">
+      {/* Credit packs */}
+      <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <p className="text-xs font-medium text-white/40 uppercase tracking-wider">{currentPlanId ? 'Change Plan' : 'Choose a Plan'}</p>
-          <p className="text-xs text-white/30">Billed monthly · PHP pricing</p>
+          <p className="text-xs font-medium text-white/40 uppercase tracking-wider">Credit Packs</p>
+          <p className="text-xs text-white/20">One-time · QRPH · No subscription</p>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-          {PLANS.map((planOption) => {
-            const isCurrent = planOption.id === currentPlanId
-            const isPopular = planOption.id === 'growth'
+          {CREDIT_PACKS.map((pack) => {
+            const isPopular = pack.id === popularId
+            const perToken = (pack.priceCentavos / pack.tokens / 100).toFixed(3)
             return (
               <div
-                key={planOption.id}
+                key={pack.id}
                 className={cn(
-                  'relative flex flex-col rounded-2xl border p-5 space-y-5 transition-all',
-                  isCurrent ? 'border-brand-accent bg-brand-accent/5' : isPopular ? 'border-brand-accent/40 bg-brand-surface' : 'border-white/[0.07] bg-brand-surface',
+                  'relative flex flex-col rounded-2xl border p-5 space-y-4 transition-all',
+                  isPopular
+                    ? 'border-brand-accent/40 bg-brand-surface'
+                    : 'border-white/[0.07] bg-brand-surface',
                 )}
               >
-                {isPopular && !isCurrent && <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-10 px-3 py-0.5 rounded-full bg-brand-accent text-[10px] font-semibold text-brand-bg whitespace-nowrap">Most Popular</div>}
-                {isCurrent && <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full bg-brand-accent text-[10px] font-semibold text-brand-bg">Current</div>}
+                {isPopular && (
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full bg-brand-accent text-[10px] font-semibold text-brand-bg whitespace-nowrap">
+                    Best Value
+                  </div>
+                )}
+
                 <div className="space-y-1">
-                  <p className="text-sm font-semibold text-white">{planOption.name}</p>
+                  <p className="text-sm font-semibold text-white">{pack.name}</p>
                   <p className="text-2xl font-bold text-white">
-                    {phpFormat(planOption.monthlyPriceCentavos)}
-                    <span className="text-sm font-normal text-white/40">/mo</span>
+                    {phpFormat(pack.priceCentavos)}
                   </p>
+                  <p className="text-xs text-white/30">₱{perToken}/token</p>
                 </div>
+
                 <ul className="space-y-2 flex-1">
-                  {planOption.features.map((feature) => (
-                    <li key={feature} className="flex items-start gap-2 text-xs text-white/60">
-                      <Sparkles className="w-3 h-3 text-brand-accent shrink-0 mt-0.5" />
-                      {feature}
-                    </li>
-                  ))}
+                  <li className="flex items-center gap-2 text-xs text-white/60">
+                    <Zap className="w-3 h-3 text-brand-accent shrink-0" />
+                    {pack.tokens.toLocaleString()} tokens
+                  </li>
+                  <li className="flex items-center gap-2 text-xs text-white/60">
+                    <Sparkles className="w-3 h-3 text-brand-accent shrink-0" />
+                    ~{Math.floor(pack.tokens / 40)} video runs
+                  </li>
                 </ul>
+
                 <Button
-                  onClick={() => handleCheckout(planOption.id)}
-                  disabled={isCurrent || isPending || actionPending === planOption.id}
-                  className={cn('w-full h-9 rounded-xl font-semibold text-sm transition-all', isCurrent ? 'bg-white/5 text-white/30 cursor-default' : 'bg-brand-accent hover:bg-brand-accent-hover text-brand-bg font-bold shadow-lg shadow-brand-accent/20')}
+                  onClick={() => handleBuyPack(pack)}
+                  disabled={isPending || actionPending === pack.id}
+                  className={cn(
+                    'w-full h-9 rounded-xl font-semibold text-sm transition-all',
+                    isPopular
+                      ? 'bg-brand-accent hover:bg-brand-accent-hover text-brand-bg font-bold shadow-lg shadow-brand-accent/20'
+                      : 'bg-white/[0.07] hover:bg-white/10 text-white',
+                  )}
                 >
-                  {actionPending === planOption.id ? (
+                  {actionPending === pack.id ? (
                     <span className="flex items-center gap-2">
                       <RefreshCw className="w-3 h-3 animate-spin" />
-                      Redirecting...
+                      Generating...
                     </span>
-                  ) : isCurrent ? 'Current plan' : 'Subscribe'}
+                  ) : 'Buy'}
                 </Button>
               </div>
             )
           })}
         </div>
 
-        <p className="text-xs text-white/20 text-center">Payments processed securely by PayMongo · Card and Maya accepted · Cancel anytime</p>
+        <p className="text-xs text-white/20 text-center">
+          Payments via QRPH — scan with any major Philippine banking app or e-wallet · Tokens credited instantly after payment
+        </p>
       </div>
     </div>
   )

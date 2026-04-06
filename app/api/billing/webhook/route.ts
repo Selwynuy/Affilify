@@ -12,24 +12,13 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { verifyWebhookSignature, getSubscription } from '@/lib/billing/paymongo'
+import { verifyWebhookSignature } from '@/lib/billing/paymongo'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { grantMonthlyTokens, getTokenBalance } from '@/lib/billing/tokens'
-import type { PlanId } from '@/lib/types/billing'
+import { getTokenBalance } from '@/lib/billing/tokens'
 import { logger } from '@/lib/logger'
 import { sendEmail } from '@/lib/email/resend'
-import { subscriptionActivatedEmail } from '@/lib/email/templates/subscription-activated'
-import { paymentFailedEmail } from '@/lib/email/templates/payment-failed'
-import { subscriptionCancelledEmail } from '@/lib/email/templates/subscription-cancelled'
 import { topupConfirmedEmail } from '@/lib/email/templates/topup-confirmed'
-import { getPlan } from '@/lib/data/plans'
-
-const VALID_PLAN_IDS: readonly PlanId[] = ['starter', 'growth', 'pro', 'business']
-
-function parsePlanId(value: string | undefined): PlanId | null {
-  if (!value || !(VALID_PLAN_IDS as readonly string[]).includes(value)) return null
-  return value as PlanId
-}
+import { getCreditPack } from '@/lib/data/plans'
 
 /** Look up a user's email via the admin auth API. Returns null on failure. */
 async function getUserEmail(userId: string): Promise<string | null> {
@@ -86,159 +75,16 @@ export async function POST(req: NextRequest) {
   const admin = createAdminClient()
 
   switch (eventType) {
-    // ── Subscription invoice paid (new sub activated or renewal) ──────────────
-    case 'subscription.invoice.paid': {
-      const invoice = eventData as {
-        id: string
-        attributes: {
-          subscription_id: string
-          amount: number
-          billing_date: string
-        }
-      }
-
-      const subId = invoice.attributes.subscription_id
-      if (!subId) break
-
-      // Fetch full subscription to get metadata / plan info
-      let pmSub
-      try {
-        pmSub = await getSubscription(subId)
-      } catch (err) {
-        logger.error('webhook: failed to fetch subscription', { subId }, err)
-        break
-      }
-
-      // Resolve userId from our DB via paymongo_subscription_id
-      const { data: subRow } = await admin
-        .from('subscriptions')
-        .select('user_id, plan_id')
-        .eq('paymongo_subscription_id', subId)
-        .single()
-
-      if (!subRow?.user_id) {
-        logger.error('webhook: no subscription row found for paymongo sub', { subId })
-        break
-      }
-
-      const planId = parsePlanId(subRow.plan_id)
-      if (!planId) {
-        logger.error('webhook: invalid plan_id in subscription row', { subId, planId: subRow.plan_id })
-        break
-      }
-
-      const nextBilling = pmSub.attributes.next_billing_schedule
-
-      await admin.from('subscriptions').upsert({
-        user_id: subRow.user_id,
-        plan_id: planId,
-        status: 'active',
-        paymongo_subscription_id: subId,
-        paymongo_customer_id: pmSub.attributes.customer_id,
-        billing_interval: 'monthly',
-        current_period_start: new Date().toISOString(),
-        current_period_end: nextBilling ?? null,
-        cancel_at_period_end: false,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'user_id' })
-
-      await grantMonthlyTokens(subRow.user_id, planId)
-      logger.info('subscription.invoice.paid: tokens granted', { userId: subRow.user_id, planId })
-
-      // Send payment confirmation email
-      const email = await getUserEmail(subRow.user_id)
-      if (email) {
-        const plan = getPlan(planId)
-        const tpl = subscriptionActivatedEmail({
-          email,
-          planName: plan.name,
-          tokensGranted: plan.tokensPerMonth,
-          amountPaid: formatPHP(plan.monthlyPriceCentavos),
-          nextBillingDate: formatDate(nextBilling),
-        })
-        await sendEmail({ to: email, ...tpl })
-      }
-      break
-    }
-
-    // ── Invoice payment failed ─────────────────────────────────────────────────
-    case 'subscription.invoice.payment_failed': {
-      const invoice = eventData as { attributes: { subscription_id: string } }
-      const subId = invoice.attributes.subscription_id
-      if (!subId) break
-
-      const { data: failedSub } = await admin
-        .from('subscriptions')
-        .update({ status: 'past_due', updated_at: new Date().toISOString() })
-        .eq('paymongo_subscription_id', subId)
-        .select('user_id, plan_id')
-        .single()
-
-      logger.warn('subscription.invoice.payment_failed', { subId })
-
-      if (failedSub?.user_id) {
-        const email = await getUserEmail(failedSub.user_id)
-        if (email) {
-          const plan = getPlan(parsePlanId(failedSub.plan_id) ?? 'starter')
-          const tpl = paymentFailedEmail({
-            planName: plan.name,
-            attemptDate: formatDate(new Date().toISOString()),
-          })
-          await sendEmail({ to: email, ...tpl })
-        }
-      }
-      break
-    }
-
-    // ── Subscription updated (upgrade / downgrade / cancel scheduled) ──────────
-    case 'subscription.updated': {
-      const pmSub = eventData as {
-        id: string
-        attributes: { status: string; next_billing_schedule: string | null; cancel_at_period_end?: boolean }
-      }
-
-      const { data: updatedSub } = await admin
-        .from('subscriptions')
-        .update({
-          status: pmSub.attributes.status,
-          current_period_end: pmSub.attributes.next_billing_schedule ?? null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('paymongo_subscription_id', pmSub.id)
-        .select('user_id, plan_id')
-        .single()
-
-      // Send cancellation email when status flips to 'canceled'
-      if (pmSub.attributes.status === 'canceled' && updatedSub?.user_id) {
-        const email = await getUserEmail(updatedSub.user_id)
-        if (email) {
-          const plan = getPlan(parsePlanId(updatedSub.plan_id) ?? 'starter')
-          const tpl = subscriptionCancelledEmail({
-            planName: plan.name,
-            accessUntil: formatDate(pmSub.attributes.next_billing_schedule),
-          })
-          await sendEmail({ to: email, ...tpl })
-        }
-      }
-      break
-    }
-
-    // ── Subscription past_due / unpaid (all retries exhausted) ────────────────
+    // ── Subscription events — disabled, no-op ─────────────────────────────────
+    case 'subscription.invoice.paid':
+    case 'subscription.invoice.payment_failed':
+    case 'subscription.updated':
     case 'subscription.past_due':
-    case 'subscription.unpaid': {
-      const pmSub = eventData as { id: string }
-      const newStatus = eventType === 'subscription.unpaid' ? 'unpaid' : 'past_due'
-
-      await admin
-        .from('subscriptions')
-        .update({ status: newStatus, updated_at: new Date().toISOString() })
-        .eq('paymongo_subscription_id', pmSub.id)
-
-      logger.warn(`webhook: ${eventType}`, { subId: pmSub.id })
+    case 'subscription.unpaid':
+      logger.warn(`webhook: subscription event received while subscriptions are disabled (${eventType})`)
       break
-    }
 
-    // ── One-time payment paid (top-up) ─────────────────────────────────────────
+    // ── One-time payment paid (credit pack purchase) ───────────────────────────
     case 'payment.paid': {
       const payment = eventData as {
         id: string
@@ -253,7 +99,9 @@ export async function POST(req: NextRequest) {
 
       const userId = meta.userId
       const tokens = parseInt(meta.tokens ?? '0')
-      const planId = meta.planId
+      const packId = meta.packId
+      const pack = packId ? getCreditPack(packId) : undefined
+      const packName = pack?.name ?? meta.packName ?? 'Credit pack'
 
       if (!userId || !tokens) {
         logger.error('payment.paid topup: missing metadata', { paymentId: payment.id })
@@ -264,16 +112,15 @@ export async function POST(req: NextRequest) {
         user_id: userId,
         amount: tokens,
         type: 'topup',
-        description: `Top-up — 1,000 tokens (${planId} rate)`,
+        description: `${packName} pack — ${tokens.toLocaleString()} tokens`,
       })
 
-      logger.info('payment.paid: top-up tokens granted', { userId, tokens })
+      logger.info('payment.paid: credit pack tokens granted', { userId, tokens, packId })
 
       // Send top-up confirmation email
       const topupEmail = await getUserEmail(userId)
       if (topupEmail) {
         const newBalance = await getTokenBalance(userId)
-        // Centavos stored in metadata as string (set during checkout)
         const amountCentavos = parseInt(meta.amountCentavos ?? '0')
         const tpl = topupConfirmedEmail({
           email: topupEmail,

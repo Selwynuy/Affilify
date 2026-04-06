@@ -212,10 +212,76 @@ export async function createPaymentIntent(
         attributes: {
           amount: amountCentavos,
           currency: 'PHP',
-          payment_method_allowed: ['card', 'gcash', 'paymaya', 'grab_pay', 'qrph'],
+          payment_method_allowed: ['qrph'],
           description,
           capture_type: 'automatic',
           metadata,
+        },
+      },
+    }),
+  })
+  return res.data
+}
+
+// ── QRPH Payment Method + Attach ──────────────────────────────────────────────
+
+export interface PMPaymentMethodQRPH {
+  id: string
+  attributes: { type: string }
+}
+
+/** Creates a QRPH payment method server-side. billing.name and billing.email are required by PayMongo. */
+export async function createQRPHPaymentMethod(
+  email: string,
+  name: string,
+): Promise<PMPaymentMethodQRPH> {
+  const res = await pmFetch<{ data: PMPaymentMethodQRPH }>('/payment_methods', {
+    method: 'POST',
+    body: JSON.stringify({
+      data: {
+        attributes: {
+          type: 'qrph',
+          billing: { name, email },
+        },
+      },
+    }),
+  })
+  return res.data
+}
+
+export interface PMAttachResult {
+  id: string
+  attributes: {
+    status: string
+    client_key: string
+    next_action: {
+      type: string
+      code: {
+        id: string
+        image_url: string   // base64 PNG: "data:image/png;base64,..."
+        amount: number
+        label: string
+      }
+    } | null
+  }
+}
+
+/**
+ * Attaches a QRPH payment method to a payment intent.
+ * Returns the updated intent — `next_action.code.image_url` contains the base64 QR PNG.
+ */
+export async function attachQRPHPaymentMethod(
+  intentId: string,
+  clientKey: string,
+  paymentMethodId: string,
+): Promise<PMAttachResult> {
+  const res = await pmFetch<{ data: PMAttachResult }>(`/payment_intents/${intentId}/attach`, {
+    method: 'POST',
+    body: JSON.stringify({
+      data: {
+        attributes: {
+          payment_method: paymentMethodId,
+          client_key: clientKey,
         },
       },
     }),

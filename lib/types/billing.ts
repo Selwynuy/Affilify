@@ -16,11 +16,12 @@ export interface Plan {
   features: string[]
 }
 
-export interface TopupPack {
+export interface CreditPack {
+  id: string
+  name: string
   tokens: number
   /** Price in PHP centavos */
   priceCentavos: number
-  planId: PlanId
 }
 
 export interface Subscription {

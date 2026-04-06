@@ -1,4 +1,4 @@
-import type { Plan, PlanId, TopupPack, VideoModel } from '@/lib/types/billing'
+import type { Plan, PlanId, CreditPack, VideoModel } from '@/lib/types/billing'
 
 export const PLANS: Plan[] = [
   {
@@ -86,13 +86,21 @@ export const TOKEN_COSTS = {
   model_gen: 20,   // Gemini standalone model photo generation
 } as const
 
-// Top-up packs — 1,000 tokens at plan-tiered PHP rates
-export const TOPUP_PACKS: TopupPack[] = [
-  { tokens: 1000, priceCentavos: 29900,  planId: 'starter'  },   // ₱299
-  { tokens: 1000, priceCentavos: 24900,  planId: 'growth'   },   // ₱249
-  { tokens: 1000, priceCentavos: 19900,  planId: 'pro'      },   // ₱199
-  { tokens: 1000, priceCentavos: 14900,  planId: 'business' },   // ₱149
+// Free tokens granted to every new user on signup
+export const SIGNUP_FREE_TOKENS = 300
+
+// Credit packs — one-time QRPH purchases (no subscription required)
+// Priced at a premium vs subscriptions: packs = convenience, subs = volume discount
+export const CREDIT_PACKS: CreditPack[] = [
+  { id: 'trial',   name: 'Trial',   tokens: 500,   priceCentavos: 24900  }, // ₱249  — ₱0.498/token
+  { id: 'basic',   name: 'Basic',   tokens: 1500,  priceCentavos: 64900  }, // ₱649  — ₱0.433/token
+  { id: 'creator', name: 'Creator', tokens: 4000,  priceCentavos: 149900 }, // ₱1,499 — ₱0.375/token
+  { id: 'studio',  name: 'Studio',  tokens: 10000, priceCentavos: 329900 }, // ₱3,299 — ₱0.330/token
 ]
+
+export function getCreditPack(id: string): CreditPack | undefined {
+  return CREDIT_PACKS.find((p) => p.id === id)
+}
 
 // Video models — ordered cheapest to most expensive
 export const VIDEO_MODELS: VideoModel[] = [

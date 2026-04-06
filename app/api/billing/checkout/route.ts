@@ -1,24 +1,20 @@
 /**
  * POST /api/billing/checkout
  *
- * Two flows:
+ * Creates a QRPH payment for a credit pack purchase.
+ * Server-side flow: PaymentIntent → QRPH PaymentMethod → attach → return QR code.
  *
- * 1. Subscription — creates/retrieves a PayMongo Customer, then creates a
- *    SetupIntent to vault the user's card. Returns a `nextActionUrl` the
- *    frontend redirects to for the card-entry / 3DS flow. Once the card is
- *    vaulted, the frontend calls /api/billing/subscribe to create the actual
- *    subscription with the vaulted payment method.
+ * Subscriptions are disabled. Only credit pack purchases are accepted.
  *
- * 2. Top-up (one-time) — creates a PaymentIntent and returns the `clientKey`
- *    for the frontend PayMongo.js checkout widget.
+ * Body: { packId: 'trial' | 'basic' | 'creator' | 'studio' }
+ *
+ * Response: { qrCode: string (base64 PNG), intentId: string, tokens: number, amountCentavos: number, packName: string }
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { createAdminClient } from '@/lib/supabase/admin'
-import { createCustomer, createSetupIntent, createPaymentIntent } from '@/lib/billing/paymongo'
-import { getPlan, TOPUP_PACKS } from '@/lib/data/plans'
-import type { PlanId } from '@/lib/types/billing'
+import { createPaymentIntent, createQRPHPaymentMethod, attachQRPHPaymentMethod } from '@/lib/billing/paymongo'
+import { getCreditPack } from '@/lib/data/plans'
 import { logger } from '@/lib/logger'
 import { sanitizeText, verifySameOrigin } from '@/lib/security'
 
@@ -31,81 +27,54 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json()
-  const planId = sanitizeText(body?.planId, { maxLength: 20 }) as PlanId
-  const topupPlanId = sanitizeText(body?.topupPlanId, { maxLength: 20 }) as PlanId
+  const packId = sanitizeText(body?.packId, { maxLength: 20 })
 
-  // ── Top-up purchase (one-time payment intent) ──────────────────────────────
-  if (topupPlanId) {
-    const pack = TOPUP_PACKS.find((p) => p.planId === topupPlanId)
-    if (!pack) {
-      return NextResponse.json({ error: 'Top-up not available for this plan' }, { status: 400 })
-    }
-
-    try {
-      const intent = await createPaymentIntent(
-        pack.priceCentavos,
-        'Genetrify token top-up — 1,000 tokens',
-        {
-          userId: user.id,
-          type: 'topup',
-          planId: topupPlanId,
-          tokens: String(pack.tokens),
-          amountCentavos: String(pack.priceCentavos),
-        },
-      )
-      return NextResponse.json({ clientKey: intent.attributes.client_key, intentId: intent.id })
-    } catch (err) {
-      logger.error('Failed to create top-up PaymentIntent', { userId: user.id }, err)
-      return NextResponse.json({ error: 'Failed to initiate payment' }, { status: 500 })
-    }
+  if (!packId) {
+    return NextResponse.json({ error: 'packId is required' }, { status: 400 })
   }
 
-  // ── Subscription setup — vault card via SetupIntent ────────────────────────
-  if (!planId) {
-    return NextResponse.json({ error: 'planId required' }, { status: 400 })
+  const pack = getCreditPack(packId)
+  if (!pack) {
+    return NextResponse.json({ error: 'Invalid pack' }, { status: 400 })
   }
 
-  const plan = getPlan(planId as PlanId)
-  if (!plan.paymongoMonthlyPlanId) {
-    return NextResponse.json({ error: 'Plan not yet configured' }, { status: 400 })
-  }
-
-  const admin = createAdminClient()
-
-  // Retrieve or create PayMongo Customer for this user
-  let customerId: string
-  const { data: existing } = await admin
-    .from('subscriptions')
-    .select('paymongo_customer_id')
-    .eq('user_id', user.id)
-    .single()
-
-  if (existing?.paymongo_customer_id) {
-    customerId = existing.paymongo_customer_id
-  } else {
-    try {
-      const customer = await createCustomer(user.email!, user.id)
-      customerId = customer.id
-    } catch (err) {
-      logger.error('Failed to create PayMongo customer', { userId: user.id }, err)
-      return NextResponse.json({ error: 'Failed to create customer' }, { status: 500 })
-    }
-  }
-
-  // Create a SetupIntent to vault the user's card
   try {
-    const setupIntent = await createSetupIntent(customerId)
-    const nextActionUrl = setupIntent.attributes.next_action?.redirect?.url ?? null
+    // 1. Create PaymentIntent (QRPH only)
+    const intent = await createPaymentIntent(
+      pack.priceCentavos,
+      `Genetrify ${pack.name} pack — ${pack.tokens.toLocaleString()} tokens`,
+      {
+        userId: user.id,
+        type: 'topup',
+        packId: pack.id,
+        packName: pack.name,
+        tokens: String(pack.tokens),
+        amountCentavos: String(pack.priceCentavos),
+      },
+    )
+
+    // 2. Create QRPH PaymentMethod (use email as billing name fallback)
+    const name = user.email?.split('@')[0] ?? 'User'
+    const paymentMethod = await createQRPHPaymentMethod(user.email!, name)
+
+    // 3. Attach → generates QR code
+    const attached = await attachQRPHPaymentMethod(intent.id, intent.attributes.client_key, paymentMethod.id)
+
+    const qrCode = attached.attributes.next_action?.code?.image_url ?? null
+    if (!qrCode) {
+      logger.error('QRPH attach returned no QR code', { userId: user.id, intentId: intent.id })
+      return NextResponse.json({ error: 'Failed to generate QR code' }, { status: 500 })
+    }
 
     return NextResponse.json({
-      setupIntentId: setupIntent.id,
-      clientKey: setupIntent.attributes.client_key,
-      nextActionUrl,
-      customerId,
-      planId,
+      qrCode,
+      intentId: intent.id,
+      tokens: pack.tokens,
+      amountCentavos: pack.priceCentavos,
+      packName: pack.name,
     })
   } catch (err) {
-    logger.error('Failed to create SetupIntent', { userId: user.id }, err)
-    return NextResponse.json({ error: 'Failed to initiate card setup' }, { status: 500 })
+    logger.error('QRPH checkout failed', { userId: user.id, packId }, err)
+    return NextResponse.json({ error: 'Failed to initiate payment' }, { status: 500 })
   }
 }
