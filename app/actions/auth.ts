@@ -6,7 +6,6 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { sendEmail } from '@/lib/email/resend'
 import { welcomeEmail } from '@/lib/email/templates/welcome'
-import { SIGNUP_FREE_TOKENS } from '@/lib/data/plans'
 
 export async function login(formData: FormData) {
   const supabase = await createClient()
@@ -80,15 +79,9 @@ export async function signup(formData: FormData) {
     return { error: error.message }
   }
 
-  // Grant free tokens and send welcome email (fire-and-forget — never block signup)
+  // Send welcome email (fire-and-forget — never block signup on email failure)
   if (data.session) {
     await Promise.allSettled([
-      admin.from('token_ledger').insert({
-        user_id: data.session.user.id,
-        amount: SIGNUP_FREE_TOKENS,
-        type: 'grant',
-        description: `Welcome gift — ${SIGNUP_FREE_TOKENS} free tokens`,
-      }),
       sendEmail({ to: email, ...welcomeEmail(email) }),
     ])
 
