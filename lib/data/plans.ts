@@ -92,7 +92,8 @@ export const SIGNUP_FREE_TOKENS = 300
 // Credit packs — one-time QRPH purchases (no subscription required)
 // Priced at a premium vs subscriptions: packs = convenience, subs = volume discount
 export const CREDIT_PACKS: CreditPack[] = [
-  { id: 'trial',   name: 'Trial',   tokens: 500,   priceCentavos: 24900  }, // ₱249  — ₱0.498/token
+  { id: 'spark',   name: 'Spark',   tokens: 200,   priceCentavos: 10000  }, // ₱100  — ₱0.500/token
+  { id: 'trial',   name: 'Trial',   tokens: 425,   priceCentavos: 24900  }, // ₱249  — ₱0.586/token
   { id: 'basic',   name: 'Basic',   tokens: 1500,  priceCentavos: 64900  }, // ₱649  — ₱0.433/token
   { id: 'creator', name: 'Creator', tokens: 4000,  priceCentavos: 149900 }, // ₱1,499 — ₱0.375/token
   { id: 'studio',  name: 'Studio',  tokens: 10000, priceCentavos: 329900 }, // ₱3,299 — ₱0.330/token

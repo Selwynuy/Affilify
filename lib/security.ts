@@ -53,8 +53,14 @@ function normalizeOrigin(origin: string) {
 }
 
 export function verifySameOrigin(request: NextRequest) {
-  const allowedOrigin = normalizeOrigin(process.env.NEXT_PUBLIC_APP_URL ?? '')
-  if (!allowedOrigin) return null
+  const allowedOrigins = new Set<string>()
+  const configuredOrigin = normalizeOrigin(process.env.NEXT_PUBLIC_APP_URL ?? '')
+  const requestUrlOrigin = normalizeOrigin(request.nextUrl.origin)
+
+  if (configuredOrigin) allowedOrigins.add(configuredOrigin)
+  if (requestUrlOrigin) allowedOrigins.add(requestUrlOrigin)
+
+  if (allowedOrigins.size === 0) return null
 
   const origin = request.headers.get('origin')
   const referer = request.headers.get('referer')
@@ -65,7 +71,7 @@ export function verifySameOrigin(request: NextRequest) {
       ? normalizeOrigin(referer)
       : null
 
-  if (!requestOrigin || requestOrigin !== allowedOrigin) {
+  if (!requestOrigin || !allowedOrigins.has(requestOrigin)) {
     return NextResponse.json({ error: 'Invalid request origin' }, { status: 403 })
   }
 

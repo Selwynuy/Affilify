@@ -80,7 +80,8 @@
       "Bash(git log:*)",
       "Bash(git ls-tree:*)",
       "Bash(ls app/\\\\\\(auth\\\\\\)/)",
-      "Bash(git check-ignore:*)"
+      "Bash(git check-ignore:*)",
+      "Bash(find /d/Projects/Genetrify -name \"*.sql\" -exec grep -l \"CREATE TABLE\" {} \\\\;)"
     ]
   }
 }

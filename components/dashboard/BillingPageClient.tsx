@@ -219,7 +219,7 @@ export function BillingPageClient({ initialData }: { initialData: BalanceData })
           <p className="text-xs text-white/20">One-time · QRPH · No subscription</p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-5 gap-3">
           {CREDIT_PACKS.map((pack) => {
             const isPopular = pack.id === popularId
             const perToken = (pack.priceCentavos / pack.tokens / 100).toFixed(3)
