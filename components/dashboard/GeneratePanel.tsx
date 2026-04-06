@@ -16,6 +16,17 @@ import { VIDEO_MODELS, getAvailableModels, TOKEN_COSTS } from '@/lib/data/plans'
 import type { VideoModel, PlanId } from '@/lib/types/billing'
 import type { MarketplaceTemplate } from '@/lib/types/marketplace'
 import { TikTokShareButton } from '@/components/dashboard/TikTokShareButton'
+import {
+  getAllVideoOptionChoices,
+  getDefaultVideoGenerationSettings,
+  getMinimumVideoGenerationTokenCost,
+  getVideoGenerationTokenCost,
+  getVideoOptionChoices,
+  hasMultipleVideoOptionChoices,
+  updateVideoGenerationSettings,
+  type VideoGenerationSettings,
+  type VideoOptionKey,
+} from '@/lib/video-generation'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -25,6 +36,13 @@ interface HistoryRun { projectId: string; createdAt: string; videos: VideoResult
 interface ProductFile { file: File; previewUrl: string }
 
 type Stage = 'idle' | 'uploading' | 'generating' | 'reviewing' | 'making-videos' | 'done' | 'error'
+
+const VIDEO_OPTION_LABELS: Record<VideoOptionKey, string> = {
+  duration: 'Duration',
+  resolution: 'Resolution',
+  mode: 'Variant',
+  generateAudio: 'Audio',
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -252,6 +270,9 @@ export function GeneratePanel({
   const [historyLoaded, setHistoryLoaded] = useState(false)
   const [availableModels, setAvailableModels] = useState<VideoModel[]>([VIDEO_MODELS[0]])
   const [selectedModelId, setSelectedModelId] = useState<string>(VIDEO_MODELS[0].id)
+  const [selectedVideoSettings, setSelectedVideoSettings] = useState<VideoGenerationSettings>(
+    getDefaultVideoGenerationSettings(VIDEO_MODELS[0]),
+  )
 
   // Local copies of template IDs — synced from context but overrideable per-run
   const [localCameraId, setLocalCameraId] = useState(cameraTemplateId || cameraTemplates[0]?.id || '')
@@ -271,6 +292,14 @@ export function GeneratePanel({
   }, [contextPlanId])
 
   const selectedModel = availableModels.find((m) => m.id === selectedModelId) ?? availableModels[0]
+  const selectedVideoTokenCost = selectedModel
+    ? getVideoGenerationTokenCost(selectedModel, selectedVideoSettings)
+    : VIDEO_MODELS[0].tokenCost
+
+  useEffect(() => {
+    if (!selectedModel) return
+    setSelectedVideoSettings(getDefaultVideoGenerationSettings(selectedModel))
+  }, [selectedModel])
 
   const isGenerating = stage === 'uploading' || stage === 'generating' || stage === 'making-videos'
   const canGenerate = productFiles.length > 0 && !!avatarConfig && !!backgroundConfig && !isGenerating && stage !== 'reviewing'
@@ -373,7 +402,14 @@ export function GeneratePanel({
       const exportRes = await fetch('/api/export', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectId: lastProjectId, imageIds: [pendingImage.id], imageUrls: [pendingImage.url], motionPrompt, videoModelId: selectedModelId }),
+        body: JSON.stringify({
+          projectId: lastProjectId,
+          imageIds: [pendingImage.id],
+          imageUrls: [pendingImage.url],
+          motionPrompt,
+          videoModelId: selectedModelId,
+          ...selectedVideoSettings,
+        }),
       })
       if (!exportRes.ok) {
         const err = await exportRes.json()
@@ -419,6 +455,13 @@ export function GeneratePanel({
     setStage('idle')
     setErrorMsg('')
     setVideoProgress(null)
+  }
+
+  function handleVideoOptionChange(key: VideoOptionKey, value: string | number | boolean) {
+    if (!selectedModel) return
+    setSelectedVideoSettings((current) =>
+      updateVideoGenerationSettings(selectedModel, current, key, value as never),
+    )
   }
 
   const cameraOptions = cameraTemplates.map((template) => ({ id: template.id, name: template.title, badge: template.badge ?? undefined }))
@@ -608,7 +651,10 @@ export function GeneratePanel({
                     {availableModels.map((model) => (
                       <button
                         key={model.id}
-                        onClick={() => setSelectedModelId(model.id)}
+                        onClick={() => {
+                          setSelectedModelId(model.id)
+                          setSelectedVideoSettings(getDefaultVideoGenerationSettings(model))
+                        }}
                         className={cn(
                           'w-full flex items-center gap-2.5 rounded-lg border px-3 py-2 text-left transition-all',
                           selectedModelId === model.id
@@ -622,7 +668,7 @@ export function GeneratePanel({
                           <p className="text-[10px] text-brand-text/30">{model.qualityLabel}</p>
                         </div>
                         <span className="flex items-center gap-0.5 text-[10px] text-brand-text/40 border border-white/8 rounded px-1.5 py-0.5 shrink-0">
-                          <Zap className="w-2.5 h-2.5" />{model.tokenCost}
+                          <Zap className="w-2.5 h-2.5" />from {getMinimumVideoGenerationTokenCost(model)}
                         </span>
                       </button>
                     ))}
@@ -634,6 +680,52 @@ export function GeneratePanel({
                   </div>
                 </div>
 
+                {selectedModel && (
+                  <div className="space-y-1.5">
+                    {(['duration', 'resolution', 'mode', 'generateAudio'] as VideoOptionKey[])
+                      .filter((key) => hasMultipleVideoOptionChoices(selectedModel, key))
+                      .map((key) => {
+                        const allChoices = getAllVideoOptionChoices(selectedModel, key)
+                        const availableChoices = new Set(
+                          getVideoOptionChoices(selectedModel, selectedVideoSettings, key).map((choice) => choice.value),
+                        )
+
+                        return (
+                          <div key={key} className="space-y-1">
+                            <p className="text-[10px] font-bold text-brand-text/35 uppercase tracking-wider">
+                              {VIDEO_OPTION_LABELS[key]}
+                            </p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {allChoices.map((choice) => {
+                                const isSelected = selectedVideoSettings[key] === choice.value
+                                const isAvailable = availableChoices.has(choice.value)
+
+                                return (
+                                  <button
+                                    key={`${key}-${String(choice.value)}`}
+                                    type="button"
+                                    disabled={!isAvailable}
+                                    onClick={() => handleVideoOptionChange(key, choice.value)}
+                                    className={cn(
+                                      'rounded-lg border px-2.5 py-1.5 text-[10px] font-medium transition-all',
+                                      isSelected
+                                        ? 'border-brand-accent/50 bg-brand-accent/10 text-brand-accent'
+                                        : isAvailable
+                                          ? 'border-white/8 bg-white/[0.02] text-brand-text/55 hover:border-white/15 hover:text-brand-text'
+                                          : 'border-white/6 bg-white/[0.01] text-brand-text/20 cursor-not-allowed',
+                                    )}
+                                  >
+                                    {choice.label}
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        )
+                      })}
+                  </div>
+                )}
+
                 {/* Approve button */}
                 <Button
                   onClick={handleApproveImage}
@@ -643,7 +735,7 @@ export function GeneratePanel({
                     <Video className="w-4 h-4" />
                     APPROVE — CREATE VIDEO
                     <span className="flex items-center gap-0.5 text-brand-bg/60 text-[10px] font-normal border border-brand-bg/20 rounded px-1.5 py-0.5 ml-1">
-                      <Zap className="w-2.5 h-2.5" />{selectedModel?.tokenCost}
+                      <Zap className="w-2.5 h-2.5" />{selectedVideoTokenCost}
                     </span>
                   </span>
                 </Button>

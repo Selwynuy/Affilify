@@ -35,6 +35,17 @@ import {
 } from "@/lib/preferences";
 import { VIDEO_MODELS } from "@/lib/data/plans";
 import type { VideoModel } from "@/lib/types/billing";
+import {
+  getAllVideoOptionChoices,
+  getDefaultVideoGenerationSettings,
+  getMinimumVideoGenerationTokenCost,
+  getVideoGenerationTokenCost,
+  getVideoOptionChoices,
+  hasMultipleVideoOptionChoices,
+  updateVideoGenerationSettings,
+  type VideoGenerationSettings,
+  type VideoOptionKey,
+} from "@/lib/video-generation";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -138,6 +149,13 @@ const CANVAS_H = 4000;
 const STUDIO_DB_NAME = "genetrify-studio";
 const STUDIO_STORE_NAME = "canvas";
 const STUDIO_STATE_KEY_PREFIX = "session";
+
+const VIDEO_OPTION_LABELS: Record<VideoOptionKey, string> = {
+  duration: "Duration",
+  resolution: "Resolution",
+  mode: "Variant",
+  generateAudio: "Audio",
+};
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -1127,8 +1145,13 @@ export function StudioCanvas({
   const [selectedVideoModel, setSelectedVideoModel] = useState<VideoModel>(
     VIDEO_MODELS[0],
   );
-  const [selectedDuration, setSelectedDuration] = useState<number>(
-    VIDEO_MODELS[0].defaultDuration,
+  const [selectedVideoSettings, setSelectedVideoSettings] =
+    useState<VideoGenerationSettings>(
+      getDefaultVideoGenerationSettings(VIDEO_MODELS[0]),
+    );
+  const selectedVideoTokenCost = getVideoGenerationTokenCost(
+    selectedVideoModel,
+    selectedVideoSettings,
   );
   const [previewImage, setPreviewImage] = useState<{
     url: string;
@@ -1827,7 +1850,7 @@ export function StudioCanvas({
           imageUrls: [videoCard.imageUrl],
           motionPrompt,
           videoModelId: selectedVideoModel.id,
-          duration: selectedDuration,
+          ...selectedVideoSettings,
         }),
       });
 
@@ -1889,7 +1912,7 @@ export function StudioCanvas({
     avatarConfig,
     backgroundConfig,
     movementTemplates,
-    selectedDuration,
+    selectedVideoSettings,
     selectedVideoModel.id,
     videoCard,
     videoMovement,
@@ -1897,6 +1920,15 @@ export function StudioCanvas({
   ]);
 
   // ── SVG connection paths ──────────────────────────────────────────────────────
+  function handleVideoOptionChange(
+    key: VideoOptionKey,
+    value: string | number | boolean,
+  ) {
+    setSelectedVideoSettings((current) =>
+      updateVideoGenerationSettings(selectedVideoModel, current, key, value as never),
+    );
+  }
+
   const renderConnections = () => {
     const productCards = cards.filter((c) => c.type === "product");
 
@@ -1960,8 +1992,8 @@ export function StudioCanvas({
             "radial-gradient(circle at 80% 15%, rgba(168,85,247,0.12), transparent 28%)",
             "linear-gradient(180deg, rgba(17,13,29,0.92), rgba(9,6,17,0.98))",
           ].join(", "),
-          backgroundSize:
-            "36px 36px, 36px 36px, 100% 100%, 100% 100%, 100% 100%",
+          backgroundSize: `${36 * zoom}px ${36 * zoom}px, ${36 * zoom}px ${36 * zoom}px, 100% 100%, 100% 100%, 100% 100%`,
+          backgroundPosition: `${pan.x % (36 * zoom)}px ${pan.y % (36 * zoom)}px, ${pan.x % (36 * zoom)}px ${pan.y % (36 * zoom)}px, 0 0, 0 0, 0 0`,
           touchAction: "none",
           cursor: connectingFrom
             ? "crosshair"
@@ -2437,7 +2469,10 @@ export function StudioCanvas({
                         {VIDEO_MODELS.map((m) => (
                           <button
                             key={m.id}
-                            onClick={() => { setSelectedVideoModel(m); setSelectedDuration(m.defaultDuration); }}
+                            onClick={() => {
+                              setSelectedVideoModel(m);
+                              setSelectedVideoSettings(getDefaultVideoGenerationSettings(m));
+                            }}
                             className={cn(
                               "px-3 py-2 rounded-lg text-left transition-all border",
                               selectedVideoModel.id === m.id
@@ -2461,7 +2496,7 @@ export function StudioCanvas({
                                   {m.qualityLabel}
                                 </span>
                                 <span className="flex items-center gap-0.5 text-[10px] text-white/30 font-mono">
-                                  <Zap size={9} className="text-yellow-500/60" />{m.tokenCost}
+                                  <Zap size={9} className="text-yellow-500/60" />from {getMinimumVideoGenerationTokenCost(m)}
                                 </span>
                               </div>
                             </div>
@@ -2470,26 +2505,49 @@ export function StudioCanvas({
                       </div>
                     </div>
 
-                    {/* Duration */}
-                    <div>
-                      <p className="text-[9px] text-white/22 font-mono uppercase tracking-widest mb-2">Duration</p>
-                      <div className="flex gap-1.5 flex-wrap">
-                        {selectedVideoModel.allowedDurations.map((d) => (
-                          <button
-                            key={d}
-                            onClick={() => setSelectedDuration(d)}
-                            className={cn(
-                              "px-3 py-1.5 rounded-lg text-[11px] font-mono border transition-all",
-                              selectedDuration === d
-                                ? "bg-brand-accent/12 border-brand-accent/35 text-brand-accent font-semibold"
-                                : "bg-white/[0.03] border-white/[0.07] text-white/38 hover:bg-white/[0.06] hover:text-white/65",
-                            )}
-                          >
-                            {d}s
-                          </button>
-                        ))}
-                      </div>
-                    </div>
+                    {(["duration", "resolution", "mode", "generateAudio"] as VideoOptionKey[])
+                      .filter((key) => hasMultipleVideoOptionChoices(selectedVideoModel, key))
+                      .map((key) => {
+                        const allChoices = getAllVideoOptionChoices(selectedVideoModel, key);
+                        const availableChoices = new Set(
+                          getVideoOptionChoices(selectedVideoModel, selectedVideoSettings, key).map(
+                            (choice) => choice.value,
+                          ),
+                        );
+
+                        return (
+                          <div key={key}>
+                            <p className="text-[9px] text-white/22 font-mono uppercase tracking-widest mb-2">
+                              {VIDEO_OPTION_LABELS[key]}
+                            </p>
+                            <div className="flex gap-1.5 flex-wrap">
+                              {allChoices.map((choice) => {
+                                const isSelected = selectedVideoSettings[key] === choice.value;
+                                const isAvailable = availableChoices.has(choice.value);
+
+                                return (
+                                  <button
+                                    key={`${key}-${String(choice.value)}`}
+                                    type="button"
+                                    disabled={!isAvailable}
+                                    onClick={() => handleVideoOptionChange(key, choice.value)}
+                                    className={cn(
+                                      "px-3 py-1.5 rounded-lg text-[11px] font-mono border transition-all",
+                                      isSelected
+                                        ? "bg-brand-accent/12 border-brand-accent/35 text-brand-accent font-semibold"
+                                        : isAvailable
+                                          ? "bg-white/[0.03] border-white/[0.07] text-white/38 hover:bg-white/[0.06] hover:text-white/65"
+                                          : "bg-white/[0.01] border-white/[0.05] text-white/18 cursor-not-allowed",
+                                    )}
+                                  >
+                                    {choice.label}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
 
                     {/* Movement */}
                     <div>
@@ -2542,7 +2600,7 @@ export function StudioCanvas({
                       <span className="text-[10px] text-white/28 font-mono">Cost</span>
                       <span className="flex items-center gap-1 text-[11px] font-semibold text-white/60 font-mono">
                         <Zap size={10} className="text-yellow-400/70" />
-                        {selectedVideoModel.tokenCost} tokens
+                        {selectedVideoTokenCost} tokens
                       </span>
                     </div>
                     <button

@@ -6,6 +6,8 @@ import { getAvailableModels, VIDEO_MODELS } from '@/lib/data/plans'
 import { logger } from '@/lib/logger'
 import { rateLimit } from '@/lib/db-rate-limit'
 import type { VideoModel } from '@/lib/types/billing'
+import type { VideoGenerationSettings } from '@/lib/video-generation'
+import { getVideoGenerationTokenCost, normalizeVideoGenerationSettings } from '@/lib/video-generation'
 import { isUuid, parseInteger, sanitizeText, verifySameOrigin } from '@/lib/security'
 
 const REPLICATE_API_KEY = process.env.REPLICATE_API_KEY
@@ -16,14 +18,14 @@ function buildReplicateInput(
   imageUrl: string,
   prompt: string,
   videoModel: VideoModel,
-  duration: number,
+  settings: VideoGenerationSettings,
 ): Record<string, unknown> {
   switch (videoModel.id) {
     case 'wan-480p':
       return {
         image: imageUrl,
         prompt,
-        num_frames: duration * WAN_FPS,
+        num_frames: settings.duration * WAN_FPS,
         frames_per_second: WAN_FPS,
         max_area: '480x832',
       }
@@ -32,40 +34,47 @@ function buildReplicateInput(
       return {
         first_frame_image: imageUrl,
         prompt,
-        duration,
+        duration: settings.duration,
+        resolution: settings.resolution,
       }
     case 'kling-turbo':
       return {
         start_image: imageUrl,
         prompt,
-        duration,
+        duration: settings.duration,
       }
     case 'kling-v3':
       return {
         start_image: imageUrl,
         prompt,
-        duration,
-        mode: 'pro',
-        generate_audio: false,
+        duration: settings.duration,
+        mode: settings.mode,
+        generate_audio: settings.generateAudio,
       }
     case 'veo-fast':
       return {
         image: imageUrl,
         prompt,
-        duration,
+        duration: settings.duration,
+        resolution: settings.resolution,
         aspect_ratio: '9:16',
-        generate_audio: false,
+        generate_audio: settings.generateAudio,
       }
     default:
       return {
         start_image: imageUrl,
         prompt,
-        duration,
+        duration: settings.duration,
       }
   }
 }
 
-async function generateVideo(imageUrl: string, prompt: string, videoModel: VideoModel, duration: number): Promise<string> {
+async function generateVideo(
+  imageUrl: string,
+  prompt: string,
+  videoModel: VideoModel,
+  settings: VideoGenerationSettings,
+): Promise<string> {
   if (!REPLICATE_API_KEY) throw new Error('REPLICATE_API_KEY is not configured')
 
   const submitRes = await fetch('https://api.replicate.com/v1/predictions', {
@@ -76,7 +85,7 @@ async function generateVideo(imageUrl: string, prompt: string, videoModel: Video
     },
     body: JSON.stringify({
       version: videoModel.replicateVersion,
-      input: buildReplicateInput(imageUrl, prompt, videoModel, duration),
+      input: buildReplicateInput(imageUrl, prompt, videoModel, settings),
     }),
   })
 
@@ -144,6 +153,9 @@ export async function POST(req: NextRequest) {
   const motionPrompt = sanitizeText(body?.motionPrompt, { maxLength: 500, allowNewlines: true })
   const videoModelId = typeof body?.videoModelId === 'string' ? body.videoModelId : ''
   const rawDuration = parseInteger(body?.duration)
+  const rawResolution = typeof body?.resolution === 'string' ? body.resolution : undefined
+  const rawMode = typeof body?.mode === 'string' ? body.mode : undefined
+  const rawGenerateAudio = typeof body?.generateAudio === 'boolean' ? body.generateAudio : undefined
 
   if (!projectId || imageIds.length === 0) {
     return new Response(JSON.stringify({ error: 'projectId and imageIds required' }), { status: 400 })
@@ -156,16 +168,15 @@ export async function POST(req: NextRequest) {
   const availableModels = planId ? getAvailableModels(planId) : [VIDEO_MODELS[0]]
   const videoModel = availableModels.find((m) => m.id === videoModelId) ?? availableModels[0]
 
-  const requestedDuration = typeof rawDuration === 'number' && Number.isInteger(rawDuration)
-    ? rawDuration
-    : videoModel.defaultDuration
-  if (!videoModel.allowedDurations.includes(requestedDuration)) {
-    return new Response(JSON.stringify({
-      error: `Duration ${requestedDuration}s is not supported by ${videoModel.name}. Allowed: ${videoModel.allowedDurations.join(', ')}s`,
-    }), { status: 400 })
-  }
-  const duration = requestedDuration
-  const tokenCostPerVideo = videoModel.tokenCost
+  const selectedSettings = normalizeVideoGenerationSettings(videoModel, {
+    duration: typeof rawDuration === 'number' && Number.isInteger(rawDuration)
+      ? rawDuration
+      : videoModel.defaultDuration,
+    resolution: rawResolution,
+    mode: rawMode,
+    generateAudio: rawGenerateAudio,
+  })
+  const tokenCostPerVideo = getVideoGenerationTokenCost(videoModel, selectedSettings)
 
   const totalTokensNeeded = tokenCostPerVideo * imageIds.length
   const balance = await getTokenBalance(user.id)
@@ -211,7 +222,7 @@ export async function POST(req: NextRequest) {
           const { data: signed } = await admin.storage.from('generated').createSignedUrl(sourcePath, 60 * 30)
           if (!signed?.signedUrl) throw new Error('Failed to create export image URL')
 
-          const videoUrl = await generateVideo(signed.signedUrl, motionPrompt, videoModel, duration)
+          const videoUrl = await generateVideo(signed.signedUrl, motionPrompt, videoModel, selectedSettings)
 
           await admin.from('project_videos').insert({
             project_id: projectId,
@@ -221,7 +232,21 @@ export async function POST(req: NextRequest) {
             url: videoUrl,
           })
 
-          const charged = await deductTokens(user.id, tokenCostPerVideo, 'video_gen', `Video generation - ${videoModel.name}`, projectId)
+          const optionLabel = [
+            `${selectedSettings.duration}s`,
+            selectedSettings.resolution,
+            selectedSettings.mode,
+            typeof selectedSettings.generateAudio === 'boolean'
+              ? selectedSettings.generateAudio ? 'audio-on' : 'audio-off'
+              : null,
+          ].filter(Boolean).join(', ')
+          const charged = await deductTokens(
+            user.id,
+            tokenCostPerVideo,
+            'video_gen',
+            `Video generation - ${videoModel.name} (${optionLabel})`,
+            projectId,
+          )
           if (!charged) {
             logger.warn('Token deduction rejected after video generation', { userId: user.id, projectId, imageId: image.id })
             await admin.from('project_videos').delete().eq('project_id', projectId).eq('image_id', image.id).eq('url', videoUrl)
