@@ -31,10 +31,10 @@ const sections = [
     ],
   },
   {
-    title: "4. Billing, subscriptions, and tokens",
+    title: "4. Billing and tokens",
     body: [
-      "Paid features, subscriptions, top-ups, token balances, and related billing features are offered subject to the pricing and plan details shown on genetrify.com at the time of purchase. Fees are charged in advance unless stated otherwise.",
-      "Unless explicitly stated, subscriptions renew automatically until cancelled. You authorize Genetrify Information Technology Services and its payment processors to charge the payment method you provide for recurring subscriptions, one-time purchases, taxes, and any applicable fees.",
+      "Paid features, token purchases, QRPH top-ups, token balances, and related billing features are offered subject to the pricing details shown on genetrify.com at the time of purchase. Fees are charged in advance unless stated otherwise.",
+      "When you initiate a one-time purchase, you authorize Genetrify Information Technology Services and its payment processors to charge the payment method you provide for that purchase, taxes, and any applicable fees. Subscription billing is not currently available unless explicitly stated.",
     ],
   },
   {

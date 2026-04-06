@@ -12,7 +12,7 @@ const sections = [
   {
     title: "1. Who this policy applies to",
     body: [
-      "This Privacy Policy explains how Genetrify Information Technology Services collects, uses, stores, and protects personal information when you visit genetrify.com, create an account, purchase a subscription, or use Genetrify's AI content generation services.",
+      "This Privacy Policy explains how Genetrify Information Technology Services collects, uses, stores, and protects personal information when you visit genetrify.com, create an account, purchase token credits or QRPH top-ups, or use Genetrify's AI content generation services.",
       "By using genetrify.com, you acknowledge that your information will be handled as described in this policy.",
     ],
   },
