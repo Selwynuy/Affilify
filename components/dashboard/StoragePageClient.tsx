@@ -263,7 +263,7 @@ export function StoragePageClient({ initialData }: { initialData: StoragePageDat
               </p>
             </div>
           </div>
-          {!data.planId && <Link href="/billing" className="text-xs text-brand-accent hover:text-brand-accent-hover transition-colors">Subscribe for storage -&gt;</Link>}
+          {!data.planId && <Link href="/billing" className="text-xs text-brand-accent hover:text-brand-accent-hover transition-colors">Buy QRPH credit pack -&gt;</Link>}
         </div>
 
         {data.limitBytes > 0 && (
@@ -281,7 +281,7 @@ export function StoragePageClient({ initialData }: { initialData: StoragePageDat
         {nearLimit && (
           <div className="flex items-center gap-2 text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2">
             <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-            Storage is almost full. Delete old files or <Link href="/billing" className="underline underline-offset-2 hover:text-amber-300">upgrade your plan</Link>.
+            Storage is almost full. Delete old files. Subscription storage upgrades are currently unavailable.
           </div>
         )}
       </div>

@@ -628,7 +628,7 @@ export function GeneratePanel({
                     ))}
                     {availableModels.length < VIDEO_MODELS.length && (
                       <p className="text-[10px] text-brand-text/25 px-1">
-                        <Link href="/billing" className="underline underline-offset-2 hover:text-brand-text/50">Upgrade</Link> to unlock more models
+                        Higher-tier models are temporarily unavailable while subscriptions are offline.
                       </p>
                     )}
                   </div>

@@ -13,26 +13,36 @@ interface BalanceData {
   balance: number
 }
 
+interface PaymentStatusResult {
+  paid: boolean
+  status?: string
+  balance?: number
+  error?: string
+}
+
 function phpFormat(centavos: number): string {
-  return '₱' + (centavos / 100).toLocaleString('en-PH', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+  return 'P' + (centavos / 100).toLocaleString('en-PH', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
 }
 
 interface QRModalProps {
   qrCode: string
+  intentId: string
   tokens: number
   amountCentavos: number
   packName: string
   onClose: () => void
-  onRefresh: () => Promise<void>
+  onRefresh: (intentId: string) => Promise<PaymentStatusResult>
 }
 
-const QR_EXPIRY_SECONDS = 1800 // 30 minutes
+const QR_EXPIRY_SECONDS = 1800
 
-function QRModal({ qrCode, tokens, amountCentavos, packName, onClose, onRefresh }: QRModalProps) {
+function QRModal({ qrCode, intentId, tokens, amountCentavos, packName, onClose, onRefresh }: QRModalProps) {
   const [secondsLeft, setSecondsLeft] = useState(QR_EXPIRY_SECONDS)
   const [refreshing, setRefreshing] = useState(false)
   const [paid, setPaid] = useState(false)
+  const [statusNote, setStatusNote] = useState<string | null>(null)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const checkStatusRef = useRef<((silent?: boolean) => Promise<void>) | null>(null)
 
   useEffect(() => {
     intervalRef.current = setInterval(() => {
@@ -53,12 +63,39 @@ function QRModal({ qrCode, tokens, amountCentavos, packName, onClose, onRefresh 
   const secs = secondsLeft % 60
   const timerLabel = `${mins}:${secs.toString().padStart(2, '0')}`
 
-  async function handleRefresh() {
-    setRefreshing(true)
-    await onRefresh()
-    setRefreshing(false)
-    setPaid(true)
+  async function checkStatus(silent = false) {
+    if (!silent) setRefreshing(true)
+    const result = await onRefresh(intentId)
+    if (!silent) setRefreshing(false)
+
+    if (result.paid) {
+      setPaid(true)
+      setStatusNote(null)
+      return
+    }
+
+    if (!silent) {
+      setStatusNote(
+        result.status === 'expired'
+          ? 'This QR code has expired. Generate a new one to continue.'
+          : result.error ?? 'Payment not confirmed yet. Complete the payment, then check again.',
+      )
+    }
   }
+
+  useEffect(() => {
+    checkStatusRef.current = checkStatus
+  })
+
+  useEffect(() => {
+    if (expired || paid) return
+
+    const poll = setInterval(() => {
+      void checkStatusRef.current?.(true)
+    }, 10000)
+
+    return () => clearInterval(poll)
+  }, [expired, paid])
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
@@ -98,7 +135,6 @@ function QRModal({ qrCode, tokens, amountCentavos, packName, onClose, onRefresh 
             </div>
           ) : (
             <>
-              {/* QR code image */}
               <div className="flex justify-center">
                 <div className="rounded-xl overflow-hidden border border-white/10 bg-white p-2">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -106,7 +142,6 @@ function QRModal({ qrCode, tokens, amountCentavos, packName, onClose, onRefresh 
                 </div>
               </div>
 
-              {/* Timer */}
               <div className="flex items-center justify-center gap-2 text-sm text-white/40">
                 <Clock className="w-3.5 h-3.5" />
                 <span>Expires in <span className={cn('font-mono font-semibold', secondsLeft < 120 ? 'text-amber-400' : 'text-white/60')}>{timerLabel}</span></span>
@@ -114,18 +149,22 @@ function QRModal({ qrCode, tokens, amountCentavos, packName, onClose, onRefresh 
 
               <div className="rounded-xl border border-white/[0.07] bg-white/3 px-4 py-3 space-y-1">
                 <p className="text-xs text-white/40 leading-relaxed">
-                  Open your banking app (BPI, BDO, GCash, Maya, etc.), scan this QR code, and complete the payment. Then tap the button below to confirm.
+                  Open your banking app (BPI, BDO, GCash, Maya, etc.), scan this QR code, and complete the payment. We only mark this as paid after the server confirms it.
                 </p>
               </div>
 
+              {statusNote && (
+                <p className="text-xs text-center text-white/45">{statusNote}</p>
+              )}
+
               <Button
-                onClick={handleRefresh}
+                onClick={() => void checkStatus()}
                 disabled={refreshing}
                 className="w-full h-10 rounded-xl bg-brand-accent hover:bg-brand-accent-hover text-brand-bg font-bold text-sm"
               >
                 {refreshing
                   ? <span className="flex items-center gap-2"><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Checking...</span>
-                  : "I've paid — Refresh balance"
+                  : 'Check payment status'
                 }
               </Button>
             </>
@@ -142,6 +181,7 @@ export function BillingPageClient({ initialData }: { initialData: BalanceData })
   const [actionPending, setActionPending] = useState<string | null>(null)
   const [qrData, setQrData] = useState<{
     qrCode: string
+    intentId: string
     tokens: number
     amountCentavos: number
     packName: string
@@ -151,6 +191,15 @@ export function BillingPageClient({ initialData }: { initialData: BalanceData })
     const res = await fetch('/api/billing/balance')
     const json = await res.json()
     setBalance(json.balance ?? 0)
+  }
+
+  async function refreshPayment(intentId: string): Promise<PaymentStatusResult> {
+    const res = await fetch(`/api/billing/status?intentId=${encodeURIComponent(intentId)}`)
+    const json = await res.json()
+    if (typeof json.balance === 'number') {
+      setBalance(json.balance)
+    }
+    return json as PaymentStatusResult
   }
 
   function handleBuyPack(pack: CreditPack) {
@@ -165,6 +214,7 @@ export function BillingPageClient({ initialData }: { initialData: BalanceData })
       if (json.qrCode) {
         setQrData({
           qrCode: json.qrCode,
+          intentId: json.intentId,
           tokens: json.tokens,
           amountCentavos: json.amountCentavos,
           packName: json.packName,
@@ -184,7 +234,7 @@ export function BillingPageClient({ initialData }: { initialData: BalanceData })
         <QRModal
           {...qrData}
           onClose={() => setQrData(null)}
-          onRefresh={refreshBalance}
+          onRefresh={refreshPayment}
         />
       )}
 
@@ -194,7 +244,6 @@ export function BillingPageClient({ initialData }: { initialData: BalanceData })
         <p className="text-sm text-brand-text/40">Purchase token credits to start generating videos.</p>
       </div>
 
-      {/* Token balance */}
       <div className="rounded-2xl border border-white/[0.07] bg-brand-surface p-5 flex items-center justify-between gap-4">
         <div className="space-y-0.5">
           <p className="text-xs font-medium text-white/40 uppercase tracking-wider">Token Balance</p>
@@ -212,7 +261,6 @@ export function BillingPageClient({ initialData }: { initialData: BalanceData })
         </button>
       </div>
 
-      {/* Credit packs */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <p className="text-xs font-medium text-white/40 uppercase tracking-wider">Credit Packs</p>
@@ -244,7 +292,7 @@ export function BillingPageClient({ initialData }: { initialData: BalanceData })
                   <p className="text-2xl font-bold text-white">
                     {phpFormat(pack.priceCentavos)}
                   </p>
-                  <p className="text-xs text-white/30">₱{perToken}/token</p>
+                  <p className="text-xs text-white/30">P{perToken}/token</p>
                 </div>
 
                 <ul className="space-y-2 flex-1">
@@ -281,7 +329,7 @@ export function BillingPageClient({ initialData }: { initialData: BalanceData })
         </div>
 
         <p className="text-xs text-white/20 text-center">
-          Payments via QRPH — scan with any major Philippine banking app or e-wallet · Tokens credited instantly after payment
+          Payments via QRPH · Scan with any major Philippine banking app or e-wallet · Tokens are credited once payment is confirmed
         </p>
       </div>
     </div>

@@ -8,39 +8,18 @@
  *   - subscription.updated
  *   - subscription.past_due
  *   - subscription.unpaid
- *   - payment.paid  (for one-time top-ups)
+ *   - payment.paid
+ *   - payment.failed
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyWebhookSignature } from '@/lib/billing/paymongo'
-import { createAdminClient } from '@/lib/supabase/admin'
-import { getTokenBalance } from '@/lib/billing/tokens'
+import { finalizeBillingPayment, updateBillingPaymentStatus } from '@/lib/billing/payments'
 import { logger } from '@/lib/logger'
-import { sendEmail } from '@/lib/email/resend'
-import { topupConfirmedEmail } from '@/lib/email/templates/topup-confirmed'
-import { getCreditPack } from '@/lib/data/plans'
 
-/** Look up a user's email via the admin auth API. Returns null on failure. */
-async function getUserEmail(userId: string): Promise<string | null> {
-  try {
-    const admin = createAdminClient()
-    const { data, error } = await admin.auth.admin.getUserById(userId)
-    if (error || !data.user?.email) return null
-    return data.user.email
-  } catch {
-    return null
-  }
-}
-
-/** Format centavo amount to PHP string e.g. "₱1,099.00" */
-function formatPHP(centavos: number): string {
-  return '₱' + (centavos / 100).toLocaleString('en-PH', { minimumFractionDigits: 2 })
-}
-
-/** Format ISO date string to readable e.g. "April 29, 2026" */
-function formatDate(iso: string | null | undefined): string {
-  if (!iso) return '—'
-  return new Date(iso).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })
+function toIsoFromUnix(seconds: number | null | undefined): string | null {
+  if (!seconds) return null
+  return new Date(seconds * 1000).toISOString()
 }
 
 export async function POST(req: NextRequest) {
@@ -72,10 +51,8 @@ export async function POST(req: NextRequest) {
 
   const eventType = event.data.attributes.type
   const eventData = event.data.attributes.data as Record<string, unknown>
-  const admin = createAdminClient()
 
   switch (eventType) {
-    // ── Subscription events — disabled, no-op ─────────────────────────────────
     case 'subscription.invoice.paid':
     case 'subscription.invoice.payment_failed':
     case 'subscription.updated':
@@ -84,57 +61,49 @@ export async function POST(req: NextRequest) {
       logger.warn(`webhook: subscription event received while subscriptions are disabled (${eventType})`)
       break
 
-    // ── One-time payment paid (credit pack purchase) ───────────────────────────
     case 'payment.paid': {
       const payment = eventData as {
         id: string
         attributes: {
-          status: string
-          metadata: Record<string, string>
+          payment_intent_id?: string
+          paid_at?: number
         }
       }
 
-      const meta = payment.attributes.metadata ?? {}
-      if (meta.type !== 'topup') break
-
-      const userId = meta.userId
-      const tokens = parseInt(meta.tokens ?? '0')
-      const packId = meta.packId
-      const pack = packId ? getCreditPack(packId) : undefined
-      const packName = pack?.name ?? meta.packName ?? 'Credit pack'
-
-      if (!userId || !tokens) {
-        logger.error('payment.paid topup: missing metadata', { paymentId: payment.id })
+      const intentId = payment.attributes.payment_intent_id
+      if (!intentId) {
+        logger.error('payment.paid missing payment_intent_id', { paymentId: payment.id })
         break
       }
 
-      await admin.from('token_ledger').insert({
-        user_id: userId,
-        amount: tokens,
-        type: 'topup',
-        description: `${packName} pack — ${tokens.toLocaleString()} tokens`,
+      const paidAt = toIsoFromUnix(payment.attributes.paid_at)
+      const result = await finalizeBillingPayment(intentId, payment.id, paidAt)
+
+      logger.info('payment.paid: credit pack tokens granted', {
+        intentId,
+        paymentId: payment.id,
+        userId: result.record?.user_id,
+        tokens: result.record?.tokens,
       })
+      break
+    }
 
-      logger.info('payment.paid: credit pack tokens granted', { userId, tokens, packId })
+    case 'payment.failed': {
+      const payment = eventData as {
+        id: string
+        attributes: {
+          payment_intent_id?: string
+        }
+      }
 
-      // Send top-up confirmation email
-      const topupEmail = await getUserEmail(userId)
-      if (topupEmail) {
-        const newBalance = await getTokenBalance(userId)
-        const amountCentavos = parseInt(meta.amountCentavos ?? '0')
-        const tpl = topupConfirmedEmail({
-          email: topupEmail,
-          tokens,
-          amountPaid: amountCentavos ? formatPHP(amountCentavos) : '—',
-          newBalance,
-        })
-        await sendEmail({ to: topupEmail, ...tpl })
+      const intentId = payment.attributes.payment_intent_id
+      if (intentId) {
+        await updateBillingPaymentStatus(intentId, 'failed', { paymentId: payment.id })
       }
       break
     }
 
     default:
-      // Unhandled event — acknowledge and move on
       break
   }
 

@@ -142,8 +142,7 @@ function PricingGrid() {
       </div>
 
       <p className="text-xs text-brand-text/25 mt-8">
-        All plans include a token top-up option Payments via PayMongo Cancel
-        anytime
+        Subscription plans are temporarily unavailable. PayMongo QRPH token top-ups are available inside the app.
       </p>
     </>
   );

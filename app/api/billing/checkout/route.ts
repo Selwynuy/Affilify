@@ -2,7 +2,7 @@
  * POST /api/billing/checkout
  *
  * Creates a QRPH payment for a credit pack purchase.
- * Server-side flow: PaymentIntent → QRPH PaymentMethod → attach → return QR code.
+ * Server-side flow: PaymentIntent -> QRPH PaymentMethod -> attach -> return QR code.
  *
  * Subscriptions are disabled. Only credit pack purchases are accepted.
  *
@@ -14,6 +14,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createPaymentIntent, createQRPHPaymentMethod, attachQRPHPaymentMethod } from '@/lib/billing/paymongo'
+import { createBillingPayment } from '@/lib/billing/payments'
 import { getCreditPack } from '@/lib/data/plans'
 import { logger } from '@/lib/logger'
 import { sanitizeText, verifySameOrigin } from '@/lib/security'
@@ -25,6 +26,7 @@ export async function POST(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!user.email) return NextResponse.json({ error: 'Account email is required for billing' }, { status: 400 })
 
   const body = await req.json()
   const packId = sanitizeText(body?.packId, { maxLength: 20 })
@@ -39,10 +41,9 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    // 1. Create PaymentIntent (QRPH only)
     const intent = await createPaymentIntent(
       pack.priceCentavos,
-      `Genetrify ${pack.name} pack — ${pack.tokens.toLocaleString()} tokens`,
+      `Genetrify ${pack.name} pack - ${pack.tokens.toLocaleString()} tokens`,
       {
         userId: user.id,
         type: 'topup',
@@ -53,11 +54,18 @@ export async function POST(req: NextRequest) {
       },
     )
 
-    // 2. Create QRPH PaymentMethod (use email as billing name fallback)
-    const name = user.email?.split('@')[0] ?? 'User'
-    const paymentMethod = await createQRPHPaymentMethod(user.email!, name)
+    await createBillingPayment({
+      userId: user.id,
+      email: user.email,
+      packId: pack.id,
+      packName: pack.name,
+      tokens: pack.tokens,
+      amountCentavos: pack.priceCentavos,
+      paymentIntentId: intent.id,
+    })
 
-    // 3. Attach → generates QR code
+    const name = user.email.split('@')[0] ?? 'User'
+    const paymentMethod = await createQRPHPaymentMethod(user.email, name)
     const attached = await attachQRPHPaymentMethod(intent.id, intent.attributes.client_key, paymentMethod.id)
 
     const qrCode = attached.attributes.next_action?.code?.image_url ?? null

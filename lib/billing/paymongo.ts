@@ -9,7 +9,7 @@ import crypto from 'crypto'
 const BASE_URL = 'https://api.paymongo.com/v1'
 
 function authHeader(): string {
-  const key = process.env.PAYMONGO_SECRET_KEY
+  const key = process.env.PAYMONGO_SECRET_KEY?.trim()
   if (!key) throw new Error('PAYMONGO_SECRET_KEY is not set')
   return `Basic ${Buffer.from(`${key}:`).toString('base64')}`
 }
@@ -20,6 +20,7 @@ async function pmFetch<T>(
 ): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
     ...options,
+    cache: 'no-store',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': authHeader(),
@@ -197,6 +198,14 @@ export interface PMPaymentIntent {
     client_key: string
     payment_method_allowed: string[]
     metadata: Record<string, string>
+    payments?: Array<{
+      id: string
+      type: string
+      attributes: {
+        status: string
+        paid_at: number | null
+      }
+    }>
   }
 }
 
@@ -220,6 +229,11 @@ export async function createPaymentIntent(
       },
     }),
   })
+  return res.data
+}
+
+export async function retrievePaymentIntent(intentId: string): Promise<PMPaymentIntent> {
+  const res = await pmFetch<{ data: PMPaymentIntent }>(`/payment_intents/${intentId}`)
   return res.data
 }
 
@@ -297,7 +311,7 @@ export async function attachQRPHPaymentMethod(
  * Uses the webhook secret key from PAYMONGO_WEBHOOK_SECRET env var.
  */
 export function verifyWebhookSignature(rawBody: string, signatureHeader: string): boolean {
-  const secret = process.env.PAYMONGO_WEBHOOK_SECRET
+  const secret = process.env.PAYMONGO_WEBHOOK_SECRET?.trim()
   if (!secret) throw new Error('PAYMONGO_WEBHOOK_SECRET is not set')
 
   const parts: Record<string, string> = {}
@@ -311,12 +325,15 @@ export function verifyWebhookSignature(rawBody: string, signatureHeader: string)
 
   const payload = `${t}.${rawBody}`
   const computed = crypto.createHmac('sha256', secret).update(payload).digest('hex')
-  // te = test signature, li = live signature
-  const expected = secret.startsWith('whsk_test') ? te : li
-  if (!expected) return false
 
   try {
-    return crypto.timingSafeEqual(Buffer.from(computed, 'hex'), Buffer.from(expected, 'hex'))
+    for (const expected of [te, li]) {
+      if (!expected) continue
+      if (crypto.timingSafeEqual(Buffer.from(computed, 'hex'), Buffer.from(expected, 'hex'))) {
+        return true
+      }
+    }
+    return false
   } catch {
     return false
   }
