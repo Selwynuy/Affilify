@@ -89,15 +89,28 @@ export const TOKEN_COSTS = {
 // Free tokens granted to every new user on signup
 export const SIGNUP_FREE_TOKENS = 300
 
+const BILLING_SMOKE_PACK_ENABLED = process.env.NEXT_PUBLIC_ENABLE_BILLING_SMOKE_PACK === 'true'
+
 // Credit packs — one-time QRPH purchases (no subscription required)
 // Priced at a premium vs subscriptions: packs = convenience, subs = volume discount
-export const CREDIT_PACKS: CreditPack[] = [
+const BASE_CREDIT_PACKS: CreditPack[] = [
   { id: 'spark',   name: 'Spark',   tokens: 200,   priceCentavos: 10000  }, // ₱100  — ₱0.500/token
   { id: 'trial',   name: 'Trial',   tokens: 520,   priceCentavos: 24900  }, // ₱249  — ₱0.479/token
   { id: 'basic',   name: 'Basic',   tokens: 1500,  priceCentavos: 64900  }, // ₱649  — ₱0.433/token
   { id: 'creator', name: 'Creator', tokens: 4000,  priceCentavos: 149900 }, // ₱1,499 — ₱0.375/token
   { id: 'studio',  name: 'Studio',  tokens: 10000, priceCentavos: 329900 }, // ₱3,299 — ₱0.330/token
 ]
+
+const BILLING_SMOKE_PACK: CreditPack = {
+  id: 'verify',
+  name: 'Verify',
+  tokens: 5,
+  priceCentavos: 500,
+}
+
+export const CREDIT_PACKS: CreditPack[] = BILLING_SMOKE_PACK_ENABLED
+  ? [BILLING_SMOKE_PACK, ...BASE_CREDIT_PACKS]
+  : BASE_CREDIT_PACKS
 
 export function getCreditPack(id: string): CreditPack | undefined {
   return CREDIT_PACKS.find((p) => p.id === id)

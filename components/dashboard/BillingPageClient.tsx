@@ -227,6 +227,7 @@ export function BillingPageClient({ initialData }: { initialData: BalanceData })
   }
 
   const popularId = 'creator'
+  const hasVerificationPack = CREDIT_PACKS.some((pack) => pack.id === 'verify')
 
   return (
     <div className="space-y-10 max-w-4xl">
@@ -270,7 +271,9 @@ export function BillingPageClient({ initialData }: { initialData: BalanceData })
         <div className="grid grid-cols-5 gap-3">
           {CREDIT_PACKS.map((pack) => {
             const isPopular = pack.id === popularId
+            const isVerificationPack = pack.id === 'verify'
             const perToken = (pack.priceCentavos / pack.tokens / 100).toFixed(3)
+
             return (
               <div
                 key={pack.id}
@@ -289,6 +292,9 @@ export function BillingPageClient({ initialData }: { initialData: BalanceData })
 
                 <div className="space-y-1">
                   <p className="text-sm font-semibold text-white">{pack.name}</p>
+                  {isVerificationPack && (
+                    <p className="text-[10px] uppercase tracking-[0.18em] text-amber-400/90">Verification pack</p>
+                  )}
                   <p className="text-2xl font-bold text-white">
                     {phpFormat(pack.priceCentavos)}
                   </p>
@@ -329,8 +335,13 @@ export function BillingPageClient({ initialData }: { initialData: BalanceData })
         </div>
 
         <p className="text-xs text-white/20 text-center">
-          Payments via QRPH · Scan with any major Philippine banking app or e-wallet · Tokens are credited once payment is confirmed
+          Payments via QRPH. Scan with any major Philippine banking app or e-wallet. Tokens are credited once payment is confirmed.
         </p>
+        {hasVerificationPack && (
+          <p className="text-xs text-amber-400/80 text-center">
+            The Verify pack is for live payment smoke tests only. Disable it after verification.
+          </p>
+        )}
       </div>
     </div>
   )
