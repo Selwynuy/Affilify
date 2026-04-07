@@ -48,6 +48,7 @@ yarn-error.log*
 !/supabase/migrations/
 /supabase/migrations/*
 !/supabase/migrations/20260405_security_hardening.sql
+!/supabase/migrations/20260407_project_system.sql
 
 # mcp
 .mcp.json
