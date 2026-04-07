@@ -81,7 +81,10 @@
       "Bash(git ls-tree:*)",
       "Bash(ls app/\\\\\\(auth\\\\\\)/)",
       "Bash(git check-ignore:*)",
-      "Bash(find /d/Projects/Genetrify -name \"*.sql\" -exec grep -l \"CREATE TABLE\" {} \\\\;)"
+      "Bash(find /d/Projects/Genetrify -name \"*.sql\" -exec grep -l \"CREATE TABLE\" {} \\\\;)",
+      "WebFetch(domain:api.replicate.com)",
+      "Bash(find /d/Projects/Genetrify -type f \\\\\\( -name \"*.json\" -o -name \"*.sql\" -o -name \"*.ts\" \\\\\\) ! -path \"*/node_modules/*\" ! -path \"*/.git/*\" ! -path \"*/.next/*\" -exec grep -l \"projects\\\\|subscriptions\\\\|storage_files\\\\|token_ledger\" {} \\\\;)",
+      "Bash(grep -h \"\\\\.from\\(\" /d/Projects/Genetrify/app/api/**/*.ts)"
     ]
   }
 }
