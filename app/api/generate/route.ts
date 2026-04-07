@@ -163,8 +163,9 @@ export async function POST(req: NextRequest) {
   )
   parts.push({ text: prompt })
 
-  // Clear previous generated images
-  await admin.from('project_images').delete().eq('project_id', projectId).eq('kind', 'generated')
+  // Determine the next generation round (keeps version history)
+  const { data: roundData } = await admin.rpc('get_next_generation_round', { p_project_id: projectId })
+  const generationRound = (roundData as number | null) ?? 1
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -217,6 +218,7 @@ export async function POST(req: NextRequest) {
             url: storagePath,
             storage_path: storagePath,
             position: i,
+            generation_round: generationRound,
           }).select('id').single()
 
           if (imgRow) {
@@ -257,7 +259,27 @@ export async function POST(req: NextRequest) {
       }
 
       if (successCount > 0) {
-        await admin.from('projects').update({ status: 'images_generated' }).eq('id', projectId)
+        // Grab the latest generated image's signed URL as the project thumbnail
+        const { data: latestImg } = await admin
+          .from('project_images')
+          .select('storage_path')
+          .eq('project_id', projectId)
+          .eq('kind', 'generated')
+          .eq('generation_round', generationRound)
+          .order('position')
+          .limit(1)
+          .single()
+        let thumbnailUrl: string | null = null
+        if (latestImg?.storage_path) {
+          const { data: signed } = await admin.storage
+            .from('generated')
+            .createSignedUrl(latestImg.storage_path, 60 * 60 * 24 * 30)
+          thumbnailUrl = signed?.signedUrl ?? null
+        }
+        await admin
+          .from('projects')
+          .update({ status: 'images_generated', thumbnail_url: thumbnailUrl })
+          .eq('id', projectId)
       }
 
       controller.enqueue(encode({ type: 'done', total: IMAGE_COUNT, success: successCount }))

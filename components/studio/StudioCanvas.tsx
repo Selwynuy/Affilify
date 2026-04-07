@@ -23,6 +23,7 @@ import {
   Mars,
   Venus,
   RefreshCw,
+  FolderOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePreferences } from "@/lib/context/preferences-context";
@@ -68,6 +69,7 @@ interface GeneratedCard extends CardBase {
   prompt: string;
   sourceIds: string[];
   projectId?: string;
+  projectName?: string;
   generatedImageId?: string;
   videoUrl?: string;
   videoFileName?: string;
@@ -106,6 +108,7 @@ interface PersistedGeneratedCard extends CardBase {
   prompt: string;
   sourceIds: string[];
   projectId?: string;
+  projectName?: string;
   generatedImageId?: string;
   videoUrl?: string;
   videoFileName?: string;
@@ -955,7 +958,7 @@ function CardComp({
         </div>
 
         {/* Footer */}
-        {(card.type === "product" || (card as GeneratedCard).prompt) && (
+        {(card.type === "product" || (card as GeneratedCard).prompt || (card as GeneratedCard).projectName) && (
           <div
             className="bg-[#15151e] px-3 py-2.5 rounded-b-2xl"
             style={{ minHeight: card.type === "product" ? CARD_FOOT_H : undefined }}
@@ -965,9 +968,26 @@ function CardComp({
                 {card.fileName}
               </p>
             ) : (
-              <p className="text-[11px] text-white/30 line-clamp-2 font-mono leading-relaxed">
-                {(card as GeneratedCard).prompt}
-              </p>
+              <div className="flex flex-col gap-1">
+                {(card as GeneratedCard).projectName && (
+                  <a
+                    href={`/projects/${(card as GeneratedCard).projectId}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    className="flex items-center gap-1 text-[11px] text-brand-accent/70 hover:text-brand-accent truncate font-medium transition-colors"
+                    title="View project"
+                  >
+                    <FolderOpen size={10} className="shrink-0" />
+                    <span className="truncate">{(card as GeneratedCard).projectName}</span>
+                  </a>
+                )}
+                {(card as GeneratedCard).prompt && (
+                  <p className="text-[11px] text-white/25 line-clamp-2 font-mono leading-relaxed">
+                    {(card as GeneratedCard).prompt}
+                  </p>
+                )}
+              </div>
             )}
           </div>
         )}
@@ -1003,6 +1023,21 @@ function CardComp({
               title="Download image"
             >
               <Download size={13} />
+            </a>
+          )}
+        {card.type === "generated" &&
+          !card.isLoading &&
+          !card.hasError &&
+          (card as GeneratedCard).projectId && (
+            <a
+              onPointerDown={(e) => e.stopPropagation()}
+              href={`/projects/${(card as GeneratedCard).projectId}`}
+              target="_blank"
+              rel="noreferrer"
+              className="p-2 rounded-xl bg-[#1b1b2e]/90 border border-white/10 text-white/50 hover:text-blue-400 hover:bg-blue-500/10 hover:border-blue-500/20 transition-all backdrop-blur-sm"
+              title="View project"
+            >
+              <ExternalLink size={13} />
             </a>
           )}
         {card.imageUrl &&
@@ -1288,6 +1323,7 @@ export function StudioCanvas({
           prompt: card.prompt,
           sourceIds: card.sourceIds,
           projectId: card.projectId,
+          projectName: card.projectName,
           generatedImageId: card.generatedImageId,
           videoUrl: card.videoUrl,
           videoFileName: card.videoFileName,
@@ -1688,7 +1724,7 @@ export function StudioCanvas({
 
       const upRes = await fetch("/api/upload", { method: "POST", body: fd });
       if (!upRes.ok) throw new Error("Upload failed");
-      const { projectId } = await upRes.json();
+      const { projectId, projectName } = await upRes.json();
 
       const genRes = await fetch("/api/generate", {
         method: "POST",
@@ -1719,6 +1755,7 @@ export function StudioCanvas({
                 ...c,
                 imageUrl,
                 projectId,
+                projectName,
                 generatedImageId,
                 isLoading: false,
                 hasError: !imageUrl,

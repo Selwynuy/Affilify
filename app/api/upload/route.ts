@@ -308,18 +308,22 @@ export async function POST(req: NextRequest) {
   }
 
   let pid = projectId
+  let projectName = 'Untitled Project'
   if (!pid) {
+    const now = new Date()
+    const autoName = `Project ${now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
     const { data: project, error } = await admin
       .from('projects')
-      .insert({ user_id: user.id, status: 'draft', avatar })
-      .select('id')
+      .insert({ user_id: user.id, status: 'draft', avatar, name: autoName })
+      .select('id, name')
       .single()
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     pid = project.id
+    projectName = project.name
   } else {
     const { data: existingProject } = await admin
       .from('projects')
-      .select('id')
+      .select('id, name')
       .eq('id', pid)
       .eq('user_id', user.id)
       .maybeSingle()
@@ -328,6 +332,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 })
     }
 
+    projectName = existingProject.name ?? 'Untitled Project'
     await admin.from('projects').update({ avatar }).eq('id', pid).eq('user_id', user.id)
   }
 
@@ -360,5 +365,5 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ projectId: pid, files: results })
+  return NextResponse.json({ projectId: pid, projectName, files: results })
 }
