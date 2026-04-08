@@ -28,7 +28,12 @@ function buildPrompt(
   lines.push(`Keep the background composition, room layout, decor, colors, lighting, and environment unchanged.`)
   lines.push(`Do not replace, redesign, restyle, crop away, or reinterpret the background.`)
   lines.push(`Only transform the avatar's outfit to match the attached product image input.`)
+  lines.push(`Use only garments, layers, accessories, footwear, and details that are visible in the user-provided product images.`)
   lines.push(`Do not add any extra products, accessories, garments, props, branding, or items that are not present in the user-provided product images.`)
+  lines.push(`If an accessory is not clearly shown in the attached product images, do not add it.`)
+  lines.push(`Do not invent jewelry or styling extras such as necklaces, chains, watches, bracelets, rings, earrings, belts, hats, sunglasses, or bags unless those exact items are provided in the product images.`)
+  lines.push(`Do not add any extra outerwear or top layers such as sweatshirts, hoodies, jackets, coats, overshirts, cardigans, or vests unless that layer is explicitly included in the product images.`)
+  lines.push(`Do not place any garment on top of the provided clothing unless that additional garment is itself one of the attached products.`)
   lines.push(`Adjust the model's pose, hand placement, body angle, and styling presentation as needed to suit the transformed outfit naturally and make the outfit read clearly.`)
   lines.push(`Do not rigidly copy the original reference pose if a better pose is needed for the outfit, but keep the result realistic, flattering, and ecommerce-appropriate.`)
 
@@ -39,7 +44,7 @@ function buildPrompt(
   }
 
   if (productDescription) {
-    lines.push(`Follow these user outfit instructions strictly: ${productDescription}.`)
+    lines.push(`Follow these user outfit instructions strictly, but never violate the attached product images: ${productDescription}.`)
   }
 
   lines.push(`Camera angle: ${cameraAnglePrompt}.`)

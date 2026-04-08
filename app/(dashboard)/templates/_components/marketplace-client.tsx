@@ -68,7 +68,7 @@ function MarketplaceCard({
 }: {
   label: string
   description?: string
-  thumbnailUrl: string
+  thumbnailUrl?: string | null
   previewUrl?: string
   badge?: string | null
   isSelected: boolean
@@ -76,7 +76,9 @@ function MarketplaceCard({
   eager: boolean
   onSelect: () => void
 }) {
-  const hasPreview = !!previewUrl
+  const resolvedThumbnailUrl = thumbnailUrl?.trim() || null
+  const resolvedPreviewUrl = previewUrl?.trim() || null
+  const hasPreview = !!resolvedPreviewUrl
 
   return (
     <div
@@ -89,24 +91,30 @@ function MarketplaceCard({
       style={{ contentVisibility: 'auto', containIntrinsicSize: '320px 520px' }}
     >
       <div className="relative aspect-2/3 w-full overflow-hidden bg-white/5">
-        <img
-          src={thumbnailUrl}
-          alt={label}
-          loading={eager ? 'eager' : 'lazy'}
-          decoding="async"
-          fetchPriority={eager ? 'high' : 'auto'}
-          className={cn(
-            'absolute inset-0 h-full w-full object-cover transition-[opacity,transform] duration-300 group-hover:scale-105',
-            hasPreview ? 'opacity-100 group-hover:opacity-0' : 'opacity-100',
-          )}
-          onError={(event) => {
-            event.currentTarget.style.display = 'none'
-          }}
-        />
+        {resolvedThumbnailUrl ? (
+          <img
+            src={resolvedThumbnailUrl}
+            alt={label}
+            loading={eager ? 'eager' : 'lazy'}
+            decoding="async"
+            fetchPriority={eager ? 'high' : 'auto'}
+            className={cn(
+              'absolute inset-0 h-full w-full object-cover transition-[opacity,transform] duration-300 group-hover:scale-105',
+              hasPreview ? 'opacity-100 group-hover:opacity-0' : 'opacity-100',
+            )}
+            onError={(event) => {
+              event.currentTarget.style.display = 'none'
+            }}
+          />
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center bg-white/[0.03] text-brand-text/20">
+            <ImageIcon className="h-8 w-8" />
+          </div>
+        )}
 
         {hasPreview && (
           <img
-            src={previewUrl}
+            src={resolvedPreviewUrl}
             alt={`${label} preview`}
             loading="lazy"
             decoding="async"
@@ -872,7 +880,7 @@ export default function MarketplaceClient({
                         key={template.id}
                         label={template.title}
                         description={template.description ?? undefined}
-                        thumbnailUrl={template.thumbnail_url ?? ''}
+                        thumbnailUrl={template.thumbnail_url}
                         previewUrl={template.preview_url ?? undefined}
                         badge={template.badge}
                         eager={index < EAGER_IMAGE_COUNT}
@@ -909,7 +917,7 @@ export default function MarketplaceClient({
                   key={template.id}
                   label={template.title}
                   description={template.description ?? undefined}
-                  thumbnailUrl={template.thumbnail_url ?? ''}
+                  thumbnailUrl={template.thumbnail_url}
                   previewUrl={template.preview_url ?? undefined}
                   badge={template.badge}
                   eager={index < EAGER_IMAGE_COUNT}
@@ -937,7 +945,7 @@ export default function MarketplaceClient({
                     key={template.id}
                     label={template.title}
                     description={template.description ?? undefined}
-                    thumbnailUrl={template.thumbnail_url ?? ''}
+                    thumbnailUrl={template.thumbnail_url}
                     badge={template.badge}
                     eager={index < EAGER_IMAGE_COUNT}
                     isSelected={cameraTemplateId === template.id}
@@ -965,7 +973,7 @@ export default function MarketplaceClient({
                     key={template.id}
                     label={template.title}
                     description={template.description ?? undefined}
-                    thumbnailUrl={template.thumbnail_url ?? ''}
+                    thumbnailUrl={template.thumbnail_url}
                     previewUrl={template.preview_url ?? undefined}
                     badge={template.badge}
                     eager={index < EAGER_IMAGE_COUNT}

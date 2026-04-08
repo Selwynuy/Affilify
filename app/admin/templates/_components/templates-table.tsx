@@ -1,6 +1,7 @@
 'use client'
 
 import { useActionState, useEffect, useState } from 'react'
+import type { FormEvent } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Archive, Eye, FileText, Layers, Pencil, Search, Trash2 } from 'lucide-react'
@@ -166,33 +167,20 @@ export default function TemplatesTable({
     setSearch(initialQuery)
   }, [initialQuery])
 
-  const deferredSearch = search.trim()
   const totalPages = Math.max(1, Math.ceil(totalRows / pageSize))
 
   function navigate(next: { status?: StatusTab; category?: CategoryFilter; query?: string; page?: number }) {
     const status = next.status ?? activeStatus
     const category = next.category ?? activeCategory
-    const query = next.query ?? deferredSearch
+    const query = next.query ?? search.trim()
     const page = next.page ?? currentPage
     router.replace(buildHref({ status, category, query, page }))
   }
 
-  useEffect(() => {
-    const timeout = window.setTimeout(() => {
-      if (search.trim() !== initialQuery) {
-        router.replace(
-          buildHref({
-            status: activeStatus,
-            category: activeCategory,
-            query: search.trim(),
-            page: 1,
-          }),
-        )
-      }
-    }, 250)
-
-    return () => window.clearTimeout(timeout)
-  }, [activeCategory, activeStatus, initialQuery, router, search])
+  function handleSearchSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    navigate({ query: search.trim(), page: 1 })
+  }
 
   return (
     <>
@@ -241,15 +229,24 @@ export default function TemplatesTable({
         </div>
 
         <div className="flex flex-col gap-3 md:flex-row">
-          <label className="relative flex-1">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/25" />
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search title or description..."
-              className="w-full rounded-xl border border-white/8 bg-white/[0.03] py-2.5 pl-9 pr-3 text-sm text-white placeholder-white/25 transition-colors focus:border-violet-500/50 focus:outline-none"
-            />
-          </label>
+          <form onSubmit={handleSearchSubmit} className="flex flex-1">
+            <label className="relative flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/25" />
+              <input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search title or description..."
+                className="w-full rounded-l-xl rounded-r-none border border-white/8 bg-white/[0.03] py-2.5 pl-9 pr-3 text-sm text-white placeholder-white/25 transition-colors focus:border-violet-500/50 focus:outline-none"
+              />
+            </label>
+            <button
+              type="submit"
+              aria-label="Search templates"
+              className="inline-flex items-center justify-center rounded-l-none rounded-r-xl border border-l-0 border-white/8 bg-white/[0.03] px-3 text-white/60 transition-colors hover:bg-white/[0.05] hover:text-white focus:border-violet-500/50 focus:outline-none"
+            >
+              <Search className="h-4 w-4" />
+            </button>
+          </form>
 
           <select
             value={activeCategory}
