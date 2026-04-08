@@ -10,7 +10,6 @@ import {
   ImageIcon,
   Mars,
   Pencil,
-  Play,
   Sparkles,
   Trash2,
   Upload,
@@ -116,19 +115,6 @@ function MarketplaceCard({
               event.currentTarget.style.display = 'none'
             }}
           />
-        )}
-
-        {hasPreview && !isSelected && (
-          <div className="absolute bottom-2 left-2 flex items-center gap-1 rounded-full bg-black/60 px-2 py-1 backdrop-blur-sm">
-            <Play className="h-2.5 w-2.5 fill-white/70 text-white/70" />
-            <span className="text-[9px] font-medium text-white/60">Preview</span>
-          </div>
-        )}
-
-        {!hasPreview && description && !isSelected && (
-          <div className="absolute bottom-2 left-2 flex items-center gap-1 rounded-full bg-black/40 px-2 py-1 backdrop-blur-sm">
-            <span className="text-[9px] text-white/30">Preview coming</span>
-          </div>
         )}
 
         {badge && (
