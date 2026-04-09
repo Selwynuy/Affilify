@@ -26,6 +26,7 @@ import {
   buildCustomAvatarConfig,
   buildUserModelAvatarConfig,
 } from '@/lib/preferences'
+import { getTemplatePrimaryImageUrl } from '@/lib/marketplace-template-media'
 import type { MarketplaceTemplate } from '@/lib/types/marketplace'
 import { TOKEN_COSTS } from '@/lib/data/plans'
 
@@ -59,7 +60,6 @@ function MarketplaceCard({
   label,
   description,
   thumbnailUrl,
-  previewUrl,
   badge,
   isSelected,
   isSaving,
@@ -69,7 +69,6 @@ function MarketplaceCard({
   label: string
   description?: string
   thumbnailUrl?: string | null
-  previewUrl?: string
   badge?: string | null
   isSelected: boolean
   isSaving: boolean
@@ -77,8 +76,6 @@ function MarketplaceCard({
   onSelect: () => void
 }) {
   const resolvedThumbnailUrl = thumbnailUrl?.trim() || null
-  const resolvedPreviewUrl = previewUrl?.trim() || null
-  const hasPreview = !!resolvedPreviewUrl
 
   return (
     <div
@@ -98,10 +95,7 @@ function MarketplaceCard({
             loading={eager ? 'eager' : 'lazy'}
             decoding="async"
             fetchPriority={eager ? 'high' : 'auto'}
-            className={cn(
-              'absolute inset-0 h-full w-full object-cover transition-[opacity,transform] duration-300 group-hover:scale-105',
-              hasPreview ? 'opacity-100 group-hover:opacity-0' : 'opacity-100',
-            )}
+            className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
             onError={(event) => {
               event.currentTarget.style.display = 'none'
             }}
@@ -110,19 +104,6 @@ function MarketplaceCard({
           <div className="absolute inset-0 flex items-center justify-center bg-white/[0.03] text-brand-text/20">
             <ImageIcon className="h-8 w-8" />
           </div>
-        )}
-
-        {hasPreview && (
-          <img
-            src={resolvedPreviewUrl}
-            alt={`${label} preview`}
-            loading="lazy"
-            decoding="async"
-            className="absolute inset-0 h-full w-full object-cover opacity-0 transition-[opacity,transform] duration-300 group-hover:opacity-100 group-hover:scale-105"
-            onError={(event) => {
-              event.currentTarget.style.display = 'none'
-            }}
-          />
         )}
 
         {badge && (
@@ -565,7 +546,18 @@ export default function MarketplaceClient({
 
   async function handleCustomFace(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
+    event.target.value = ''
     if (!file) return
+
+    const ALLOWED_FACE_TYPES = ['image/jpeg', 'image/png', 'image/webp']
+    if (!ALLOWED_FACE_TYPES.includes(file.type)) {
+      setGenerateError('Unsupported file type. Please upload a JPG, PNG, or WebP image.')
+      return
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setGenerateError('Face image must be under 10MB.')
+      return
+    }
 
     const reader = new FileReader()
     reader.onload = async (loadEvent) => {
@@ -599,6 +591,9 @@ export default function MarketplaceClient({
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ avatar_config: config }),
           })
+        } else {
+          setCustomFaceUrl(null)
+          setGenerateError(data?.error ?? 'Could not upload face image. Please try again.')
         }
       } finally {
         setUploadingCustomFace(false)
@@ -880,8 +875,7 @@ export default function MarketplaceClient({
                         key={template.id}
                         label={template.title}
                         description={template.description ?? undefined}
-                        thumbnailUrl={template.thumbnail_url}
-                        previewUrl={template.preview_url ?? undefined}
+                        thumbnailUrl={getTemplatePrimaryImageUrl(template)}
                         badge={template.badge}
                         eager={index < EAGER_IMAGE_COUNT}
                         isSelected={avatarConfig?.type === 'preset' && avatarConfig.presetId === template.id}
@@ -917,8 +911,7 @@ export default function MarketplaceClient({
                   key={template.id}
                   label={template.title}
                   description={template.description ?? undefined}
-                  thumbnailUrl={template.thumbnail_url}
-                  previewUrl={template.preview_url ?? undefined}
+                  thumbnailUrl={getTemplatePrimaryImageUrl(template)}
                   badge={template.badge}
                   eager={index < EAGER_IMAGE_COUNT}
                   isSelected={backgroundConfig?.presetId === template.id}
@@ -945,7 +938,7 @@ export default function MarketplaceClient({
                     key={template.id}
                     label={template.title}
                     description={template.description ?? undefined}
-                    thumbnailUrl={template.thumbnail_url}
+                    thumbnailUrl={getTemplatePrimaryImageUrl(template)}
                     badge={template.badge}
                     eager={index < EAGER_IMAGE_COUNT}
                     isSelected={cameraTemplateId === template.id}
@@ -973,8 +966,7 @@ export default function MarketplaceClient({
                     key={template.id}
                     label={template.title}
                     description={template.description ?? undefined}
-                    thumbnailUrl={template.thumbnail_url}
-                    previewUrl={template.preview_url ?? undefined}
+                    thumbnailUrl={getTemplatePrimaryImageUrl(template)}
                     badge={template.badge}
                     eager={index < EAGER_IMAGE_COUNT}
                     isSelected={movementTemplateId === template.id}

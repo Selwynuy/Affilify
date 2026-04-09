@@ -67,10 +67,17 @@ export default async function AdminTemplatesPage({
 
   return (
     <div className="space-y-6 max-w-5xl">
-      <div className="flex items-start justify-end gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-semibold text-white">Templates</h1>
+          <p className="text-sm text-white/50">
+            {count ?? 0} template{count === 1 ? '' : 's'} across all categories and statuses.
+          </p>
+        </div>
+
         <Link
           href="/admin/templates/new"
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium transition-colors shrink-0"
+          className="flex shrink-0 items-center gap-2 rounded-xl bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-500"
         >
           <Plus className="w-4 h-4" />
           New template
@@ -85,6 +92,7 @@ export default async function AdminTemplatesPage({
         pageSize={PAGE_SIZE}
         totalRows={count ?? 0}
         rows={rows}
+        showHeader={false}
       />
     </div>
   )

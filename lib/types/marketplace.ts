@@ -8,7 +8,7 @@ export type TemplateStatus   = 'draft' | 'published' | 'archived'
  * Flexible per-category config object stored in the `config` JSONB column.
  *
  * Known fields by category:
- *   camera:     promptFragment, cameraAnglePrompt
+ *   camera:     cameraAnglePrompt
  *   movement:   promptFragment
  *   avatar:     gender, style
  *   background: roomAesthetic, roomColors, roomElements
@@ -46,9 +46,9 @@ export interface MarketplaceTemplate {
   description:   string | null
   category:      TemplateCategory
   status:        TemplateStatus
-  thumbnail_url: string | null  // small card image shown in the UI selector
-  preview_url:   string | null  // medium preview, fallback for generation
-  reference_url: string | null  // full-resolution image passed to Gemini — populate this for avatar + background templates
+  thumbnail_url: string | null  // canonical template image used for cards; currently also written from admin's single image input
+  preview_url:   string | null  // legacy optional preview media, kept for backward compatibility
+  reference_url: string | null  // legacy generation image field, kept for backward compatibility
   badge:         string | null
   sort_order:    number
   config:        TemplateConfig

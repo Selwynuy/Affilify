@@ -1,5 +1,6 @@
 import type { MarketplaceTemplate } from '@/lib/types/marketplace'
 import type { AvatarConfig, BackgroundConfig } from '@/lib/types/preferences'
+import { getTemplatePrimaryImageUrl } from '@/lib/marketplace-template-media'
 
 export function buildAvatarConfigFromTemplate(template: MarketplaceTemplate | null | undefined): AvatarConfig | null {
   if (!template) return null
@@ -27,7 +28,7 @@ export function buildBackgroundConfigFromTemplate(template: MarketplaceTemplate 
     roomAesthetic: String(template.config.roomAesthetic ?? ''),
     roomColors: String(template.config.roomColors ?? ''),
     roomElements: String(template.config.roomElements ?? ''),
-    thumbnailUrl: template.thumbnail_url ?? undefined,
+    thumbnailUrl: getTemplatePrimaryImageUrl(template) ?? undefined,
   }
 }
 

@@ -7,7 +7,8 @@ import { logger } from '@/lib/logger'
 import { rateLimit } from '@/lib/db-rate-limit'
 import type { VideoModel } from '@/lib/types/billing'
 import type { VideoGenerationSettings } from '@/lib/video-generation'
-import { getVideoGenerationTokenCost, normalizeVideoGenerationSettings } from '@/lib/video-generation'
+import { getVideoGenerationProfile, getVideoGenerationTokenCost, normalizeVideoGenerationSettings } from '@/lib/video-generation'
+import { recordVendorCostEvent } from '@/lib/analytics/profitability'
 import { isUuid, parseInteger, sanitizeText, verifySameOrigin } from '@/lib/security'
 
 const REPLICATE_API_KEY = process.env.REPLICATE_API_KEY
@@ -176,6 +177,7 @@ export async function POST(req: NextRequest) {
     mode: rawMode,
     generateAudio: rawGenerateAudio,
   })
+  const selectedProfile = getVideoGenerationProfile(videoModel, selectedSettings)
   const tokenCostPerVideo = getVideoGenerationTokenCost(videoModel, selectedSettings)
 
   const totalTokensNeeded = tokenCostPerVideo * imageIds.length
@@ -257,6 +259,22 @@ export async function POST(req: NextRequest) {
             }))
             continue
           }
+          await recordVendorCostEvent({
+            userId: user.id,
+            projectId,
+            provider: 'replicate',
+            operation: 'video_gen',
+            model: videoModel.id,
+            tokensCharged: tokenCostPerVideo,
+            vendorCostUsd: selectedProfile.vendorPriceUsd,
+            metadata: {
+              imageId: image.id,
+              duration: selectedSettings.duration,
+              resolution: selectedSettings.resolution ?? null,
+              mode: selectedSettings.mode ?? null,
+              generateAudio: selectedSettings.generateAudio ?? null,
+            },
+          })
 
           successCount++
           const storageFileName = `genetrify-video-${i + 1}.mp4`

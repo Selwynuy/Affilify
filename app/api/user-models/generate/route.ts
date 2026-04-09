@@ -7,6 +7,7 @@ import { logger } from '@/lib/logger'
 import { rateLimit } from '@/lib/db-rate-limit'
 import { getPublishedMarketplaceTemplateById } from '@/lib/data/marketplace-templates'
 import { getTemplateGenerationImageUrl } from '@/lib/marketplace-template-media'
+import { getGoogleVendorCostUsd, recordVendorCostEvent } from '@/lib/analytics/profitability'
 import { isUuid, isSafeHttpUrl, sanitizeText, verifySameOrigin } from '@/lib/security'
 
 const GEMINI_MODEL = 'gemini-3.1-flash-image-preview'
@@ -246,6 +247,20 @@ export async function POST(req: NextRequest) {
     await admin.storage.from('generated').remove([storagePath])
     return NextResponse.json({ error: 'Insufficient tokens.' }, { status: 402 })
   }
+  await recordVendorCostEvent({
+    userId: user.id,
+    provider: 'google',
+    operation: 'model_gen',
+    model: GEMINI_MODEL,
+    tokensCharged: TOKEN_COSTS.model_gen,
+    vendorCostUsd: getGoogleVendorCostUsd('model_gen'),
+    metadata: {
+      sourceTemplateId,
+      useCustomFace,
+      style,
+      gender,
+    },
+  })
 
   const { data: signed } = await admin.storage.from('generated').createSignedUrl(storagePath, 60 * 60 * 24 * 7)
   const signedUrl = signed?.signedUrl ?? null

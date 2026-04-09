@@ -18,11 +18,12 @@ export async function GET(
 
   const { data: ticket, error } = await admin
     .from('support_tickets')
-    .select('*, user:user_id(email)')
+    .select('*')
     .eq('id', id)
     .single()
 
   if (error || !ticket) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  const { data: authUser } = await admin.auth.admin.getUserById(ticket.user_id)
 
   const { data: messages } = await admin
     .from('ticket_messages')
@@ -30,7 +31,13 @@ export async function GET(
     .eq('ticket_id', id)
     .order('created_at', { ascending: true })
 
-  return NextResponse.json({ ticket, messages: messages ?? [] })
+  return NextResponse.json({
+    ticket: {
+      ...ticket,
+      user: { email: authUser.user?.email ?? null },
+    },
+    messages: messages ?? [],
+  })
 }
 
 // PATCH — update status or add staff reply
@@ -57,16 +64,18 @@ export async function PATCH(
     if (!VALID_STATUSES.includes(status as TicketStatus)) {
       return NextResponse.json({ error: 'Invalid status' }, { status: 400 })
     }
-    await admin.from('support_tickets').update({ status: status as TicketStatus }).eq('id', id)
+    const { error } = await admin.from('support_tickets').update({ status: status as TicketStatus }).eq('id', id)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
   if (reply?.trim()) {
-    await admin.from('ticket_messages').insert({
+    const { error } = await admin.from('ticket_messages').insert({
       ticket_id: id,
       sender_id: user.id,
       is_staff: true,
       body: reply.trim(),
     })
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
   return NextResponse.json({ ok: true })

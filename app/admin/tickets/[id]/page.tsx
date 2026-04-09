@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
+import { useNotify } from '@/components/feedback/use-notify'
 import { ArrowLeft, Send, Shield } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -15,6 +16,7 @@ const STATUS_OPTIONS: TicketStatus[] = ['open', 'in_progress', 'resolved', 'clos
 type AdminTicket = SupportTicket & { user?: { email: string } }
 
 export default function AdminTicketDetailPage() {
+  const notify = useNotify()
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -24,10 +26,18 @@ export default function AdminTicketDetailPage() {
   const [loading, setLoading] = useState(true)
   const [reply, setReply] = useState('')
   const [isPending, startTransition] = useTransition()
+  const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
 
   async function load() {
+    setError(null)
     const res = await fetch(`/api/admin/tickets/${id}`)
-    if (!res.ok) { router.push('/admin/tickets'); return }
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      setError(data.error ?? 'Could not load ticket')
+      setLoading(false)
+      return
+    }
     const data = await res.json()
     setTicket(data.ticket)
     setMessages(data.messages ?? [])
@@ -36,15 +46,29 @@ export default function AdminTicketDetailPage() {
 
   useEffect(() => { void load() }, [id]) // eslint-disable-line react-hooks/set-state-in-effect
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
+  useEffect(() => {
+    if (error) notify.error({ title: 'Ticket action failed', description: error })
+  }, [error, notify])
+  useEffect(() => {
+    if (notice) notify.success({ description: notice })
+  }, [notice, notify])
 
   function updateStatus(status: TicketStatus) {
     startTransition(async () => {
-      await fetch(`/api/admin/tickets/${id}`, {
+      setError(null)
+      setNotice(null)
+      const res = await fetch(`/api/admin/tickets/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status }),
       })
-      load()
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setError(data.error ?? 'Could not update ticket status')
+        return
+      }
+      setNotice('Ticket status updated')
+      await load()
     })
   }
 
@@ -52,13 +76,22 @@ export default function AdminTicketDetailPage() {
     e.preventDefault()
     if (!reply.trim()) return
     startTransition(async () => {
-      await fetch(`/api/admin/tickets/${id}`, {
+      setError(null)
+      setNotice(null)
+      const nextReply = reply.trim()
+      const res = await fetch(`/api/admin/tickets/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reply: reply.trim() }),
+        body: JSON.stringify({ reply: nextReply }),
       })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setError(data.error ?? 'Could not send reply')
+        return
+      }
       setReply('')
-      load()
+      setNotice('Reply sent')
+      await load()
     })
   }
 
@@ -70,7 +103,23 @@ export default function AdminTicketDetailPage() {
       </div>
     )
   }
-  if (!ticket) return null
+  if (!ticket) {
+    return (
+      <div className="max-w-2xl space-y-4">
+        <button
+          onClick={() => router.push('/admin/tickets')}
+          className="flex items-center gap-1.5 text-sm text-white/40 transition-colors hover:text-white"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" />
+          Back to tickets
+        </button>
+        <div className="rounded-2xl border border-red-500/20 bg-red-500/10 px-5 py-4">
+          <p className="text-sm font-medium text-red-300">Ticket unavailable</p>
+          <p className="mt-1 text-xs text-red-300/80">{error ?? 'This ticket could not be loaded.'}</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="max-w-2xl space-y-6">
@@ -122,6 +171,17 @@ export default function AdminTicketDetailPage() {
         </div>
       </div>
 
+      {error && (
+        <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+          {error}
+        </div>
+      )}
+      {notice && (
+        <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
+          {notice}
+        </div>
+      )}
+
       {/* Messages */}
       <div className="space-y-3">
         {messages.map((msg) => (
@@ -165,8 +225,9 @@ export default function AdminTicketDetailPage() {
           onChange={(e) => setReply(e.target.value)}
           placeholder="Write a staff reply…"
           rows={4}
-          className="w-full rounded-xl border border-violet-500/20 bg-violet-500/[0.03] px-3 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-violet-500/50 transition-colors resize-none"
-        />
+            className="w-full rounded-xl border border-violet-500/20 bg-violet-500/[0.03] px-3 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-violet-500/50 transition-colors resize-none"
+            disabled={isPending}
+          />
         <div className="flex justify-end">
           <Button
             type="submit"

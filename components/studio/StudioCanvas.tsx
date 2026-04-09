@@ -26,6 +26,7 @@ import {
   FolderOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useNotify } from "@/components/feedback/use-notify";
 import { usePreferences } from "@/lib/context/preferences-context";
 import type { MarketplaceTemplate } from "@/lib/types/marketplace";
 import type { AvatarConfig, BackgroundConfig } from "@/lib/types/preferences";
@@ -34,6 +35,7 @@ import {
   buildBackgroundConfigFromTemplate,
   buildCustomAvatarConfig,
 } from "@/lib/preferences";
+import { getTemplatePrimaryImageUrl } from "@/lib/marketplace-template-media";
 import { VIDEO_MODELS } from "@/lib/data/plans";
 import type { VideoModel } from "@/lib/types/billing";
 import {
@@ -61,6 +63,8 @@ interface ProductCard extends CardBase {
   imageUrl: string;
   fileName: string;
   file: File;
+  projectId?: string;
+  projectName?: string;
 }
 
 interface GeneratedCard extends CardBase {
@@ -100,6 +104,8 @@ interface PersistedProductCard extends CardBase {
   type: "product";
   fileName: string;
   file: File;
+  projectId?: string;
+  projectName?: string;
 }
 
 interface PersistedGeneratedCard extends CardBase {
@@ -198,6 +204,47 @@ function selBounds(cards: Card[], ids: Set<string>) {
     right: Math.max(...sel.map((c) => c.x + CARD_W)),
     bottom: Math.max(...sel.map((c) => c.y + CARD_H)),
   };
+}
+
+function resolveStudioProject(
+  productCards: ProductCard[],
+  allCards: Card[],
+): { projectId?: string; projectName?: string; error?: string } {
+  const sourceIds = new Set(productCards.map((card) => card.id));
+  const projectEntries = new Map<string, string | undefined>();
+
+  for (const card of productCards) {
+    if (card.projectId) {
+      projectEntries.set(card.projectId, card.projectName);
+    }
+  }
+
+  for (const card of allCards) {
+    if (
+      card.type !== "generated" ||
+      !card.projectId ||
+      card.sourceIds.length !== productCards.length
+    ) {
+      continue;
+    }
+    const matchesAllSources = card.sourceIds.every((sourceId) =>
+      sourceIds.has(sourceId),
+    );
+    if (matchesAllSources) {
+      projectEntries.set(card.projectId, card.projectName);
+    }
+  }
+
+  if (projectEntries.size > 1) {
+    return {
+      error:
+        "Selected cards belong to multiple projects. Generate from one connected product group at a time.",
+    };
+  }
+
+  const [entry] = [...projectEntries.entries()];
+  if (!entry) return {};
+  return { projectId: entry[0], projectName: entry[1] };
 }
 
 function portPos(c: Card, side: Side) {
@@ -491,7 +538,19 @@ function TemplatePanel({
 
   async function handleCustomFace(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
+    event.target.value = "";
     if (!file) return;
+
+    const ALLOWED_FACE_TYPES = ["image/jpeg", "image/png", "image/webp"];
+    if (!ALLOWED_FACE_TYPES.includes(file.type)) {
+      notify.error({ title: "Unsupported file type", description: "Please upload a JPG, PNG, or WebP image." });
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      notify.error({ title: "File too large", description: "Face image must be under 10MB." });
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = async (e) => {
       const dataUrl = e.target?.result as string;
@@ -519,6 +578,8 @@ function TemplatePanel({
           body: JSON.stringify({ avatar_config: config }),
         });
         onClose();
+      } else {
+        notify.error({ title: "Upload failed", description: data?.error ?? "Could not upload face image." });
       }
     };
     reader.readAsDataURL(file);
@@ -681,6 +742,7 @@ function TemplatePanel({
               {templates.map((t, i) => {
                 const selected = isSelected(t);
                 const saving = savingId === t.id;
+                const templateImageUrl = getTemplatePrimaryImageUrl(t);
                 return (
                   <div
                     key={t.id}
@@ -691,28 +753,15 @@ function TemplatePanel({
                         ? "border-brand-accent ring-1 ring-brand-accent/40 shadow-md shadow-brand-accent/10"
                         : "border-white/[0.08] hover:border-white/20",
                     )}
-                  >
+                    >
                     <div className="relative aspect-[2/3] w-full overflow-hidden bg-white/5">
-                      {t.thumbnail_url ? (
-                        <>
-                          <img
-                            src={t.thumbnail_url}
-                            alt={t.title}
-                            loading={i < 4 ? "eager" : "lazy"}
-                            className={cn(
-                              "absolute inset-0 h-full w-full object-cover transition-opacity duration-200",
-                              t.preview_url ? "group-hover:opacity-0" : "",
-                            )}
-                          />
-                          {t.preview_url && (
-                            <img
-                              src={t.preview_url}
-                              alt=""
-                              loading="lazy"
-                              className="absolute inset-0 h-full w-full object-cover opacity-0 transition-opacity duration-200 group-hover:opacity-100"
-                            />
-                          )}
-                        </>
+                      {templateImageUrl ? (
+                        <img
+                          src={templateImageUrl}
+                          alt={t.title}
+                          loading={i < 4 ? "eager" : "lazy"}
+                          className="absolute inset-0 h-full w-full object-cover"
+                        />
                       ) : (
                         <div className="absolute inset-0 flex items-center justify-center">
                           <meta.icon size={24} className="text-white/10" />
@@ -1068,6 +1117,7 @@ function CtxPanel({
   selProducts,
   prompt,
   isGenerating,
+  errorMessage,
   promptInputRef,
   onPromptChange,
   onGenerate,
@@ -1077,6 +1127,7 @@ function CtxPanel({
   selProducts: Card[];
   prompt: string;
   isGenerating: boolean;
+  errorMessage?: string;
   promptInputRef?: React.RefObject<HTMLTextAreaElement | null>;
   onPromptChange: (v: string) => void;
   onGenerate: () => void;
@@ -1156,6 +1207,11 @@ function CtxPanel({
           {isGenerating ? "..." : "Go"}
         </button>
       </div>
+      {errorMessage ? (
+        <p className="mt-2 text-[11px] leading-relaxed text-red-300/80">
+          {errorMessage}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -1169,6 +1225,7 @@ export function StudioCanvas({
   avatarTemplates,
   backgroundTemplates,
 }: StudioCanvasProps) {
+  const notify = useNotify();
   const {
     avatarConfig,
     backgroundConfig,
@@ -1185,6 +1242,7 @@ export function StudioCanvas({
   const [isDragOver, setIsDragOver] = useState(false);
   const [prompt, setPrompt] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState("");
   const [videoCard, setVideoCard] = useState<GeneratedCard | null>(null);
   const [videoPrompt, setVideoPrompt] = useState("");
   const [selectedVideoModel, setSelectedVideoModel] = useState<VideoModel>(
@@ -1322,6 +1380,8 @@ export function StudioCanvas({
             y: card.y,
             fileName: card.fileName,
             file: card.file,
+            projectId: card.projectId,
+            projectName: card.projectName,
           } satisfies PersistedProductCard;
         }
         return {
@@ -1378,6 +1438,9 @@ export function StudioCanvas({
     el.style.height = "0px";
     el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
     el.style.overflowY = el.scrollHeight > 160 ? "auto" : "hidden";
+  }, [prompt, selectedIds]);
+  useEffect(() => {
+    setGenerateError("");
   }, [prompt, selectedIds]);
 
   // ── Keyboard: Delete / Backspace removes selected cards ──────────────────────
@@ -1713,6 +1776,8 @@ export function StudioCanvas({
 
   // ── Generate ──────────────────────────────────────────────────────────────────
   const handleGenerate = useCallback(async () => {
+    setGenerateError("");
+
     // Expand selection to include connected group
     const expanded = expandGroup(selectedRef.current, connectionsRef.current);
     let productCards = cardsRef.current.filter(
@@ -1733,19 +1798,27 @@ export function StudioCanvas({
 
     if (!productCards.length) return;
     const normalizedPrompt = prompt.trim();
+    const resolvedProject = resolveStudioProject(productCards, cardsRef.current);
+    if (resolvedProject.error) {
+      setGenerateError(resolvedProject.error);
+      return;
+    }
 
     const bounds = selBounds(cardsRef.current, selectedRef.current);
-    const pid = uid();
+    const tempId = uid();
+    const sourceIds = productCards.map((c) => c.id);
     setCards((prev) => [
       ...prev,
       {
-        id: pid,
+        id: tempId,
         type: "generated",
         x: bounds ? bounds.right + GAP : 60,
         y: bounds ? bounds.top : 80,
         imageUrl: "",
         prompt: normalizedPrompt,
-        sourceIds: productCards.map((c) => c.id),
+        sourceIds,
+        projectId: resolvedProject.projectId,
+        projectName: resolvedProject.projectName,
         isLoading: true,
       } satisfies GeneratedCard,
     ]);
@@ -1754,10 +1827,16 @@ export function StudioCanvas({
     try {
       const fd = new FormData();
       fd.append("usePreferences", "true");
+      if (resolvedProject.projectId) {
+        fd.append("projectId", resolvedProject.projectId);
+      }
       productCards.forEach((c) => fd.append("products", c.file));
 
       const upRes = await fetch("/api/upload", { method: "POST", body: fd });
-      if (!upRes.ok) throw new Error("Upload failed");
+      if (!upRes.ok) {
+        const error = await upRes.json().catch(() => null);
+        throw new Error(error?.error ?? "Upload failed");
+      }
       const { projectId, projectName } = await upRes.json();
 
       const genRes = await fetch("/api/generate", {
@@ -1769,7 +1848,10 @@ export function StudioCanvas({
           cameraTemplateId,
         }),
       });
-      if (!genRes.ok) throw new Error("Generate failed");
+      if (!genRes.ok) {
+        const error = await genRes.json().catch(() => null);
+        throw new Error(error?.error ?? "Generate failed");
+      }
 
       let imageUrl = "";
       let generatedImageId: string | undefined;
@@ -1784,7 +1866,13 @@ export function StudioCanvas({
       }
       setCards((prev) =>
         prev.map((c) =>
-          c.id === pid
+          c.type === "product" && sourceIds.includes(c.id)
+            ? {
+                ...c,
+                projectId,
+                projectName,
+              }
+            : c.id === tempId
             ? {
                 ...c,
                 imageUrl,
@@ -1797,16 +1885,20 @@ export function StudioCanvas({
             : c,
         ),
       );
-    } catch {
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Generation failed";
+      setGenerateError(message);
+      notify.error({ title: "Generation failed", description: message });
       setCards((prev) =>
         prev.map((c) =>
-          c.id === pid ? { ...c, isLoading: false, hasError: true } : c,
+          c.id === tempId ? { ...c, isLoading: false, hasError: true } : c,
         ),
       );
     } finally {
       setIsGenerating(false);
     }
-  }, [prompt, cameraTemplateId]);
+  }, [prompt, cameraTemplateId, notify]);
 
   // ── Card ops ──────────────────────────────────────────────────────────────────
   const deleteCard = useCallback((id: string) => {
@@ -1970,6 +2062,10 @@ export function StudioCanvas({
         fileName: createdVideo.filename,
         storageFileId: createdVideo.storageFileId,
       });
+      notify.success({
+        title: "Video ready",
+        description: "Your generated video is ready for preview and download.",
+      });
       setCards((prev) =>
         prev.map((card) =>
           card.id === videoCard.id
@@ -1983,9 +2079,10 @@ export function StudioCanvas({
         ),
       );
     } catch (error) {
-      setVideoError(
-        error instanceof Error ? error.message : "Video generation failed",
-      );
+      const message =
+        error instanceof Error ? error.message : "Video generation failed";
+      setVideoError(message);
+      notify.error({ title: "Video generation failed", description: message });
     } finally {
       setIsCreatingVideo(false);
     }
@@ -1993,6 +2090,7 @@ export function StudioCanvas({
     avatarConfig,
     backgroundConfig,
     movementTemplates,
+    notify,
     selectedVideoSettings,
     selectedVideoModel.id,
     videoCard,
@@ -2385,6 +2483,7 @@ export function StudioCanvas({
                   selProducts={selProducts}
                   prompt={prompt}
                   isGenerating={isGenerating}
+                  errorMessage={generateError}
                   promptInputRef={promptInputRef}
                   onPromptChange={setPrompt}
                   onGenerate={handleGenerate}
@@ -2456,6 +2555,7 @@ export function StudioCanvas({
               selProducts={selProducts}
               prompt={prompt}
               isGenerating={isGenerating}
+              errorMessage={generateError}
               onPromptChange={setPrompt}
               onGenerate={handleGenerate}
               onDelete={deleteSelected}

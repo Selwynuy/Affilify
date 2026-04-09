@@ -37,15 +37,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'File exceeds 20MB limit' }, { status: 400 })
   }
 
-  if (kind !== 'thumbnail' && kind !== 'preview' && kind !== 'reference') {
+  if (kind !== 'image' && kind !== 'thumbnail' && kind !== 'preview' && kind !== 'reference') {
     return NextResponse.json({ error: 'Invalid media kind' }, { status: 400 })
   }
 
   const isImage = file.type.startsWith('image/')
   const isVideo = file.type.startsWith('video/')
 
-  if (kind === 'thumbnail' && !isImage) {
-    return NextResponse.json({ error: 'Thumbnail must be an image' }, { status: 400 })
+  if ((kind === 'image' || kind === 'thumbnail') && !isImage) {
+    return NextResponse.json({ error: 'Image must be an image file' }, { status: 400 })
   }
 
   if (kind === 'reference' && !isImage) {

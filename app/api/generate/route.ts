@@ -5,6 +5,7 @@ import { deductTokens, getTokenBalance } from '@/lib/billing/tokens'
 import { TOKEN_COSTS } from '@/lib/data/plans'
 import { logger } from '@/lib/logger'
 import { rateLimit } from '@/lib/db-rate-limit'
+import { getGoogleVendorCostUsd, recordVendorCostEvent } from '@/lib/analytics/profitability'
 import {
   getMarketplaceTemplateDefaults,
   getPublishedMarketplaceTemplateById,
@@ -20,22 +21,48 @@ function buildPrompt(
   productCount: number,
   productDescription: string,
   cameraAnglePrompt: string,
+  roomAesthetic: string,
+  roomColors: string,
+  roomElements: string,
 ): string {
   const lines: string[] = []
+  const hasUserPrompt = productDescription.trim().length > 0
 
+  lines.push(`Follow this priority order strictly.`)
+  lines.push(`1. Copy the avatar identity exactly from the attached avatar reference image.`)
+  lines.push(`2. Apply the attached product image inputs accurately to that avatar.`)
+  lines.push(`3. Place the avatar naturally inside the same background environment or room concept.`)
+  lines.push(`4. Use the requested angle as the camera viewpoint.`)
+  lines.push(`5. Treat the user's final instruction as the highest-priority override for camera, framing, pose, scene cleanup, staging, and composition, while still preserving avatar identity and product fidelity unless the user explicitly asks otherwise.`)
   lines.push(`Use the attached avatar reference image strictly as the exact person.`)
-  lines.push(`Use the attached background reference image strictly as the exact background and scene.`)
-  lines.push(`Keep the background composition, room layout, decor, colors, lighting, and environment unchanged.`)
-  lines.push(`Do not replace, redesign, restyle, crop away, or reinterpret the background.`)
+  lines.push(`Use the attached background reference image as the same exact environment identity.`)
+  lines.push(`Preserve the same room type, wall and floor materials, architecture, decor style, color palette, and lighting direction from the background reference.`)
+  lines.push(`Background room concept: ${roomAesthetic || 'clean editorial interior'}.`)
+  lines.push(`Background colors: ${roomColors || 'neutral tones'}.`)
+  if (roomElements) {
+    lines.push(`Typical background elements in this environment: ${roomElements}.`)
+  }
+  lines.push(`Do not replace, redesign, or restyle the background into a different room, studio, or material treatment.`)
+  lines.push(`Do not change the background from white studio to concrete, from concrete to seamless paper, from indoor to outdoor, or otherwise invent a different set.`)
+  lines.push(`When the camera angle changes, keep the same environment identity but reframe it naturally from the new viewpoint instead of freezing the original composition.`)
+  lines.push(`The model must feel physically inside the background, with correct scale, perspective, floor contact, contact shadows, lighting interaction, and believable body physics.`)
+  lines.push(`Do not make the model look pasted onto the background.`)
   lines.push(`Only transform the avatar's outfit to match the attached product image input.`)
-  lines.push(`Use only garments, layers, accessories, footwear, and details that are visible in the user-provided product images.`)
-  lines.push(`Do not add any extra products, accessories, garments, props, branding, or items that are not present in the user-provided product images.`)
-  lines.push(`If an accessory is not clearly shown in the attached product images, do not add it.`)
-  lines.push(`Do not invent jewelry or styling extras such as necklaces, chains, watches, bracelets, rings, earrings, belts, hats, sunglasses, or bags unless those exact items are provided in the product images.`)
-  lines.push(`Do not add any extra outerwear or top layers such as sweatshirts, hoodies, jackets, coats, overshirts, cardigans, or vests unless that layer is explicitly included in the product images.`)
-  lines.push(`Do not place any garment on top of the provided clothing unless that additional garment is itself one of the attached products.`)
-  lines.push(`Adjust the model's pose, hand placement, body angle, and styling presentation as needed to suit the transformed outfit naturally and make the outfit read clearly.`)
-  lines.push(`Do not rigidly copy the original reference pose if a better pose is needed for the outfit, but keep the result realistic, flattering, and ecommerce-appropriate.`)
+  lines.push(`By default, use only garments, layers, accessories, footwear, and details that are visible in the user-provided product images.`)
+  lines.push(`Treat the uploaded product images as the complete source of truth for what the model is allowed to wear.`)
+  lines.push(`Do not add any extra products, accessories, garments, props, branding, or items that are not present in the user-provided product images unless the user's final instruction explicitly requests them.`)
+  lines.push(`If an accessory is not clearly shown in the attached product images, do not add it unless the user's final instruction explicitly asks for it.`)
+  lines.push(`Do not invent jewelry or styling extras such as necklaces, chains, watches, bracelets, rings, earrings, belts, hats, sunglasses, or bags unless they are provided in the product images or explicitly requested in the user's final instruction.`)
+  lines.push(`Do not add any extra outerwear or top layers such as sweatshirts, hoodies, jackets, coats, overshirts, cardigans, or vests unless they are explicitly included in the product images or explicitly requested in the user's final instruction.`)
+  lines.push(`Do not place any garment on top of the provided clothing unless that garment is in the attached product inputs or explicitly requested in the user's final instruction.`)
+  lines.push(`If the uploaded product is a t-shirt, shirt, polo, blouse, knit top, or any other upper-body garment, that exact product must be the visible outermost top on the model.`)
+  lines.push(`Do not cover the provided top with another layer, and do not add an undershirt, overshirt, sweatshirt, sweater, hoodie, jacket, or visible necklace unless it is clearly present in the product inputs or explicitly requested by the user.`)
+  lines.push(`Adjust the model's pose, hand placement, and styling presentation as needed to suit the transformed outfit naturally and make the outfit read clearly.`)
+  lines.push(`Angles are camera-view instructions. Change the camera perspective, framing, height, lens feel, and viewpoint of the model accordingly.`)
+  lines.push(`Do not interpret the angle by rotating, tilting, or floating the model's body unnaturally.`)
+  lines.push(`Keep the model physically grounded, upright, and anatomically plausible unless the reference image itself clearly shows a supported leaning pose.`)
+  lines.push(`Do not make the model appear to defy gravity, float, stick to walls, lean at an impossible angle, or balance in a way that would be unrealistic in a real photo shoot.`)
+  lines.push(`Do not rigidly copy the original reference pose if a better pose is needed for the outfit, but keep the result realistic, flattering, ecommerce-appropriate, and physically believable.`)
 
   if (productCount === 1) {
     lines.push(`Apply the attached product image to the avatar's outfit accurately and naturally.`)
@@ -44,10 +71,17 @@ function buildPrompt(
   }
 
   if (productDescription) {
-    lines.push(`Follow these user outfit instructions strictly, but never violate the attached product images: ${productDescription}.`)
+    lines.push(`User's final instruction: ${productDescription}.`)
+    lines.push(`Treat the user's final instruction as authoritative for camera, framing, pose, background cleanup, staging, and composition.`)
+    lines.push(`If the user's final instruction requests removing or changing objects in the scene, apply that within the same background environment rather than switching to a different background.`)
+    lines.push(`If the user's final instruction conflicts with the default background framing or camera setup, follow the user's final instruction while keeping the same person, the same environment identity, and the provided product fidelity.`)
   }
 
-  lines.push(`Camera angle: ${cameraAnglePrompt}.`)
+  lines.push(`Camera viewpoint only: ${cameraAnglePrompt}.`)
+  lines.push(`If the requested camera viewpoint conflicts with the original background framing, keep the same room, materials, and styling but generate a new physically plausible framing from that viewpoint.`)
+  if (hasUserPrompt) {
+    lines.push(`Because the user provided a final instruction, prioritize that instruction over default scene composition choices.`)
+  }
   lines.push(`Preserve the avatar identity, face, body proportions, and pose realism.`)
   lines.push(`Output: photorealistic 9:16 vertical portrait, professional ecommerce quality.`)
 
@@ -106,6 +140,9 @@ export async function POST(req: NextRequest) {
     avatarReferenceMime,
     backgroundReferenceB64,
     backgroundReferenceMime,
+    roomAesthetic,
+    roomColors,
+    roomElements,
   } = avatar
 
   const { data: productRows } = await admin
@@ -165,6 +202,9 @@ export async function POST(req: NextRequest) {
     validProductRows.length,
     productDescription || '',
     cameraAnglePrompt,
+    sanitizeText(roomAesthetic, { maxLength: 120 }) || '',
+    sanitizeText(roomColors, { maxLength: 160 }) || '',
+    sanitizeText(roomElements, { maxLength: 260 }) || '',
   )
   parts.push({ text: prompt })
 
@@ -249,6 +289,20 @@ export async function POST(req: NextRequest) {
               public_url: signedUrl,
               size_bytes: buffer.byteLength,
             }, { onConflict: 'storage_path' })
+            await recordVendorCostEvent({
+              userId: user.id,
+              projectId,
+              provider: 'google',
+              operation: 'image_gen',
+              model: GEMINI_MODEL,
+              tokensCharged: TOKEN_COSTS.image_gen,
+              vendorCostUsd: getGoogleVendorCostUsd('image_gen'),
+              metadata: {
+                generationRound,
+                outputIndex: i,
+                productCount: validProductRows.length,
+              },
+            })
             // Stream the image immediately as a data URL so the client can show it right away
             controller.enqueue(encode({
               type: 'image',
