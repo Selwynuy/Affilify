@@ -32,7 +32,8 @@
       "WebFetch(domain:developers.paymongo.com)",
       "WebFetch(domain:www.paymongo.com)",
       "WebFetch(domain:www.anthropic.com)",
-      "Bash(Remove-Item:*)"
+      "Bash(Remove-Item:*)",
+      "Bash(npm list:*)"
     ],
     "deny": [
       "Bash(rm -rf:*)",

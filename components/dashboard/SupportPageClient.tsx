@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
+import { useNotify } from '@/components/feedback/use-notify'
 import { Plus, MessageCircle, ChevronRight, X, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { CATEGORY_LABELS, STATUS_LABELS, STATUS_COLORS, type SupportTicket, type TicketCategory } from '@/lib/types/support'
@@ -15,6 +16,7 @@ const CATEGORIES: { value: TicketCategory; label: string }[] = [
 ]
 
 function NewTicketModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+  const notify = useNotify()
   const [subject, setSubject] = useState('')
   const [category, setCategory] = useState<TicketCategory>('general')
   const [body, setBody] = useState('')
@@ -32,9 +34,12 @@ function NewTicketModal({ onClose, onCreated }: { onClose: () => void; onCreated
       })
       const data = await res.json()
       if (!res.ok) {
-        setError(data.error ?? 'Something went wrong')
+        const message = data.error ?? 'Something went wrong'
+        setError(message)
+        notify.error({ title: 'Failed to create ticket', description: message })
         return
       }
+      notify.success({ title: 'Ticket created', description: 'Your support request has been submitted.' })
       onCreated()
     })
   }
@@ -115,14 +120,25 @@ function NewTicketModal({ onClose, onCreated }: { onClose: () => void; onCreated
 }
 
 export function SupportPageClient({ initialTickets }: { initialTickets: SupportTicket[] }) {
+  const notify = useNotify()
   const router = useRouter()
   const [tickets, setTickets] = useState<SupportTicket[]>(initialTickets)
   const [showNew, setShowNew] = useState(false)
 
   async function loadTickets() {
-    const res = await fetch('/api/support/tickets')
-    const data = await res.json()
-    setTickets(data.tickets ?? [])
+    try {
+      const res = await fetch('/api/support/tickets')
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.error ?? 'Failed to load support tickets')
+      }
+      setTickets(data.tickets ?? [])
+    } catch (error) {
+      notify.error({
+        title: 'Could not refresh tickets',
+        description: error instanceof Error ? error.message : 'Failed to load support tickets',
+      })
+    }
   }
 
   async function handleCreated() {

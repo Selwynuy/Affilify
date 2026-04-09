@@ -1,18 +1,30 @@
 'use client'
 
-import { useActionState } from 'react'
+import { useActionState, useEffect } from 'react'
 import { forgotPassword } from '@/app/actions/auth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { useNotify } from '@/components/feedback/use-notify'
 
 export function ForgotPasswordForm() {
+  const notify = useNotify()
   const [state, action, pending] = useActionState(
     async (_prev: { error?: string; success?: boolean } | null, formData: FormData) => {
       return await forgotPassword(formData) ?? null
     },
     null
   )
+
+  useEffect(() => {
+    if (state?.error) notify.error({ title: 'Reset request failed', description: state.error })
+    if (state?.success) {
+      notify.success({
+        title: 'Check your email',
+        description: "If the account exists, we've sent a reset link.",
+      })
+    }
+  }, [notify, state?.error, state?.success])
 
   if (state?.success) {
     return (

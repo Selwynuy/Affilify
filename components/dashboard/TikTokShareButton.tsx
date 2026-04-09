@@ -5,6 +5,7 @@ import { faTiktok } from "@fortawesome/free-brands-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useNotify } from "@/components/feedback/use-notify";
 import { ExternalLink, Loader2, Music2, Share2, Unplug, X } from "lucide-react";
 
 interface TikTokCreator {
@@ -37,6 +38,7 @@ export function TikTokShareButton({
   className?: string;
   buttonLabel?: string;
 }) {
+  const notify = useNotify();
   const [pickerOpen, setPickerOpen] = useState(false);
   const [tiktokOpen, setTiktokOpen] = useState(false);
   const [account, setAccount] = useState<TikTokAccountResponse | null>(null);
@@ -87,9 +89,10 @@ export function TikTokShareButton({
         setAllowStitch(!creator.stitch_disabled);
       }
     } catch (err) {
-      setMessage(
-        err instanceof Error ? err.message : "Could not load TikTok status",
-      );
+      const message =
+        err instanceof Error ? err.message : "Could not load TikTok status";
+      setMessage(message);
+      notify.error({ title: "TikTok status failed", description: message });
     } finally {
       setLoadingAccount(false);
     }
@@ -109,15 +112,20 @@ export function TikTokShareButton({
 
       if (event.data.success) {
         setMessage("TikTok connected.");
+        notify.success({
+          title: "TikTok connected",
+          description: "Your account is ready for direct post.",
+        });
         void loadAccount();
         return;
       }
 
-      setMessage(
+      const message =
         typeof event.data.message === "string"
           ? event.data.message
-          : "TikTok connection failed",
-      );
+          : "TikTok connection failed";
+      setMessage(message);
+      notify.error({ title: "Connection failed", description: message });
     }
 
     window.addEventListener("message", onMessage);
@@ -212,10 +220,15 @@ export function TikTokShareButton({
       setBrandContentToggle(false);
       setBrandOrganicToggle(false);
       setConsentChecked(false);
+      notify.success({
+        title: "TikTok disconnected",
+        description: "Your TikTok account has been disconnected.",
+      });
     } catch (err) {
-      setMessage(
-        err instanceof Error ? err.message : "Could not disconnect TikTok",
-      );
+      const message =
+        err instanceof Error ? err.message : "Could not disconnect TikTok";
+      setMessage(message);
+      notify.error({ title: "Disconnect failed", description: message });
     } finally {
       setDisconnecting(false);
     }
@@ -248,8 +261,14 @@ export function TikTokShareButton({
       setPublishId(json.publishId);
       setPublishStatus(json.status ?? null);
       setMessage("Upload sent to TikTok. Publishing can take a moment.");
+      notify.success({
+        title: "Upload sent",
+        description: "TikTok is processing your post.",
+      });
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "TikTok share failed");
+      const message = err instanceof Error ? err.message : "TikTok share failed";
+      setMessage(message);
+      notify.error({ title: "TikTok share failed", description: message });
     } finally {
       setSharing(false);
     }

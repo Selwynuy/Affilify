@@ -1,14 +1,16 @@
 'use client'
 
 import Link from 'next/link'
-import { useActionState, useState } from 'react'
+import { useActionState, useEffect, useState } from 'react'
 import { signup } from '@/app/actions/auth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { useNotify } from '@/components/feedback/use-notify'
 import { Eye, EyeOff } from 'lucide-react'
 
 export function SignupForm() {
+  const notify = useNotify()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
@@ -26,6 +28,12 @@ export function SignupForm() {
     },
     null
   )
+
+  useEffect(() => {
+    if (state?.error) {
+      notify.error({ title: 'Signup failed', description: state.error })
+    }
+  }, [notify, state?.error])
 
   return (
     <form action={action} className="space-y-5">

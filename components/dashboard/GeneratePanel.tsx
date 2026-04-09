@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { usePreferences } from '@/lib/context/preferences-context'
 import { useTokens } from '@/lib/context/token-context'
 import { buildAvatarConfigFromTemplate, buildBackgroundConfigFromTemplate } from '@/lib/preferences'
+import { useNotify } from '@/components/feedback/use-notify'
 import {
   ImagePlus, X, Download,
   Zap, Sparkles, Video, RotateCcw, ChevronDown, CheckCircle2,
@@ -252,6 +253,7 @@ export function GeneratePanel({
   cameraTemplates: MarketplaceTemplate[]
   movementTemplates: MarketplaceTemplate[]
 }) {
+  const notify = useNotify()
   const { avatarConfig, backgroundConfig, cameraTemplateId, movementTemplateId, setAvatarConfig, setBackgroundConfig } = usePreferences()
   const { balance: tokenBalance, planId: contextPlanId, refreshBalance } = useTokens()
 
@@ -353,7 +355,9 @@ export function GeneratePanel({
       setLastDescription(productDescription)
       await runImageGeneration(pid, productDescription)
     } catch (e: unknown) {
-      setErrorMsg(e instanceof Error ? e.message : 'Something went wrong')
+      const message = e instanceof Error ? e.message : 'Something went wrong'
+      setErrorMsg(message)
+      notify.error({ title: 'Image generation failed', description: message })
       setStage('error')
     }
   }
@@ -426,10 +430,13 @@ export function GeneratePanel({
       }
 
       setStage('done')
+      notify.success({ title: 'Video ready', description: 'Your generated video is ready to review and download.' })
       fetch('/api/history').then((r) => r.json()).then((d) => setHistoryRuns(d.runs ?? []))
       refreshBalance()
     } catch (e: unknown) {
-      setErrorMsg(e instanceof Error ? e.message : 'Something went wrong')
+      const message = e instanceof Error ? e.message : 'Something went wrong'
+      setErrorMsg(message)
+      notify.error({ title: 'Video generation failed', description: message })
       setStage('error')
     }
   }
@@ -439,7 +446,9 @@ export function GeneratePanel({
     try {
       await runImageGeneration(lastProjectId, lastDescription)
     } catch (e: unknown) {
-      setErrorMsg(e instanceof Error ? e.message : 'Something went wrong')
+      const message = e instanceof Error ? e.message : 'Something went wrong'
+      setErrorMsg(message)
+      notify.error({ title: 'Regeneration failed', description: message })
       setStage('error')
     }
   }

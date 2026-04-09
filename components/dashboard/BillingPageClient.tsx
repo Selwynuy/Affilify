@@ -4,6 +4,7 @@ import { useState, useTransition, useEffect, useRef } from 'react'
 import { cn } from '@/lib/utils'
 import { CREDIT_PACKS } from '@/lib/data/plans'
 import { Button } from '@/components/ui/button'
+import { useNotify } from '@/components/feedback/use-notify'
 import {
   Zap, CheckCircle2, X, RefreshCw, Sparkles, Clock,
 } from 'lucide-react'
@@ -38,6 +39,22 @@ const QR_EXPIRY_SECONDS = 1800
 
 function QRModal({ qrCode, intentId, tokens, amountCentavos, packName, onClose, onRefresh }: QRModalProps) {
   const [secondsLeft, setSecondsLeft] = useState(QR_EXPIRY_SECONDS)
+  const [confirmingCancel, setConfirmingCancel] = useState(false)
+  const [cancelling, setCancelling] = useState(false)
+
+  async function handleConfirmedCancel() {
+    setCancelling(true)
+    try {
+      await fetch('/api/billing/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ intentId }),
+      })
+    } finally {
+      setCancelling(false)
+      onClose()
+    }
+  }
   const [refreshing, setRefreshing] = useState(false)
   const [paid, setPaid] = useState(false)
   const [statusNote, setStatusNote] = useState<string | null>(null)
@@ -101,7 +118,7 @@ function QRModal({ qrCode, intentId, tokens, amountCentavos, packName, onClose, 
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
       <div className="relative w-full max-w-sm rounded-2xl border border-white/10 bg-[#1a1d22] shadow-2xl">
         <button
-          onClick={onClose}
+          onClick={() => (paid || expired) ? onClose() : setConfirmingCancel(true)}
           className="absolute right-4 top-4 text-white/30 hover:text-white/70 transition-colors"
           aria-label="Close"
         >
@@ -167,6 +184,35 @@ function QRModal({ qrCode, intentId, tokens, amountCentavos, packName, onClose, 
                   : 'Check payment status'
                 }
               </Button>
+
+              {confirmingCancel ? (
+                <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 space-y-3">
+                  <p className="text-xs text-white/60 text-center">Cancel this payment? The QR code will no longer be valid.</p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setConfirmingCancel(false)}
+                      disabled={cancelling}
+                      className="flex-1 rounded-lg border border-white/10 py-1.5 text-xs text-white/50 hover:text-white/80 transition-colors disabled:opacity-50"
+                    >
+                      Keep waiting
+                    </button>
+                    <button
+                      onClick={() => void handleConfirmedCancel()}
+                      disabled={cancelling}
+                      className="flex-1 rounded-lg border border-red-500/30 bg-red-500/10 py-1.5 text-xs text-red-400 hover:bg-red-500/20 transition-colors disabled:opacity-50"
+                    >
+                      {cancelling ? 'Cancelling…' : 'Yes, cancel'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setConfirmingCancel(true)}
+                  className="w-full text-center text-xs text-white/30 hover:text-white/60 transition-colors py-1"
+                >
+                  Cancel
+                </button>
+              )}
             </>
           )}
         </div>
@@ -176,6 +222,7 @@ function QRModal({ qrCode, intentId, tokens, amountCentavos, packName, onClose, 
 }
 
 export function BillingPageClient({ initialData }: { initialData: BalanceData }) {
+  const notify = useNotify()
   const [balance, setBalance] = useState(initialData.balance ?? 0)
   const [isPending, startTransition] = useTransition()
   const [actionPending, setActionPending] = useState<string | null>(null)
@@ -220,7 +267,10 @@ export function BillingPageClient({ initialData }: { initialData: BalanceData })
           packName: json.packName,
         })
       } else {
-        alert(json.error ?? 'Failed to generate QR code. Please try again.')
+        notify.error({
+          title: 'Checkout failed',
+          description: json.error ?? 'Failed to generate QR code. Please try again.',
+        })
       }
       setActionPending(null)
     })
