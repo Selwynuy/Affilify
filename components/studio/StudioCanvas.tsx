@@ -1071,6 +1071,7 @@ function CtxPanel({
   promptInputRef,
   onPromptChange,
   onGenerate,
+  onDelete,
 }: {
   selCards: Card[];
   selProducts: Card[];
@@ -1079,6 +1080,7 @@ function CtxPanel({
   promptInputRef?: React.RefObject<HTMLTextAreaElement | null>;
   onPromptChange: (v: string) => void;
   onGenerate: () => void;
+  onDelete: () => void;
 }) {
   const canGenerate =
     selProducts.length > 0 || selCards.some((c) => c.type === "generated");
@@ -1101,7 +1103,7 @@ function CtxPanel({
             </div>
           ))}
         </div>
-        <span className="text-[10px] text-white/30 leading-snug">
+        <span className="flex-1 text-[10px] text-white/30 leading-snug">
           {isRegenerate
             ? "Edit prompt and Go to regenerate"
             : selProducts.length === 0
@@ -1110,6 +1112,14 @@ function CtxPanel({
                 ? "Generate model for this product"
                 : `Generate outfit - ${selProducts.length} connected items`}
         </span>
+        <button
+          type="button"
+          onClick={onDelete}
+          className="shrink-0 p-1 rounded-lg text-white/25 hover:text-red-400 hover:bg-red-500/10 transition-all"
+          title="Delete selected"
+        >
+          <Trash2 size={12} />
+        </button>
       </div>
       <div className="flex gap-2 items-end">
         <textarea
@@ -1369,6 +1379,30 @@ export function StudioCanvas({
     el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
     el.style.overflowY = el.scrollHeight > 160 ? "auto" : "hidden";
   }, [prompt, selectedIds]);
+
+  // ── Keyboard: Delete / Backspace removes selected cards ──────────────────────
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Delete" && e.key !== "Backspace") return;
+      const target = e.target as HTMLElement;
+      if (
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.isContentEditable
+      )
+        return;
+      if (selectedRef.current.size === 0) return;
+      e.preventDefault();
+      const ids = selectedRef.current;
+      setCards((prev) => prev.filter((c) => !ids.has(c.id)));
+      setConnections((prev) =>
+        prev.filter((cn) => !ids.has(cn.from) && !ids.has(cn.to)),
+      );
+      setSelectedIds(new Set());
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   // ── Canvas coordinate helper ─────────────────────────────────────────────────
   const toCanvas = useCallback(
@@ -1785,6 +1819,16 @@ export function StudioCanvas({
       n.delete(id);
       return n;
     });
+  }, []);
+
+  const deleteSelected = useCallback(() => {
+    const ids = selectedRef.current;
+    if (ids.size === 0) return;
+    setCards((prev) => prev.filter((c) => !ids.has(c.id)));
+    setConnections((prev) =>
+      prev.filter((cn) => !ids.has(cn.from) && !ids.has(cn.to)),
+    );
+    setSelectedIds(new Set());
   }, []);
 
   const clearCanvas = useCallback(() => {
@@ -2344,6 +2388,7 @@ export function StudioCanvas({
                   promptInputRef={promptInputRef}
                   onPromptChange={setPrompt}
                   onGenerate={handleGenerate}
+                  onDelete={deleteSelected}
                 />
               </motion.div>
             )}
@@ -2413,6 +2458,7 @@ export function StudioCanvas({
               isGenerating={isGenerating}
               onPromptChange={setPrompt}
               onGenerate={handleGenerate}
+              onDelete={deleteSelected}
             />
           </motion.div>
         )}
