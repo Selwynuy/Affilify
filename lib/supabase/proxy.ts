@@ -1,12 +1,27 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+const PROTECTED_PREFIXES = [
+  '/dashboard',
+  '/projects',
+  '/billing',
+  '/templates',
+  '/support',
+  '/admin',
+]
+
+function isProtectedRoute(pathname: string) {
+  return PROTECTED_PREFIXES.some((prefix) => pathname.startsWith(prefix))
+}
+
+function isAuthRoute(pathname: string) {
+  return pathname.startsWith('/login') || pathname.startsWith('/signup')
+}
+
 export async function updateSession(request: NextRequest) {
   const { pathname } = request.nextUrl
-  const isAuthRoute = pathname.startsWith('/login') || pathname.startsWith('/signup')
-  const isDashboardRoute = pathname.startsWith('/dashboard')
 
-  if (!isAuthRoute && !isDashboardRoute) {
+  if (!isAuthRoute(pathname) && !isProtectedRoute(pathname)) {
     return NextResponse.next({ request })
   }
 
@@ -37,13 +52,13 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  if (!user && isDashboardRoute) {
+  if (!user && isProtectedRoute(pathname)) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
   }
 
-  if (user && isAuthRoute) {
+  if (user && isAuthRoute(pathname)) {
     const url = request.nextUrl.clone()
     url.pathname = '/dashboard'
     return NextResponse.redirect(url)

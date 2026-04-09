@@ -6,6 +6,7 @@ import { TOKEN_COSTS } from '@/lib/data/plans'
 import { logger } from '@/lib/logger'
 import { rateLimit } from '@/lib/db-rate-limit'
 import { getPublishedMarketplaceTemplateById } from '@/lib/data/marketplace-templates'
+import { getTemplateGenerationImageUrl } from '@/lib/marketplace-template-media'
 import { isUuid, isSafeHttpUrl, sanitizeText, verifySameOrigin } from '@/lib/security'
 
 const GEMINI_MODEL = 'gemini-3.1-flash-image-preview'
@@ -42,7 +43,7 @@ async function fetchAsBase64(url: string): Promise<{ b64: string; mime: string }
 
     if (parsed.pathname === '/api/template-media') {
       const path = parsed.searchParams.get('path')?.trim()
-      if (!path) return null
+      if (!path || !path.startsWith('marketplace-templates/')) return null
       const admin = createAdminClient()
       const { data } = await admin.storage.from('uploads').download(path)
       if (!data) return null
@@ -163,16 +164,17 @@ export async function POST(req: NextRequest) {
     modelName = customName || 'My Custom Model'
   } else {
     const template = await getPublishedMarketplaceTemplateById(templateId!)
+    const templateImageUrl = getTemplateGenerationImageUrl(template)
     if (!template || template.category !== 'avatar') {
       return NextResponse.json({ error: 'Avatar template not found' }, { status: 404 })
     }
-    if (!template.reference_url) {
+    if (!templateImageUrl) {
       return NextResponse.json(
         { error: 'This template is missing a full-resolution reference image.' },
         { status: 400 },
       )
     }
-    reference = await fetchAsBase64(template.reference_url)
+    reference = await fetchAsBase64(templateImageUrl)
     if (!reference) {
       return NextResponse.json({ error: 'Could not load template reference image.' }, { status: 400 })
     }

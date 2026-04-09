@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { fetchTikTokPublishStatus, getValidTikTokAccessToken } from '@/lib/tiktok'
+import { sanitizeText } from '@/lib/security'
 
 export async function GET(req: NextRequest) {
   const supabase = await createClient()
@@ -10,7 +11,7 @@ export async function GET(req: NextRequest) {
 
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const publishId = req.nextUrl.searchParams.get('publishId')
+  const publishId = sanitizeText(req.nextUrl.searchParams.get('publishId'), { maxLength: 100 })
   if (!publishId) return NextResponse.json({ error: 'publishId is required' }, { status: 400 })
 
   const { accessToken } = await getValidTikTokAccessToken(user.id)

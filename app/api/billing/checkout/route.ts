@@ -17,6 +17,7 @@ import { createPaymentIntent, createQRPHPaymentMethod, attachQRPHPaymentMethod }
 import { createBillingPayment } from '@/lib/billing/payments'
 import { getCreditPack } from '@/lib/data/plans'
 import { logger } from '@/lib/logger'
+import { rateLimit } from '@/lib/db-rate-limit'
 import { sanitizeText, verifySameOrigin } from '@/lib/security'
 
 export async function POST(req: NextRequest) {
@@ -26,6 +27,16 @@ export async function POST(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  // Rate limit: 5 checkout attempts per user per 10 minutes
+  const rl = await rateLimit(`checkout:${user.id}`, { limit: 5, windowMs: 10 * 60_000 })
+  if (!rl.allowed) {
+    logger.warn('Rate limit hit on /api/billing/checkout', { userId: user.id })
+    return NextResponse.json(
+      { error: 'Too many payment requests. Please wait before trying again.' },
+      { status: 429, headers: { 'Retry-After': String(Math.ceil((rl.resetAt - Date.now()) / 1000)) } },
+    )
+  }
   if (!user.email) return NextResponse.json({ error: 'Account email is required for billing' }, { status: 400 })
 
   const body = await req.json()

@@ -8,7 +8,7 @@ import {
   buildAvatarConfigFromTemplate,
   buildBackgroundConfigFromTemplate,
 } from '@/lib/preferences'
-import { isUuid, verifySameOrigin } from '@/lib/security'
+import { isUuid, sanitizeText, verifySameOrigin } from '@/lib/security'
 
 export async function GET() {
   const supabase = await createClient()
@@ -56,8 +56,53 @@ export async function POST(req: NextRequest) {
 
   // Build only the fields that were provided
   const update: Record<string, unknown> = { user_id: user.id, updated_at: new Date().toISOString() }
-  if ('avatar_config' in body) update.avatar_config = body.avatar_config
-  if ('background_config' in body) update.background_config = body.background_config
+
+  if ('avatar_config' in body && body.avatar_config !== null && typeof body.avatar_config === 'object') {
+    const ac = body.avatar_config as Record<string, unknown>
+    const validTypes = ['custom', 'preset', 'user_model']
+    const validGenders = ['man', 'woman']
+    const validStyles = ['casual', 'streetwear', 'luxury', 'minimal']
+
+    const cleanedAvatarConfig: Record<string, unknown> = {
+      type: validTypes.includes(ac.type as string) ? ac.type : 'preset',
+      gender: validGenders.includes(ac.gender as string) ? ac.gender : 'man',
+      style: validStyles.includes(ac.style as string) ? ac.style : 'casual',
+      presetId: isUuid(ac.presetId as string) ? ac.presetId : null,
+      userModelId: isUuid(ac.userModelId as string) ? ac.userModelId : null,
+    }
+
+    // Only allow storage paths that belong to this user (must start with their user ID)
+    if (typeof ac.facePath === 'string' && ac.facePath.startsWith(`${user.id}/`)) {
+      cleanedAvatarConfig.facePath = sanitizeText(ac.facePath, { maxLength: 300 })
+    }
+    if (typeof ac.userModelStoragePath === 'string' && ac.userModelStoragePath.startsWith(`user-models/${user.id}/`)) {
+      cleanedAvatarConfig.userModelStoragePath = sanitizeText(ac.userModelStoragePath, { maxLength: 300 })
+    }
+    if (typeof ac.faceUrl === 'string') {
+      cleanedAvatarConfig.faceUrl = sanitizeText(ac.faceUrl, { maxLength: 500 })
+    }
+
+    update.avatar_config = cleanedAvatarConfig
+  } else if (body.avatar_config === null && 'avatar_config' in body) {
+    update.avatar_config = null
+  }
+
+  if ('background_config' in body && body.background_config !== null && typeof body.background_config === 'object') {
+    const bc = body.background_config as Record<string, unknown>
+    const validBgTypes = ['preset', 'custom']
+
+    update.background_config = {
+      type: validBgTypes.includes(bc.type as string) ? bc.type : 'preset',
+      presetId: isUuid(bc.presetId as string) ? bc.presetId : null,
+      roomAesthetic: sanitizeText(bc.roomAesthetic, { maxLength: 60 }) || '',
+      roomColors: sanitizeText(bc.roomColors, { maxLength: 120 }) || '',
+      roomElements: sanitizeText(bc.roomElements, { maxLength: 200 }) || '',
+      thumbnailUrl: typeof bc.thumbnailUrl === 'string' ? sanitizeText(bc.thumbnailUrl, { maxLength: 500 }) : null,
+    }
+  } else if (body.background_config === null && 'background_config' in body) {
+    update.background_config = null
+  }
+
   if ('camera_template_id' in body) update.camera_template_id = isUuid(body.camera_template_id) ? body.camera_template_id : null
   if ('movement_template_id' in body) update.movement_template_id = isUuid(body.movement_template_id) ? body.movement_template_id : null
 

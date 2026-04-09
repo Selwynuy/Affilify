@@ -12,6 +12,7 @@ import {
   buildAvatarConfigFromTemplate,
   buildBackgroundConfigFromTemplate,
 } from '@/lib/preferences'
+import { getTemplateGenerationImageUrl } from '@/lib/marketplace-template-media'
 import {
   assertAllowedMimeType,
   getExtensionForMimeType,
@@ -32,7 +33,7 @@ async function readTemplateMediaAsBase64(url: string | null | undefined) {
 
     if (parsed.pathname === '/api/template-media') {
       const path = parsed.searchParams.get('path')?.trim()
-      if (!path) return { b64: undefined, mime: undefined }
+      if (!path || !path.startsWith('marketplace-templates/')) return { b64: undefined, mime: undefined }
 
       const admin = createAdminClient()
       const { data } = await admin.storage.from('uploads').download(path)
@@ -186,7 +187,10 @@ export async function POST(req: NextRequest) {
       ? await getPublishedMarketplaceTemplateById(String(bc.presetId))
       : null
 
-    if (ac.type === 'preset' && !avatarTemplate?.reference_url) {
+    const avatarGenerationUrl = getTemplateGenerationImageUrl(avatarTemplate)
+    const backgroundGenerationUrl = getTemplateGenerationImageUrl(backgroundTemplate)
+
+    if (ac.type === 'preset' && !avatarGenerationUrl) {
       return NextResponse.json(
         { error: 'Selected avatar is missing a full-resolution reference image.' },
         { status: 400 },
@@ -198,7 +202,7 @@ export async function POST(req: NextRequest) {
         { status: 400 },
       )
     }
-    if (!backgroundTemplate?.reference_url) {
+    if (!backgroundGenerationUrl) {
       return NextResponse.json(
         { error: 'Selected background is missing a full-resolution reference image.' },
         { status: 400 },
@@ -212,8 +216,8 @@ export async function POST(req: NextRequest) {
         avatarTemplate?.description ?? avatarTemplate?.title ?? '',
       )
       : undefined
-    const avatarReferenceUrl = ac.type === 'preset' ? avatarTemplate?.reference_url : undefined
-    const backgroundReferenceUrl = backgroundTemplate.reference_url
+    const avatarReferenceUrl = ac.type === 'preset' ? avatarGenerationUrl ?? undefined : undefined
+    const backgroundReferenceUrl = backgroundGenerationUrl
     const { b64: avatarReferenceB64, mime: avatarReferenceMime } = await readTemplateMediaAsBase64(avatarReferenceUrl)
     const { b64: backgroundReferenceB64, mime: backgroundReferenceMime } = await readTemplateMediaAsBase64(backgroundReferenceUrl)
 

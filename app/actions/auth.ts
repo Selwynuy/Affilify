@@ -2,21 +2,33 @@
 
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
-import { createAdminClient } from '@/lib/supabase/admin'
+import { headers } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
 import { sendEmail } from '@/lib/email/resend'
 import { welcomeEmail } from '@/lib/email/templates/welcome'
+import { rateLimit } from '@/lib/db-rate-limit'
+import { logger } from '@/lib/logger'
 
 export async function login(formData: FormData) {
+  const headersList = await headers()
+  const ip = headersList.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
+  const email = (formData.get('email') as string ?? '').trim().toLowerCase()
+
+  // Rate limit: 10 attempts per IP per 15 minutes
+  const rl = await rateLimit(`login:ip:${ip}`, { limit: 10, windowMs: 15 * 60_000 })
+  if (!rl.allowed) {
+    return { error: 'Too many login attempts. Please wait before trying again.' }
+  }
+
   const supabase = await createClient()
 
   const { error } = await supabase.auth.signInWithPassword({
-    email: formData.get('email') as string,
+    email,
     password: formData.get('password') as string,
   })
 
   if (error) {
-    return { error: error.message }
+    return { error: 'Invalid email or password.' }
   }
 
   revalidatePath('/', 'layout')
@@ -24,6 +36,15 @@ export async function login(formData: FormData) {
 }
 
 export async function signup(formData: FormData) {
+  const headersList = await headers()
+  const ip = headersList.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
+
+  // Rate limit: 5 signups per IP per hour
+  const rl = await rateLimit(`signup:ip:${ip}`, { limit: 5, windowMs: 60 * 60_000 })
+  if (!rl.allowed) {
+    return { error: 'Too many signup attempts. Please wait before trying again.' }
+  }
+
   const supabase = await createClient()
   const email = (formData.get('email') as string).trim().toLowerCase()
   const password = formData.get('password') as string
@@ -40,33 +61,9 @@ export async function signup(formData: FormData) {
     return { error: 'Passwords do not match.' }
   }
 
-  const admin = createAdminClient()
-  let page = 1
-  let emailTaken = false
-
-  while (!emailTaken) {
-    const { data, error } = await admin.auth.admin.listUsers({
-      page,
-      perPage: 1000,
-    })
-
-    if (error) {
-      return { error: 'Unable to verify email availability right now. Please try again.' }
-    }
-
-    emailTaken = data.users.some((user) => user.email?.toLowerCase() === email)
-
-    if (emailTaken || !data.nextPage) {
-      break
-    }
-
-    page = data.nextPage
-  }
-
-  if (emailTaken) {
-    return { error: 'An account with that email already exists.' }
-  }
-
+  // signUp returns an obfuscated session when the email is already taken
+  // (Supabase "prevent email enumeration" must be ON in Auth settings).
+  // We no longer do a full user list scan — that was O(n) and leaked existence.
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
@@ -76,7 +73,9 @@ export async function signup(formData: FormData) {
   })
 
   if (error) {
-    return { error: error.message }
+    // Never reveal whether an email already exists
+    logger.warn('signup error (suppressed from user)', { error: error.message })
+    redirect(`/check-email?email=${encodeURIComponent(email)}`)
   }
 
   // Send welcome email (fire-and-forget — never block signup on email failure)
@@ -116,7 +115,7 @@ export async function forgotPassword(formData: FormData): Promise<{ error?: stri
 
   if (error) {
     // Never reveal whether an email exists — return success regardless
-    console.error('forgotPassword error (suppressed from user):', error.message)
+    logger.warn('forgotPassword error (suppressed from user)', { error: error.message })
   }
 
   // Always return success to prevent email enumeration attacks

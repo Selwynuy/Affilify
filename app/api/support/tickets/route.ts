@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { TicketCategory, TicketPriority } from '@/lib/types/support'
 import { sanitizeText, verifySameOrigin } from '@/lib/security'
+import { rateLimit } from '@/lib/db-rate-limit'
 
 // GET /api/support/tickets — list user's tickets
 export async function GET() {
@@ -29,6 +30,15 @@ export async function POST(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  // Rate limit: 5 new tickets per user per hour
+  const rl = await rateLimit(`support-ticket:${user.id}`, { limit: 5, windowMs: 60 * 60_000 })
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: 'Too many tickets submitted. Please wait before creating another.' },
+      { status: 429 },
+    )
+  }
 
   const payload = await req.json()
   const subject = sanitizeText(payload?.subject, { maxLength: 160 })

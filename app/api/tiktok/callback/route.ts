@@ -6,13 +6,27 @@ import {
   upsertTikTokAccount,
 } from '@/lib/tiktok'
 
-function callbackHtml(payload: { success: boolean; message: string }) {
-  const serialized = JSON.stringify({ type: 'tiktok-oauth', ...payload })
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;')
+}
 
-  return `<!doctype html>
+const CALLBACK_CSP = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'"
+const CALLBACK_HEADERS = { 'Content-Type': 'text/html; charset=utf-8', 'Content-Security-Policy': CALLBACK_CSP }
+
+function callbackHtml(payload: { success: boolean; message: string }) {
+  // JSON.stringify produces safe JS literal — only guard against </script> tag break-out
+  const serialized = JSON.stringify({ type: 'tiktok-oauth', ...payload })
+    .replace(/<\/script>/gi, '<\\/script>')
+
+  return new Response(`<!doctype html>
 <html>
   <body style="font-family: sans-serif; background: #0f1115; color: white; display: grid; place-items: center; min-height: 100vh;">
-    <p>${payload.message}</p>
+    <p>${escapeHtml(payload.message)}</p>
     <script>
       const payload = ${serialized};
       if (window.opener) {
@@ -21,7 +35,7 @@ function callbackHtml(payload: { success: boolean; message: string }) {
       setTimeout(() => window.close(), 400);
     </script>
   </body>
-</html>`
+</html>`, { headers: CALLBACK_HEADERS })
 }
 
 export async function GET(req: Request) {
@@ -37,15 +51,11 @@ export async function GET(req: Request) {
   cookieStore.delete('tiktok_oauth_verifier')
 
   if (error) {
-    return new Response(callbackHtml({ success: false, message: error }), {
-      headers: { 'Content-Type': 'text/html; charset=utf-8' },
-    })
+    return callbackHtml({ success: false, message: error })
   }
 
   if (!code || !state || !expectedState || state !== expectedState || !codeVerifier) {
-    return new Response(callbackHtml({ success: false, message: 'TikTok authorization could not be verified.' }), {
-      headers: { 'Content-Type': 'text/html; charset=utf-8' },
-    })
+    return callbackHtml({ success: false, message: 'TikTok authorization could not be verified.' })
   }
 
   const supabase = await createClient()
@@ -54,9 +64,7 @@ export async function GET(req: Request) {
   } = await supabase.auth.getUser()
 
   if (!user) {
-    return new Response(callbackHtml({ success: false, message: 'You must be signed in before connecting TikTok.' }), {
-      headers: { 'Content-Type': 'text/html; charset=utf-8' },
-    })
+    return callbackHtml({ success: false, message: 'You must be signed in before connecting TikTok.' })
   }
 
   try {
@@ -64,13 +72,9 @@ export async function GET(req: Request) {
     const creatorInfo = await queryTikTokCreatorInfo(token.access_token)
     await upsertTikTokAccount(user.id, token, creatorInfo)
 
-    return new Response(callbackHtml({ success: true, message: 'TikTok connected. You can close this window.' }), {
-      headers: { 'Content-Type': 'text/html; charset=utf-8' },
-    })
+    return callbackHtml({ success: true, message: 'TikTok connected. You can close this window.' })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'TikTok connection failed.'
-    return new Response(callbackHtml({ success: false, message }), {
-      headers: { 'Content-Type': 'text/html; charset=utf-8' },
-    })
+    return callbackHtml({ success: false, message })
   }
 }

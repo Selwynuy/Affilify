@@ -8,18 +8,21 @@ import type {
   TemplateCategory,
   TemplateConfig,
   TemplateFormState,
+  TemplateStatus,
 } from '@/lib/types/marketplace'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function extractCommonFields(formData: FormData) {
+  const imageUrl = (formData.get('image_url') as string)?.trim() || null
+
   return {
     title:         (formData.get('title')         as string)?.trim() ?? '',
     description:   (formData.get('description')   as string)?.trim() || null,
     category:      (formData.get('category')       as TemplateCategory),
-    thumbnail_url: (formData.get('thumbnail_url') as string)?.trim() || null,
-    preview_url:   (formData.get('preview_url')   as string)?.trim() || null,
-    reference_url: (formData.get('reference_url') as string)?.trim() || null,
+    thumbnail_url: imageUrl,
+    preview_url:   null,
+    reference_url: imageUrl,
     badge:         (formData.get('badge')          as string)?.trim() || null,
     sort_order:    parseInt((formData.get('sort_order') as string) ?? '0', 10) || 0,
   }
@@ -35,7 +38,6 @@ function buildConfig(formData: FormData, category: TemplateCategory): TemplateCo
 
   switch (category) {
     case 'camera':
-      config.promptFragment    = (formData.get('config.promptFragment')    as string) ?? ''
       config.cameraAnglePrompt = (formData.get('config.cameraAnglePrompt') as string) ?? ''
       break
     case 'movement':
@@ -64,10 +66,40 @@ function buildConfig(formData: FormData, category: TemplateCategory): TemplateCo
   return config
 }
 
-function revalidateTemplates(id?: string) {
+function revalidateTemplates(ids?: string | string[]) {
   revalidatePath('/admin/templates')
   revalidatePath('/templates')
-  if (id) revalidatePath(`/admin/templates/${id}`)
+  const values = typeof ids === 'string' ? [ids] : ids ?? []
+  for (const id of values) {
+    revalidatePath(`/admin/templates/${id}`)
+  }
+}
+
+function getTemplateIds(formData: FormData) {
+  return formData
+    .getAll('ids')
+    .map((value) => (typeof value === 'string' ? value.trim() : ''))
+    .filter(Boolean)
+}
+
+async function updateTemplateStatuses(ids: string[], status: TemplateStatus) {
+  const admin = createAdminClient()
+  const { error } = await admin
+    .from('marketplace_templates')
+    .update({ status })
+    .in('id', ids)
+
+  if (error) return { error: error.message }
+
+  revalidateTemplates(ids)
+
+  const labels: Record<TemplateStatus, string> = {
+    published: ids.length === 1 ? 'Template published' : `${ids.length} templates published`,
+    draft: ids.length === 1 ? 'Template moved to draft' : `${ids.length} templates moved to draft`,
+    archived: ids.length === 1 ? 'Template archived' : `${ids.length} templates archived`,
+  }
+
+  return { success: labels[status] }
 }
 
 // ─── Create ───────────────────────────────────────────────────────────────────
@@ -205,6 +237,46 @@ export async function deleteTemplateInline(
 
   if (error) return { error: error.message }
 
-  revalidateTemplates()
+  revalidateTemplates(id)
   return { success: 'Template deleted' }
+}
+
+export async function setTemplatesStatusInline(
+  _prev: TemplateFormState,
+  formData: FormData,
+): Promise<TemplateFormState> {
+  const user = await verifyAdmin()
+  if (!user) return { error: 'Unauthorized' }
+
+  const ids = getTemplateIds(formData)
+  const status = (formData.get('status') as string)?.trim()
+
+  if (ids.length === 0) return { error: 'Select at least one template' }
+  if (!['draft', 'published', 'archived'].includes(status)) {
+    return { error: 'Invalid status' }
+  }
+
+  return updateTemplateStatuses(ids, status as TemplateStatus)
+}
+
+export async function deleteTemplatesInline(
+  _prev: TemplateFormState,
+  formData: FormData,
+): Promise<TemplateFormState> {
+  const user = await verifyAdmin()
+  if (!user) return { error: 'Unauthorized' }
+
+  const ids = getTemplateIds(formData)
+  if (ids.length === 0) return { error: 'Select at least one template' }
+
+  const admin = createAdminClient()
+  const { error } = await admin
+    .from('marketplace_templates')
+    .delete()
+    .in('id', ids)
+
+  if (error) return { error: error.message }
+
+  revalidateTemplates()
+  return { success: ids.length === 1 ? 'Template deleted' : `${ids.length} templates deleted` }
 }
