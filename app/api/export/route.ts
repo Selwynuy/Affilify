@@ -21,7 +21,7 @@ const WAN_FPS = 16
 const POLL_DEADLINE_MS = 10 * 60 * 1000
 
 /** Wall-clock budget for this route (polling + download + storage). Must be ≥ POLL_DEADLINE_MS. Vercel Hobby caps at 300s; Pro/Enterprise up to 800s — raise dashboard limit if needed. */
-export const maxDuration = 660
+export const maxDuration = 300
 
 export const dynamic = 'force-dynamic'
 const POLL_INTERVAL_MS = 5_000
