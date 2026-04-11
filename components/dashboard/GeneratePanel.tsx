@@ -17,6 +17,7 @@ import { VIDEO_MODELS, getAvailableModels, TOKEN_COSTS } from '@/lib/data/plans'
 import type { VideoModel, PlanId } from '@/lib/types/billing'
 import type { MarketplaceTemplate } from '@/lib/types/marketplace'
 import { TikTokShareButton } from '@/components/dashboard/TikTokShareButton'
+import { buildFinalImageVideoPrompt } from '@/lib/video-prompt'
 import {
   getAllVideoOptionChoices,
   getDefaultVideoGenerationSettings,
@@ -234,14 +235,6 @@ function HistorySection({ runs }: { runs: HistoryRun[] }) {
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
-function buildMovementPrompt(template: MarketplaceTemplate | null, gender: string, roomAesthetic: string) {
-  const promptFragment = typeof template?.config.promptFragment === 'string'
-    ? template.config.promptFragment
-    : ''
-
-  return `A ${gender} in a ${roomAesthetic} room - ${promptFragment} The overall mood is elegant and confident.`
-}
-
 export function GeneratePanel({
   avatarTemplates,
   backgroundTemplates,
@@ -315,7 +308,6 @@ export function GeneratePanel({
     setProductFiles((prev) => {
       const combined = [...prev]
       for (const f of newFiles) {
-        if (combined.length >= 5) break
         if (!combined.find((p) => p.file.name === f.name)) {
           combined.push({ file: f, previewUrl: URL.createObjectURL(f) })
         }
@@ -398,11 +390,7 @@ export function GeneratePanel({
 
     try {
       const selectedMovementTemplate = movementTemplates.find((template) => template.id === localMovementId) ?? movementTemplates[0] ?? null
-      const motionPrompt = buildMovementPrompt(
-        selectedMovementTemplate,
-        avatarConfig?.gender ?? 'man',
-        backgroundConfig?.roomAesthetic ?? 'masculine',
-      )
+      const motionPrompt = buildFinalImageVideoPrompt(lastDescription, selectedMovementTemplate)
       const exportRes = await fetch('/api/export', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -417,22 +405,36 @@ export function GeneratePanel({
       })
       if (!exportRes.ok) {
         const err = await exportRes.json()
+        if (exportRes.status === 402) {
+          throw new Error(err.error ?? 'Insufficient tokens. Please top up and try again.')
+        }
         throw new Error(err.error ?? 'Video generation failed')
       }
 
+      let videoErrorMessage: string | null = null
       for await (const event of readNDJSON(exportRes)) {
         if (event.type === 'progress') {
           setVideoProgress({ current: event.index as number, total: event.total as number })
         } else if (event.type === 'video') {
           setVideos((prev) => [...prev, event.video as VideoResult])
           setVideoProgress({ current: (event.index as number) + 1, total: event.total as number })
+        } else if (event.type === 'video_error') {
+          videoErrorMessage = typeof event.error === 'string' ? event.error : 'Video generation failed'
         }
+      }
+
+      refreshBalance()
+
+      if (videoErrorMessage) {
+        setErrorMsg(videoErrorMessage)
+        notify.error({ title: 'Video generation failed', description: videoErrorMessage })
+        setStage('error')
+        return
       }
 
       setStage('done')
       notify.success({ title: 'Video ready', description: 'Your generated video is ready to review and download.' })
       fetch('/api/history').then((r) => r.json()).then((d) => setHistoryRuns(d.runs ?? []))
-      refreshBalance()
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : 'Something went wrong'
       setErrorMsg(message)

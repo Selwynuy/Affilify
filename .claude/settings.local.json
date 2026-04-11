@@ -33,7 +33,15 @@
       "WebFetch(domain:www.paymongo.com)",
       "WebFetch(domain:www.anthropic.com)",
       "Bash(Remove-Item:*)",
-      "Bash(npm list:*)"
+      "Bash(npm list:*)",
+      "Bash(npx playwright:*)",
+      "Bash(npm ls:*)",
+      "Bash(grep -l \"throw\\\\|throw new Error\" /d/Projects/Genetrify/app/api/*/*.ts)",
+      "Bash(npm audit:*)",
+      "Bash(grep:*)",
+      "Bash(find /d/Projects/Genetrify/e2e -name \"*.spec.ts\" -exec wc -l {} \\\\;)",
+      "Bash(awk '{sum+=$1} END {print \"Total e2e lines:\", sum}')",
+      "Bash(npm uninstall:*)"
     ],
     "deny": [
       "Bash(rm -rf:*)",

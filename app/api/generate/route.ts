@@ -11,6 +11,7 @@ import {
   getPublishedMarketplaceTemplateById,
   getTemplateConfigValue,
 } from '@/lib/data/marketplace-templates'
+import { resolveProjectThumbnailUrl } from '@/lib/projects/thumbnail'
 import { isUuid, sanitizeText, verifySameOrigin } from '@/lib/security'
 
 const GEMINI_MODEL = 'gemini-3.1-flash-image-preview'
@@ -221,9 +222,12 @@ export async function POST(req: NextRequest) {
         controller.enqueue(encode({ type: 'progress', index: i, total: IMAGE_COUNT }))
 
         try {
-          const res = await fetch(`${GEMINI_URL}?key=${process.env.GOOGLE_AI_STUDIO_KEY}`, {
+          const res = await fetch(GEMINI_URL, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              'x-goog-api-key': process.env.GOOGLE_AI_STUDIO_KEY ?? '',
+            },
             body: JSON.stringify({
               contents: [{ role: 'user', parts }],
               generationConfig: { responseModalities: ['IMAGE', 'TEXT'] },
@@ -251,7 +255,7 @@ export async function POST(req: NextRequest) {
 
           const { mimeType, data: b64 } = imagePart.inlineData
           const ext = mimeType === 'image/png' ? 'png' : 'jpg'
-          const storagePath = `${user.id}/${projectId}/generated-${i}.${ext}`
+          const storagePath = `${user.id}/${projectId}/round-${generationRound}/generated-${i}-${Date.now()}.${ext}`
 
           const buffer = Buffer.from(b64, 'base64')
           await admin.storage.from('generated').upload(storagePath, buffer, { contentType: mimeType, upsert: true })
@@ -283,7 +287,7 @@ export async function POST(req: NextRequest) {
             await admin.from('storage_files').upsert({
               user_id: user.id,
               project_id: projectId,
-              file_name: `ai-image-${projectId.slice(0, 6)}-${i + 1}.${ext}`,
+              file_name: `ai-image-${projectId.slice(0, 6)}-r${generationRound}-${i + 1}.${ext}`,
               file_type: 'generated_image',
               storage_path: storagePath,
               public_url: signedUrl,
@@ -328,16 +332,10 @@ export async function POST(req: NextRequest) {
           .order('position')
           .limit(1)
           .single()
-        let thumbnailUrl: string | null = null
-        if (latestImg?.storage_path) {
-          const { data: signed } = await admin.storage
-            .from('generated')
-            .createSignedUrl(latestImg.storage_path, 60 * 60 * 24 * 30)
-          thumbnailUrl = signed?.signedUrl ?? null
-        }
+        const thumbnailUrl = await resolveProjectThumbnailUrl(admin, latestImg?.storage_path ?? null)
         await admin
           .from('projects')
-          .update({ status: 'images_generated', thumbnail_url: thumbnailUrl })
+          .update({ status: 'images_generated', thumbnail_url: latestImg?.storage_path ?? null })
           .eq('id', projectId)
       }
 

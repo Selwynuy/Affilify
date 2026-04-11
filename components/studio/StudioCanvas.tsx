@@ -34,10 +34,12 @@ import {
   buildAvatarConfigFromTemplate,
   buildBackgroundConfigFromTemplate,
   buildCustomAvatarConfig,
+  buildUserModelAvatarConfig,
 } from "@/lib/preferences";
 import { getTemplatePrimaryImageUrl } from "@/lib/marketplace-template-media";
 import { VIDEO_MODELS } from "@/lib/data/plans";
 import type { VideoModel } from "@/lib/types/billing";
+import { buildFinalImageVideoPrompt } from "@/lib/video-prompt";
 import {
   getAllVideoOptionChoices,
   getDefaultVideoGenerationSettings,
@@ -148,7 +150,6 @@ const CARD_FOOT_H = 56;
 const CARD_H = CARD_IMG_H + CARD_FOOT_H;
 const PORT_R = 9; // port circle radius
 const DRAG_THRESH = 5;
-const MAX_PRODUCTS = 5;
 const GAP = 22;
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 2.0;
@@ -396,22 +397,9 @@ function buildStudioVideoPrompt(
   avatarConfig: AvatarConfig | null,
   backgroundConfig: BackgroundConfig | null,
 ) {
-  const cleanedPrompt = basePrompt.trim();
-  const motionFragment =
-    typeof movementTemplate?.config.promptFragment === "string"
-      ? movementTemplate.config.promptFragment.trim()
-      : "";
-  const gender = avatarConfig?.gender === "woman" ? "woman" : "man";
-  const roomAesthetic = backgroundConfig?.roomAesthetic || "studio";
-
-  return [
-    cleanedPrompt,
-    `Subject: ${gender} in a ${roomAesthetic} space.`,
-    motionFragment,
-    "Keep the framing vertical 9:16, keep motion natural, and preserve the outfit details.",
-  ]
-    .filter(Boolean)
-    .join(" ");
+  void avatarConfig;
+  void backgroundConfig;
+  return buildFinalImageVideoPrompt(basePrompt, movementTemplate);
 }
 
 // ── StatusChip ────────────────────────────────────────────────────────────────
@@ -450,6 +438,14 @@ function StatusChip({
 
 // ── TemplatePanel ─────────────────────────────────────────────────────────────
 
+interface UserModel {
+  id: string;
+  name: string;
+  storage_path: string;
+  public_url: string;
+  gender: string;
+}
+
 function TemplatePanel({
   category,
   avatarTemplates,
@@ -476,8 +472,21 @@ function TemplatePanel({
     setMovementTemplateId,
   } = usePreferences();
 
+  const notify = useNotify();
   const [isPending, startTransition] = useTransition();
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [userModels, setUserModels] = useState<UserModel[]>([]);
+  const [userModelsLoading, setUserModelsLoading] = useState(false);
+
+  useEffect(() => {
+    if (category !== "avatar") return;
+    setUserModelsLoading(true);
+    fetch("/api/user-models")
+      .then((r) => r.json())
+      .then((d) => setUserModels(d.models ?? []))
+      .catch(() => setUserModels([]))
+      .finally(() => setUserModelsLoading(false));
+  }, [category]);
   const [avatarGender, setAvatarGender] = useState<"male" | "female">(
     avatarConfig?.gender === "woman" ? "female" : "male",
   );
@@ -583,6 +592,25 @@ function TemplatePanel({
       }
     };
     reader.readAsDataURL(file);
+  }
+
+  function handleSelectUserModel(model: UserModel) {
+    const gender: AvatarConfig["gender"] =
+      model.gender === "woman" ? "woman" : "man";
+    const config = buildUserModelAvatarConfig(
+      model.id,
+      model.storage_path,
+      gender,
+    );
+    setAvatarConfig(config);
+    startTransition(async () => {
+      await fetch("/api/preferences", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ avatar_config: config }),
+      });
+    });
+    onClose();
   }
 
   const CATEGORY_META: Record<
@@ -733,6 +761,89 @@ function TemplatePanel({
 
         {/* Template grid */}
         <div className="flex-1 overflow-y-auto min-h-0 px-4 py-3 scrollbar-brand">
+
+          {/* My Faces — user-uploaded models */}
+          {category === "avatar" && (userModelsLoading || userModels.length > 0) && (
+            <div className="mb-4">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-white/30 mb-2">
+                My Faces
+              </p>
+              {userModelsLoading ? (
+                <div className="flex items-center gap-2 text-[11px] text-white/25 py-2">
+                  <RefreshCw size={11} className="animate-spin" />
+                  Loading…
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2.5">
+                  {userModels.map((model) => {
+                    const selected =
+                      avatarConfig?.type === "user_model" &&
+                      avatarConfig.userModelId === model.id;
+                    return (
+                      <div
+                        key={model.id}
+                        onClick={() => handleSelectUserModel(model)}
+                        className={cn(
+                          "group relative flex flex-col overflow-hidden rounded-xl border transition-all duration-150 cursor-pointer",
+                          selected
+                            ? "border-brand-accent ring-1 ring-brand-accent/40 shadow-md shadow-brand-accent/10"
+                            : "border-white/[0.08] hover:border-white/20",
+                        )}
+                      >
+                        <div className="relative aspect-[2/3] w-full overflow-hidden bg-white/5">
+                          {model.public_url ? (
+                            <img
+                              src={model.public_url}
+                              alt={model.name}
+                              className="absolute inset-0 h-full w-full object-cover"
+                            />
+                          ) : (
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <User size={24} className="text-white/10" />
+                            </div>
+                          )}
+                          {selected && (
+                            <div className="absolute inset-0 bg-brand-accent/10" />
+                          )}
+                          <div
+                            className={cn(
+                              "absolute inset-x-1.5 bottom-1.5 transition-all duration-150",
+                              selected
+                                ? "opacity-100 translate-y-0"
+                                : "opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0",
+                            )}
+                          >
+                            <div className="flex w-full items-center justify-center gap-1 rounded-lg py-1 text-[10px] font-bold uppercase tracking-wider bg-brand-accent text-brand-bg">
+                              {selected ? (
+                                <><CheckCircle2 size={10} /> Active</>
+                              ) : (
+                                "Use this"
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <div
+                          className={cn(
+                            "px-2 py-1.5 border-t text-[10px] font-medium truncate transition-colors",
+                            selected
+                              ? "border-brand-accent/30 bg-brand-accent/8 text-brand-accent"
+                              : "border-white/[0.06] bg-[#15151e] text-white/50",
+                          )}
+                        >
+                          {model.name}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              <div className="mt-3 mb-1 border-t border-white/[0.06]" />
+              <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-white/30 mt-3 mb-2">
+                Templates
+              </p>
+            </div>
+          )}
+
           {templates.length === 0 ? (
             <p className="text-center text-[12px] text-white/25 py-10">
               No templates yet
@@ -1706,7 +1817,7 @@ export function StudioCanvas({
       const existing = cardsRef.current.filter(
         (c) => c.type === "product",
       ).length;
-      const toAdd = imgs.slice(0, MAX_PRODUCTS - existing);
+      const toAdd = imgs;
       if (!toAdd.length) return;
 
       // Place near viewport center when no explicit drop position given
@@ -2029,6 +2140,9 @@ export function StudioCanvas({
 
       if (!exportRes.ok) {
         const error = await exportRes.json().catch(() => null);
+        if (exportRes.status === 402) {
+          throw new Error(error?.error ?? "Insufficient tokens. Please top up and try again.");
+        }
         throw new Error(error?.error ?? "Video generation failed");
       }
 
@@ -2045,6 +2159,7 @@ export function StudioCanvas({
             storageFileId?: string | null;
           };
         } else if (event.type === "video_error") {
+          // Surface the exact message — includes refund confirmation when applicable
           throw new Error(
             typeof event.error === "string"
               ? event.error

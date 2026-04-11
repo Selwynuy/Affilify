@@ -23,6 +23,13 @@ function toIsoFromUnix(seconds: number | null | undefined): string | null {
 }
 
 export async function POST(req: NextRequest) {
+  // NOTE: verifySameOrigin() is intentionally NOT used here.
+  // PayMongo webhooks are server-to-server POST requests, not
+  // browser-initiated requests, so browser Origin/Referer checks are
+  // not the right control for this endpoint.
+  // We authenticate the raw request with PayMongo's HMAC-SHA256
+  // signature before any business logic runs.
+
   const rawBody = await req.text()
   const sig = req.headers.get('paymongo-signature')
 

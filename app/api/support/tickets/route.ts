@@ -6,10 +6,19 @@ import { sanitizeText, verifySameOrigin } from '@/lib/security'
 import { rateLimit } from '@/lib/db-rate-limit'
 
 // GET /api/support/tickets — list user's tickets
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const originError = verifySameOrigin(req)
+  if (originError) return originError
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  // Rate limit: 30 reads per minute per user (prevents enumeration abuse)
+  const rl = await rateLimit(`support-tickets-get:${user.id}`, { limit: 30, windowMs: 60_000 })
+  if (!rl.allowed) {
+    return NextResponse.json({ error: 'Too many requests.' }, { status: 429 })
+  }
 
   const admin = createAdminClient()
   const { data, error } = await admin

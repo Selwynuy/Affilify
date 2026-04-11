@@ -1,6 +1,11 @@
 /**
  * Validates required environment variables at startup.
  * Import this in instrumentation.ts or any server entrypoint.
+ *
+ * Deployment notes for video export (`app/api/export/route.ts`):
+ * - `REPLICATE_API_KEY` — Replicate predictions API
+ * - `SUPABASE_SERVICE_ROLE_KEY` — admin client: signed URLs for source frames,
+ *   `project_videos` / `storage_files` writes, upload to `videos` bucket
  */
 
 const REQUIRED_VARS = [

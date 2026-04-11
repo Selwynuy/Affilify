@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { resolveProjectThumbnailUrl } from '@/lib/projects/thumbnail'
 import { isUuid, sanitizeText, verifySameOrigin } from '@/lib/security'
 
 type Params = { params: Promise<{ id: string }> }
@@ -42,7 +43,14 @@ export async function GET(req: NextRequest, { params }: Params) {
     .eq('project_id', id)
     .order('created_at', { ascending: false })
 
-  return NextResponse.json({ project, images: images ?? [], videos: videos ?? [] })
+  return NextResponse.json({
+    project: {
+      ...project,
+      thumbnail_url: await resolveProjectThumbnailUrl(admin, project.thumbnail_url),
+    },
+    images: images ?? [],
+    videos: videos ?? [],
+  })
 }
 
 export async function PATCH(req: NextRequest, { params }: Params) {
@@ -66,7 +74,25 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   }
 
   if ('folder_id' in body) {
-    updates.folder_id = isUuid(body.folder_id) ? body.folder_id : null
+    if (body.folder_id === null) {
+      updates.folder_id = null
+    } else if (isUuid(body.folder_id)) {
+      const admin = createAdminClient()
+      const { data: folder } = await admin
+        .from('project_folders')
+        .select('id')
+        .eq('id', body.folder_id)
+        .eq('user_id', user.id)
+        .maybeSingle()
+
+      if (!folder) {
+        return NextResponse.json({ error: 'Folder not found' }, { status: 404 })
+      }
+
+      updates.folder_id = folder.id
+    } else {
+      updates.folder_id = null
+    }
   }
 
   if (Object.keys(updates).length === 0) {

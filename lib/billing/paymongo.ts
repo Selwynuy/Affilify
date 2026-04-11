@@ -6,6 +6,8 @@
 
 import crypto from 'crypto'
 
+const WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS = 5 * 60
+
 const BASE_URL = 'https://api.paymongo.com/v1'
 
 function authHeader(): string {
@@ -213,9 +215,16 @@ export async function createPaymentIntent(
   amountCentavos: number,
   description: string,
   metadata: Record<string, string>,
+  idempotencyKey?: string,
 ): Promise<PMPaymentIntent> {
+  const headers: Record<string, string> = {}
+  if (idempotencyKey) {
+    headers['Idempotency-Key'] = idempotencyKey
+  }
+
   const res = await pmFetch<{ data: PMPaymentIntent }>('/payment_intents', {
     method: 'POST',
+    headers,
     body: JSON.stringify({
       data: {
         attributes: {
@@ -309,6 +318,7 @@ export async function attachQRPHPaymentMethod(
  * Verifies the `Paymongo-Signature` header.
  * Header format: t=<timestamp>,te=<test_sig>,li=<live_sig>
  * Uses the webhook secret key from PAYMONGO_WEBHOOK_SECRET env var.
+ * Rejects stale signatures to reduce replay risk.
  */
 export function verifyWebhookSignature(rawBody: string, signatureHeader: string): boolean {
   const secret = process.env.PAYMONGO_WEBHOOK_SECRET?.trim()
@@ -322,6 +332,13 @@ export function verifyWebhookSignature(rawBody: string, signatureHeader: string)
 
   const { t, te, li } = parts
   if (!t) return false
+  if (!/^\d+$/.test(t)) return false
+
+  const timestamp = Number.parseInt(t, 10)
+  const now = Math.floor(Date.now() / 1000)
+  if (Math.abs(now - timestamp) > WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS) {
+    return false
+  }
 
   const payload = `${t}.${rawBody}`
   const computed = crypto.createHmac('sha256', secret).update(payload).digest('hex')

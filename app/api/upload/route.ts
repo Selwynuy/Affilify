@@ -342,13 +342,15 @@ export async function POST(req: NextRequest) {
 
   const results: { kind: string; url: string; path: string }[] = []
   if (productFiles.length > 0) {
+    for (const file of productFiles) {
+      const fileError = validateImageFile(file, 'Product image')
+      if (fileError) return NextResponse.json({ error: fileError }, { status: 400 })
+    }
+
     await admin.from('project_images').delete().eq('project_id', pid).eq('kind', 'product')
 
     for (let i = 0; i < productFiles.length; i++) {
       const file = productFiles[i]
-      const fileError = validateImageFile(file, 'Product image')
-      if (fileError) return NextResponse.json({ error: fileError }, { status: 400 })
-
       const ext = getExtensionForMimeType(file.type, 'jpg')
       const bytes = await file.arrayBuffer()
       const path = `transient://${user.id}/${pid}/product-${i}.${ext}`

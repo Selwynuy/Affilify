@@ -118,7 +118,9 @@ export async function POST(req: NextRequest) {
   const body = await req.json()
   const templateId = isUuid(body?.templateId) ? body.templateId : null
   const useCustomFace = body?.useCustomFace === true
-  const explicitFacePath = typeof body?.facePath === 'string' ? body.facePath.trim() : ''
+  const rawFacePath = typeof body?.facePath === 'string' ? body.facePath.trim() : ''
+  // Validate that the path belongs to the authenticated user (prevents IDOR)
+  const explicitFacePath = rawFacePath.startsWith(`${user.id}/`) ? rawFacePath : ''
   const customName = sanitizeText(body?.name, { maxLength: 60 })
   const reqGender = body?.gender === 'woman' ? 'woman' : 'man'
   const reqStyle = sanitizeText(body?.style, { maxLength: 20 }) || 'casual'
@@ -150,9 +152,13 @@ export async function POST(req: NextRequest) {
       .maybeSingle()
 
     const avatarConfig = (prefs?.avatar_config ?? null) as { facePath?: string } | null
+    // Validate stored facePath also belongs to this user (defense-in-depth, admin client bypasses RLS)
+    const storedFacePath = typeof avatarConfig?.facePath === 'string' && avatarConfig.facePath.startsWith(`${user.id}/`)
+      ? avatarConfig.facePath
+      : null
     reference =
       await loadFaceFromPath(explicitFacePath)
-      ?? await loadFaceFromPath(avatarConfig?.facePath)
+      ?? await loadFaceFromPath(storedFacePath)
       ?? await loadUserFace(user.id)
     if (!reference) {
       return NextResponse.json(
@@ -193,9 +199,12 @@ export async function POST(req: NextRequest) {
 
   let geminiData: unknown
   try {
-    const res = await fetch(`${GEMINI_URL}?key=${process.env.GOOGLE_AI_STUDIO_KEY}`, {
+    const res = await fetch(GEMINI_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': process.env.GOOGLE_AI_STUDIO_KEY ?? '',
+      },
       body: JSON.stringify({
         contents: [{ role: 'user', parts }],
         generationConfig: { responseModalities: ['IMAGE', 'TEXT'] },

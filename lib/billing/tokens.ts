@@ -51,6 +51,26 @@ export async function grantMonthlyTokens(userId: string, planId: PlanId): Promis
   })
 }
 
+/** Refunds tokens back to a user. Used when generation fails after tokens were already deducted. */
+export async function refundTokens(
+  userId: string,
+  amount: number,
+  description: string,
+  projectId?: string,
+): Promise<void> {
+  const admin = createAdminClient()
+  const { error } = await admin.rpc('refund_tokens', {
+    p_user_id: userId,
+    p_amount: amount,
+    p_description: description,
+    p_project_id: projectId ?? null,
+  })
+
+  if (error) {
+    throw new Error(error.message)
+  }
+}
+
 /** Gets the user's current plan ID from subscriptions table. Falls back to null. */
 export async function getUserPlanId(userId: string): Promise<PlanId | null> {
   const admin = createAdminClient()

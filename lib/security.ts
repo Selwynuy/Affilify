@@ -121,12 +121,35 @@ export function isSafeHttpUrl(value: string, options?: { allowHosts?: string[] }
   }
 }
 
-function isPrivateHostname(hostname: string) {
+function isPrivateHostname(hostname: string): boolean {
   const lower = hostname.toLowerCase()
+
+  // IPv4-mapped IPv6 — unwrap and recheck the embedded IPv4 address
+  if (/^::ffff:/i.test(lower)) return isPrivateHostname(lower.slice(7))
+
+  // Loopback and link-local (IPv4 + IPv6)
   if (lower === 'localhost' || lower.endsWith('.local')) return true
   if (lower === '127.0.0.1' || lower === '::1') return true
+  if (/^127\./.test(lower)) return true
+
+  // Private IPv4 ranges
   if (/^10\./.test(lower) || /^192\.168\./.test(lower)) return true
   if (/^172\.(1[6-9]|2\d|3[0-1])\./.test(lower)) return true
+
+  // Link-local / APIPA (also covers AWS/GCP IMDS at 169.254.169.254)
   if (/^169\.254\./.test(lower)) return true
+
+  // Catch-all 0.0.0.0
+  if (lower === '0.0.0.0') return true
+
+  // Cloud metadata endpoints by hostname
+  if (lower === 'metadata.google.internal' || lower.endsWith('.metadata.google.internal')) return true
+
+  // Alibaba Cloud IMDS
+  if (lower === '100.100.100.200') return true
+
+  // Private IPv6 ranges: unique-local (fc00::/7) and link-local (fe80::/10)
+  if (/^f[c-d][0-9a-f]{2}:/i.test(lower) || /^fe[89ab][0-9a-f]:/i.test(lower)) return true
+
   return false
 }

@@ -1,7 +1,12 @@
 /**
  * In-memory sliding-window rate limiter.
- * Suitable for single-instance deployments (Vercel serverless: use per-function, not global state).
- * For multi-region/multi-instance, swap the store for Redis/Upstash.
+ *
+ * WARNING: NOT suitable for serverless deployments (Vercel, AWS Lambda, etc.).
+ * On serverless platforms the in-memory store is reset on every cold start, providing
+ * zero protection against burst attacks. Use lib/db-rate-limit.ts instead, which
+ * is backed by Postgres advisory locks and works correctly across serverless invocations.
+ *
+ * This module is retained only for local/single-instance development use.
  */
 
 interface Window {

@@ -19,7 +19,8 @@ import { GET, POST } from './route'
 describe('/api/support/tickets', () => {
   it('GET returns 401 without auth', async () => {
     createClient.mockResolvedValue({ auth: { getUser: vi.fn(async () => ({ data: { user: null } })) } })
-    const res = await GET()
+    const req = new NextRequest('http://localhost/api/support/tickets')
+    const res = await GET(req)
     expect(res.status).toBe(401)
   })
 

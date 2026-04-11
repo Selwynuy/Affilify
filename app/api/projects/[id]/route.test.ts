@@ -2,10 +2,11 @@ import { describe, expect, it, vi } from 'vitest'
 import { NextRequest } from 'next/server'
 
 const createClient = vi.hoisted(() => vi.fn())
+const createAdminClient = vi.hoisted(() => vi.fn())
 const verifySameOrigin = vi.hoisted(() => vi.fn())
 
 vi.mock('@/lib/supabase/server', () => ({ createClient }))
-vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: vi.fn() }))
+vi.mock('@/lib/supabase/admin', () => ({ createAdminClient }))
 vi.mock('@/lib/security', async () => {
   const actual = await vi.importActual<typeof import('@/lib/security')>('@/lib/security')
   return { ...actual, verifySameOrigin }
@@ -38,5 +39,33 @@ describe('/api/projects/[id]', () => {
     const req = new NextRequest('http://localhost/api/projects/550e8400-e29b-41d4-a716-446655440000', { method: 'DELETE' })
     const res = await DELETE(req, { params: Promise.resolve({ id: '550e8400-e29b-41d4-a716-446655440000' }) })
     expect(res.status).toBe(401)
+  })
+
+  it('PATCH rejects moving a project into another user folder', async () => {
+    verifySameOrigin.mockReturnValue(null)
+    createClient.mockResolvedValue({ auth: { getUser: vi.fn(async () => ({ data: { user: { id: 'u1' } } })) } })
+    createAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === 'project_folders') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                eq: vi.fn(() => ({
+                  maybeSingle: vi.fn(async () => ({ data: null })),
+                })),
+              })),
+            })),
+          }
+        }
+        throw new Error(`unexpected table ${table}`)
+      }),
+    })
+
+    const req = new NextRequest('http://localhost/api/projects/550e8400-e29b-41d4-a716-446655440000', {
+      method: 'PATCH',
+      body: JSON.stringify({ folder_id: '550e8400-e29b-41d4-a716-446655440001' }),
+    })
+    const res = await PATCH(req, { params: Promise.resolve({ id: '550e8400-e29b-41d4-a716-446655440000' }) })
+    expect(res.status).toBe(404)
   })
 })

@@ -52,6 +52,10 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    // Idempotency key: user + pack + 10-minute window prevents duplicate intents on retries
+    const windowKey = Math.floor(Date.now() / (10 * 60_000))
+    const idempotencyKey = `topup-${user.id}-${pack.id}-${windowKey}`
+
     const intent = await createPaymentIntent(
       pack.priceCentavos,
       `Genetrify ${pack.name} pack - ${pack.tokens.toLocaleString()} tokens`,
@@ -63,6 +67,7 @@ export async function POST(req: NextRequest) {
         tokens: String(pack.tokens),
         amountCentavos: String(pack.priceCentavos),
       },
+      idempotencyKey,
     )
 
     await createBillingPayment({

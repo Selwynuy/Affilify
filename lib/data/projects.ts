@@ -2,6 +2,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { getPlan } from '@/lib/data/plans'
 import type { PlanId } from '@/lib/types/billing'
+import { resolveProjectThumbnailUrl } from '@/lib/projects/thumbnail'
 
 export interface ProjectFolder {
   id: string
@@ -87,7 +88,12 @@ export async function listProjects(folderId?: string | null): Promise<ProjectLis
   }
 
   const { data } = await query
-  return (data ?? []) as ProjectListItem[]
+  const projects = (data ?? []) as ProjectListItem[]
+
+  return Promise.all(projects.map(async project => ({
+    ...project,
+    thumbnail_url: await resolveProjectThumbnailUrl(admin, project.thumbnail_url),
+  })))
 }
 
 export async function getProject(id: string): Promise<{
@@ -132,7 +138,10 @@ export async function getProject(id: string): Promise<{
     .order('created_at', { ascending: false })
 
   return {
-    project: project as ProjectDetail,
+    project: {
+      ...(project as ProjectDetail),
+      thumbnail_url: await resolveProjectThumbnailUrl(admin, project.thumbnail_url),
+    },
     images,
     videos: (videos ?? []) as ProjectVideo[],
   }
