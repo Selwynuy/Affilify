@@ -11,7 +11,7 @@ export default async function DashboardPage() {
     redirect('/login')
   }
 
-  const { avatar, background, camera, movement } =
+  const { avatar, background, shot_type, motion_style, video_flow } =
     await getPublishedMarketplaceTemplateGroups()
 
   return (
@@ -19,8 +19,9 @@ export default async function DashboardPage() {
       userId={session.user.id}
       avatarTemplates={avatar}
       backgroundTemplates={background}
-      cameraTemplates={camera}
-      movementTemplates={movement}
+      cameraTemplates={shot_type}
+      movementTemplates={motion_style}
+      videoFlowTemplates={video_flow}
     />
   )
 }

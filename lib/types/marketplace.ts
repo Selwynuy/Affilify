@@ -1,15 +1,27 @@
 // Types for the staff-managed template marketplace.
 // Config is stored as JSONB and varies per category — kept extensible via index signature.
 
-export type TemplateCategory = 'camera' | 'movement' | 'avatar' | 'background' | 'other'
+export type TemplateCategory = 'shot_type' | 'motion_style' | 'video_flow' | 'avatar' | 'background' | 'other'
 export type TemplateStatus   = 'draft' | 'published' | 'archived'
+
+export interface VideoFlowStepConfig {
+  id: string
+  title: string
+  description?: string
+  beatGoal?: string
+  shotTypeTemplateId?: string
+  motionStyleTemplateId?: string
+  promptFragment?: string
+  durationSec?: number
+}
 
 /**
  * Flexible per-category config object stored in the `config` JSONB column.
  *
  * Known fields by category:
- *   camera:     cameraAnglePrompt
- *   movement:   promptFragment
+ *   shot_type:    cameraAnglePrompt
+ *   motion_style: promptFragment
+ *   video_flow:   flowSummary, defaultStepId, steps[]
  *   avatar:     gender, style
  *   background: roomAesthetic, roomColors, roomElements
  *
@@ -17,10 +29,16 @@ export type TemplateStatus   = 'draft' | 'published' | 'archived'
  * and read them from config where needed.
  */
 export interface TemplateConfig {
-  /** Movement templates: motion description sent to Kling video API */
+  /** Motion-style templates: motion description for animating the final generated image */
   promptFragment?: string
-  /** Camera templates: injected into the {{camera_angle}} Gemini image prompt slot */
+  /** Shot-type templates: injected into the image-generation prompt as the framing/composition directive */
   cameraAnglePrompt?: string
+  /** Video-flow templates: short summary shown in the UI */
+  flowSummary?: string
+  /** Video-flow templates: which step should be selected first */
+  defaultStepId?: string
+  /** Video-flow templates: ordered beat list for short-form sequences */
+  steps?: VideoFlowStepConfig[]
   /** Avatar templates */
   gender?: string
   style?: string

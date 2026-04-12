@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { verifyAdmin } from '@/lib/admin/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getBillingControls } from '@/lib/billing/launch-control'
 
 export async function GET() {
   const user = await verifyAdmin()
@@ -78,6 +79,7 @@ export async function GET() {
   const vendorCostEvents = vendorCostEventsResult.data ?? []
   const recentPayments = recentPaymentsResult.data ?? []
   const plans = plansResult.data ?? []
+  const billingControls = await getBillingControls(admin)
 
   // --- KPI Totals ---
   const totalRevenueCentavos = payments.reduce((sum, p) => sum + (p.amount_centavos ?? 0), 0)
@@ -168,6 +170,7 @@ export async function GET() {
       trackedJobs: vendorCostEvents.length,
       unpricedGoogleJobs,
     },
+    billingControls,
     recentPayments,
   })
 }

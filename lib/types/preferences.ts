@@ -25,6 +25,7 @@ export interface BackgroundConfig {
 export interface UserPreferences {
   avatar_config: AvatarConfig | null
   background_config: BackgroundConfig | null
-  camera_template_id: string | null
-  movement_template_id: string | null
+  shot_type_template_id: string | null
+  motion_style_template_id: string | null
+  video_flow_template_id: string | null
 }

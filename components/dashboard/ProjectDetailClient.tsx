@@ -3,10 +3,11 @@
 import { useState, useTransition, useRef } from 'react'
 import Link from 'next/link'
 import {
-  ArrowLeft, Pencil, Copy, Trash2, Film, Download, X, Check,
-  ChevronLeft, ChevronRight, Sparkles, Clock, FolderOpen,
+  ArrowLeft, Pencil, Copy, Trash2, Download, X, Check,
+  ChevronLeft, ChevronRight, Sparkles, Clock, FolderOpen, Maximize2,
 } from 'lucide-react'
 import { TikTokShareButton } from '@/components/dashboard/TikTokShareButton'
+import { cn } from '@/lib/utils'
 import type { ProjectDetail, ProjectImage, ProjectVideo } from '@/lib/data/projects'
 
 interface Props {
@@ -278,84 +279,113 @@ export function ProjectDetailClient({ project: initialProject, images, videos }:
         </div>
       )}
 
-      {/* Generation rounds */}
-      {rounds.map((round, rIdx) => {
-        const roundImgs = generatedImages
-          .filter(img => img.generation_round === round)
-          .sort((a, b) => a.position - b.position)
+      {/* Generation rounds — side by side, wrap to new rows (no horizontal scroll strip) */}
+      {rounds.length > 0 && (
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {rounds.map((round, rIdx) => {
+            const roundImgs = generatedImages
+              .filter(img => img.generation_round === round)
+              .sort((a, b) => a.position - b.position)
 
-        return (
-          <section key={round}>
-            <div className="flex items-center gap-3 mb-3">
-              <span className="text-xs font-semibold uppercase tracking-widest text-white/30">
-                {rIdx === 0 ? 'Latest' : `Round ${round}`}
-              </span>
-              <span className="text-[11px] text-white/20">
-                {formatDate(roundImgs[0]?.created_at ?? '')}
-              </span>
-              {rIdx === 0 && rounds.length > 1 && (
-                <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-brand-accent/10 text-brand-accent border border-brand-accent/20 font-medium">
-                  Latest
-                </span>
-              )}
-            </div>
+            return (
+              <section key={round} className="flex min-w-0 flex-col">
+                <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <span className="text-xs font-semibold uppercase tracking-widest text-white/30">
+                    {rIdx === 0 ? 'Latest' : `Round ${round}`}
+                  </span>
+                  <span className="text-[11px] text-white/20">
+                    {formatDate(roundImgs[0]?.created_at ?? '')}
+                  </span>
+                  {rIdx === 0 && rounds.length > 1 && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-brand-accent/10 text-brand-accent border border-brand-accent/20 font-medium">
+                      Latest
+                    </span>
+                  )}
+                </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-              {roundImgs.map((img, posIdx) => {
-                const imgVideos = videosByImageId.get(img.id) ?? []
-                const videoUrl = imgVideos.find(v => v.video_url)?.video_url ?? null
-                const storageFileForVideo = imgVideos.find(v => v.video_url)
+                <div className="grid grid-cols-1 gap-3">
+                  {roundImgs.map((img, posIdx) => {
+                    const imgVideos = videosByImageId.get(img.id) ?? []
+                    const videoUrl = imgVideos.find(v => v.url)?.url ?? null
+                    const storageFileForVideo = imgVideos.find(v => v.url)
 
-                return (
-                  <div key={img.id} className="group relative rounded-xl overflow-hidden border border-white/[0.07] bg-black">
-                    <button
-                      onClick={() => openLightbox(round, posIdx)}
-                      className="block w-full aspect-[9/16] relative"
-                    >
-                      <img
-                        src={getDisplayUrl(img)}
-                        alt=""
-                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                      />
-                      {videoUrl && (
-                        <div className="absolute bottom-2 left-2 flex items-center gap-1 bg-black/70 rounded-full px-2 py-0.5">
-                          <Film className="w-3 h-3 text-purple-400" />
-                          <span className="text-[10px] text-purple-300 font-medium">Video</span>
-                        </div>
-                      )}
-                    </button>
+                    const posterUrl = getDisplayUrl(img)
 
-                    {/* Hover actions */}
-                    <div className="absolute inset-x-0 bottom-0 p-2 flex flex-col gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity bg-gradient-to-t from-black/80 via-black/40 to-transparent">
-                      {videoUrl && (
-                        <div className="flex gap-1.5">
-                          <a
-                            href={videoUrl}
-                            download
-                            target="_blank"
-                            rel="noreferrer"
-                            className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white/80 text-[11px] transition-all"
-                          >
-                            <Download className="w-3 h-3" /> Video
-                          </a>
-                          {storageFileForVideo && (
-                            <TikTokShareButton
-                              storageFileId={storageFileForVideo.id}
-                              fileName={`video-${img.id.slice(0, 6)}.mp4`}
-                              fileUrl={videoUrl}
-                              buttonLabel="TikTok"
-                            />
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </section>
-        )
-      })}
+                    return (
+                      <div
+                        key={img.id}
+                        className={cn(
+                          'group relative overflow-hidden rounded-xl border border-white/[0.07] bg-black',
+                          videoUrl ? 'flex flex-col' : '',
+                        )}
+                      >
+                        {videoUrl ? (
+                          <>
+                            <div className="relative aspect-[9/16] w-full bg-black">
+                              <video
+                                src={videoUrl}
+                                poster={posterUrl}
+                                controls
+                                playsInline
+                                preload="metadata"
+                                className="h-full w-full object-cover"
+                              >
+                                Video preview
+                              </video>
+                              <button
+                                type="button"
+                                onClick={() => openLightbox(round, posIdx)}
+                                className="absolute right-2 top-2 flex items-center gap-1 rounded-lg border border-white/15 bg-black/65 px-2 py-1.5 text-[11px] font-medium text-white/90 backdrop-blur-sm transition-colors hover:bg-black/85"
+                                title="Open still image"
+                              >
+                                <Maximize2 className="h-3.5 w-3.5" />
+                                <span className="hidden sm:inline">Still</span>
+                              </button>
+                            </div>
+                            <div className="flex gap-1.5 border-t border-white/[0.07] p-2">
+                              <a
+                                href={videoUrl}
+                                download
+                                target="_blank"
+                                rel="noreferrer"
+                                className="flex flex-1 items-center justify-center gap-1 rounded-lg bg-white/10 py-2 text-[11px] text-white/85 transition-all hover:bg-white/18"
+                              >
+                                <Download className="h-3.5 w-3.5" /> Save
+                              </a>
+                              {storageFileForVideo && (
+                                <TikTokShareButton
+                                  storageFileId={storageFileForVideo.id}
+                                  fileName={`video-${img.id.slice(0, 6)}.mp4`}
+                                  fileUrl={videoUrl}
+                                  buttonLabel="TikTok"
+                                />
+                              )}
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => openLightbox(round, posIdx)}
+                              className="relative block aspect-[9/16] w-full"
+                            >
+                              <img
+                                src={posterUrl}
+                                alt=""
+                                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                              />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </section>
+            )
+          })}
+        </div>
+      )}
 
       {lightbox && (
         <ImageLightbox

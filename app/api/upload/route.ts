@@ -21,6 +21,7 @@ import {
   sanitizeText,
   verifySameOrigin,
 } from '@/lib/security'
+import { StorageLimitError, assertStorageCapacity } from '@/lib/storage/quota'
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024
 const MAX_PRODUCT_FILES = 5
@@ -96,6 +97,17 @@ export async function POST(req: NextRequest) {
     const ext = getExtensionForMimeType(faceFile.type, 'jpg')
     const path = `${user.id}/avatar/face.${ext}`
     const bytes = await faceFile.arrayBuffer()
+
+    try {
+      await assertStorageCapacity(admin, user.id, faceFile.size, {
+        replacingObject: { bucket: 'uploads', path },
+      })
+    } catch (error) {
+      if (error instanceof StorageLimitError) {
+        return NextResponse.json({ error: error.message }, { status: 409 })
+      }
+      throw error
+    }
 
     const { error } = await admin.storage.from('uploads').upload(path, bytes, {
       contentType: faceFile.type,
@@ -299,6 +311,16 @@ export async function POST(req: NextRequest) {
       const ext = getExtensionForMimeType(faceFile.type, 'jpg')
       const path = `${user.id}/temp-face.${ext}`
       const bytes = await faceFile.arrayBuffer()
+      try {
+        await assertStorageCapacity(admin, user.id, faceFile.size, {
+          replacingObject: { bucket: 'uploads', path },
+        })
+      } catch (error) {
+        if (error instanceof StorageLimitError) {
+          return NextResponse.json({ error: error.message }, { status: 409 })
+        }
+        throw error
+      }
       await admin.storage.from('uploads').upload(path, bytes, { contentType: faceFile.type, upsert: true })
       const { data: signed } = await admin.storage.from('uploads').createSignedUrl(path, 60 * 60)
       const faceB64 = Buffer.from(bytes).toString('base64')

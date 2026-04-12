@@ -6,12 +6,14 @@ import type { AvatarConfig, BackgroundConfig } from '@/lib/types/preferences'
 interface PreferencesContextValue {
   avatarConfig: AvatarConfig | null
   backgroundConfig: BackgroundConfig | null
-  cameraTemplateId: string
-  movementTemplateId: string
+  shotTypeTemplateId: string
+  motionStyleTemplateId: string
+  videoFlowTemplateId: string
   setAvatarConfig: (config: AvatarConfig | null) => void
   setBackgroundConfig: (config: BackgroundConfig | null) => void
-  setCameraTemplateId: (id: string) => void
-  setMovementTemplateId: (id: string) => void
+  setShotTypeTemplateId: (id: string) => void
+  setMotionStyleTemplateId: (id: string) => void
+  setVideoFlowTemplateId: (id: string) => void
 }
 
 const PreferencesContext = createContext<PreferencesContextValue | null>(null)
@@ -19,25 +21,28 @@ const PreferencesContext = createContext<PreferencesContextValue | null>(null)
 export function PreferencesProvider({
   initialAvatarConfig,
   initialBackgroundConfig,
-  initialCameraTemplateId,
-  initialMovementTemplateId,
+  initialShotTypeTemplateId,
+  initialMotionStyleTemplateId,
+  initialVideoFlowTemplateId,
   children,
 }: {
   initialAvatarConfig: AvatarConfig | null
   initialBackgroundConfig: BackgroundConfig | null
-  initialCameraTemplateId: string
-  initialMovementTemplateId: string
+  initialShotTypeTemplateId: string
+  initialMotionStyleTemplateId: string
+  initialVideoFlowTemplateId: string
   children: React.ReactNode
 }) {
   const [avatarConfig, setAvatarConfig] = useState<AvatarConfig | null>(initialAvatarConfig)
   const [backgroundConfig, setBackgroundConfig] = useState<BackgroundConfig | null>(initialBackgroundConfig)
-  const [cameraTemplateId, setCameraTemplateId] = useState<string>(initialCameraTemplateId)
-  const [movementTemplateId, setMovementTemplateId] = useState<string>(initialMovementTemplateId)
+  const [shotTypeTemplateId, setShotTypeTemplateId] = useState<string>(initialShotTypeTemplateId)
+  const [motionStyleTemplateId, setMotionStyleTemplateId] = useState<string>(initialMotionStyleTemplateId)
+  const [videoFlowTemplateId, setVideoFlowTemplateId] = useState<string>(initialVideoFlowTemplateId)
 
   return (
     <PreferencesContext.Provider value={{
-      avatarConfig, backgroundConfig, cameraTemplateId, movementTemplateId,
-      setAvatarConfig, setBackgroundConfig, setCameraTemplateId, setMovementTemplateId,
+      avatarConfig, backgroundConfig, shotTypeTemplateId, motionStyleTemplateId, videoFlowTemplateId,
+      setAvatarConfig, setBackgroundConfig, setShotTypeTemplateId, setMotionStyleTemplateId, setVideoFlowTemplateId,
     }}>
       {children}
     </PreferencesContext.Provider>

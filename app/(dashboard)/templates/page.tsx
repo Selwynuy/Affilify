@@ -13,8 +13,9 @@ export default async function MarketplacePage() {
   const {
     avatar: avatarTemplates,
     background: backgroundTemplates,
-    camera: cameraTemplates,
-    movement: movementTemplates,
+    shot_type: shotTypeTemplates,
+    motion_style: motionStyleTemplates,
+    video_flow: videoFlowTemplates,
   } = await getPublishedMarketplaceTemplateGroups()
 
   return (
@@ -22,8 +23,9 @@ export default async function MarketplacePage() {
       <MarketplaceClient
         avatarTemplates={avatarTemplates}
         backgroundTemplates={backgroundTemplates}
-        cameraTemplates={cameraTemplates}
-        movementTemplates={movementTemplates}
+        cameraTemplates={shotTypeTemplates}
+        movementTemplates={motionStyleTemplates}
+        videoFlowTemplates={videoFlowTemplates}
       />
     </PageWrapper>
   )

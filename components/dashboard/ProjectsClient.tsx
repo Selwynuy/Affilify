@@ -519,9 +519,9 @@ export function ProjectsClient({ initialProjects, initialFolders, storageSummary
                 <HardDrive className="w-4.5 h-4.5 text-brand-accent" />
               </div>
               <div>
-                <p className="text-sm font-medium text-white">Project storage</p>
+                <p className="text-sm font-medium text-white">Account storage</p>
                 <p className="text-xs text-white/35">
-                  Files are now managed through projects instead of a separate storage page.
+                  Includes project outputs, saved face uploads, and AI model files.
                 </p>
               </div>
             </div>
@@ -554,7 +554,7 @@ export function ProjectsClient({ initialProjects, initialFolders, storageSummary
           {nearLimit && (
             <div className="flex items-center gap-2 rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
               <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-              Storage is almost full. Delete older projects you no longer need.
+              Storage is almost full. Delete older projects or saved models you no longer need.
             </div>
           )}
         </div>

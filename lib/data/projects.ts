@@ -1,8 +1,8 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
-import { getPlan } from '@/lib/data/plans'
 import type { PlanId } from '@/lib/types/billing'
 import { resolveProjectThumbnailUrl } from '@/lib/projects/thumbnail'
+import { getUserStorageSummary } from '@/lib/storage/quota'
 
 export interface ProjectFolder {
   id: string
@@ -39,7 +39,7 @@ export interface ProjectImage {
 export interface ProjectVideo {
   id: string
   image_id: string | null
-  video_url: string | null
+  url: string | null
   status: string
   created_at: string
 }
@@ -133,7 +133,7 @@ export async function getProject(id: string): Promise<{
 
   const { data: videos } = await admin
     .from('project_videos')
-    .select('id, image_id, video_url, status, created_at')
+    .select('id, image_id, url, status, created_at')
     .eq('project_id', id)
     .order('created_at', { ascending: false })
 
@@ -150,37 +150,12 @@ export async function getProject(id: string): Promise<{
 export async function getProjectStorageSummary(): Promise<ProjectStorageSummary> {
   const userId = await getAuthenticatedUserId()
   const admin = createAdminClient()
-
-  const { data: projects } = await admin
-    .from('projects')
-    .select('id')
-    .eq('user_id', userId)
-
-  const projectIds = (projects ?? []).map(project => project.id)
-
-  const { data: storageFiles } = projectIds.length === 0
-    ? { data: [] as Array<{ size_bytes: number | null }> }
-    : await admin
-      .from('storage_files')
-      .select('size_bytes')
-      .eq('user_id', userId)
-      .in('project_id', projectIds)
-
-  const { data: sub } = await admin
-    .from('subscriptions')
-    .select('plan_id, status')
-    .eq('user_id', userId)
-    .single()
-
-  const planId = (sub?.status === 'active' ? sub.plan_id : null) as PlanId | null
-  const plan = planId ? getPlan(planId) : null
-  const limitBytes = (plan?.storageGb ?? 0) * 1024 * 1024 * 1024
-  const files = storageFiles ?? []
+  const summary = await getUserStorageSummary(admin, userId)
 
   return {
-    usedBytes: files.reduce((total, file) => total + Number(file.size_bytes ?? 0), 0),
-    fileCount: files.length,
-    limitBytes,
-    planId,
+    usedBytes: summary.usedBytes,
+    fileCount: summary.fileCount,
+    limitBytes: summary.limitBytes,
+    planId: summary.planId as PlanId | null,
   }
 }

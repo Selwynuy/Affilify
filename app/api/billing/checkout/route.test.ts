@@ -8,14 +8,17 @@ const createBillingPayment = vi.hoisted(() => vi.fn())
 const rateLimit = vi.hoisted(() => vi.fn())
 const verifySameOrigin = vi.hoisted(() => vi.fn())
 const getCreditPack = vi.hoisted(() => vi.fn())
+const getBillingControls = vi.hoisted(() => vi.fn())
 
 vi.mock('@/lib/supabase/server', () => ({ createClient }))
+vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: vi.fn(() => ({})) }))
 vi.mock('@/lib/billing/paymongo', () => ({
   createPaymentIntent,
   createQRPHPaymentMethod,
   attachQRPHPaymentMethod,
 }))
 vi.mock('@/lib/billing/payments', () => ({ createBillingPayment }))
+vi.mock('@/lib/billing/launch-control', () => ({ getBillingControls }))
 vi.mock('@/lib/db-rate-limit', () => ({ rateLimit }))
 vi.mock('@/lib/security', async () => {
   const actual = await vi.importActual<typeof import('@/lib/security')>('@/lib/security')
@@ -43,6 +46,7 @@ describe('POST /api/billing/checkout', () => {
   it('returns 429 on rate limit hit', async () => {
     verifySameOrigin.mockReturnValue(null)
     withUser()
+    getBillingControls.mockResolvedValue({ topupsEnabled: true, topupMessage: null })
     rateLimit.mockResolvedValue({ allowed: false, resetAt: Date.now() + 60_000 })
     const res = await POST(new Request('http://localhost/api/billing/checkout', {
       method: 'POST',
@@ -54,6 +58,7 @@ describe('POST /api/billing/checkout', () => {
   it('creates checkout and returns QR code payload', async () => {
     verifySameOrigin.mockReturnValue(null)
     withUser()
+    getBillingControls.mockResolvedValue({ topupsEnabled: true, topupMessage: null })
     rateLimit.mockResolvedValue({ allowed: true, resetAt: Date.now() + 60_000 })
     getCreditPack.mockReturnValue({ id: 'basic', name: 'Basic', tokens: 100, priceCentavos: 9900 })
     createPaymentIntent.mockResolvedValue({ id: 'pi_1', attributes: { client_key: 'ck_1' } })
@@ -72,5 +77,25 @@ describe('POST /api/billing/checkout', () => {
     expect(body.intentId).toBe('pi_1')
     expect(body.qrCode).toContain('https://qr.example')
     expect(createBillingPayment).toHaveBeenCalled()
+  })
+
+  it('returns 409 when top-ups are paused by funding controls', async () => {
+    verifySameOrigin.mockReturnValue(null)
+    withUser()
+    rateLimit.mockResolvedValue({ allowed: true, resetAt: Date.now() + 60_000 })
+    getCreditPack.mockReturnValue({ id: 'basic', name: 'Basic', tokens: 100, priceCentavos: 9900 })
+    getBillingControls.mockResolvedValue({
+      topupsEnabled: false,
+      topupMessage: 'Token top-ups are temporarily paused because the funded token allocation has been fully reserved.',
+    })
+
+    const res = await POST(new Request('http://localhost/api/billing/checkout', {
+      method: 'POST',
+      body: JSON.stringify({ packId: 'basic' }),
+    }) as never)
+
+    expect(res.status).toBe(409)
+    const body = await res.json()
+    expect(body.error).toContain('temporarily paused')
   })
 })

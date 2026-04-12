@@ -7,6 +7,7 @@ import {
   Camera,
   Check,
   CheckCircle2,
+  Film,
   ImageIcon,
   Mars,
   Pencil,
@@ -30,7 +31,7 @@ import { getTemplatePrimaryImageUrl } from '@/lib/marketplace-template-media'
 import type { MarketplaceTemplate } from '@/lib/types/marketplace'
 import { TOKEN_COSTS } from '@/lib/data/plans'
 
-type Tab = 'avatar' | 'background' | 'camera' | 'movement'
+type Tab = 'avatar' | 'background' | 'shot_type' | 'motion_style' | 'video_flow'
 
 const ITEMS_PER_PAGE = 12
 const EAGER_IMAGE_COUNT = 4
@@ -38,12 +39,13 @@ const EAGER_IMAGE_COUNT = 4
 const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'avatar', label: 'Avatar', icon: <User className="h-3.5 w-3.5" /> },
   { id: 'background', label: 'Background', icon: <ImageIcon className="h-3.5 w-3.5" /> },
-  { id: 'camera', label: 'Angle', icon: <Camera className="h-3.5 w-3.5" /> },
-  { id: 'movement', label: 'Movement', icon: <Sparkles className="h-3.5 w-3.5" /> },
+  { id: 'shot_type', label: 'Shot Type', icon: <Camera className="h-3.5 w-3.5" /> },
+  { id: 'motion_style', label: 'Motion Style', icon: <Sparkles className="h-3.5 w-3.5" /> },
+  { id: 'video_flow', label: 'Video Flow', icon: <Film className="h-3.5 w-3.5" /> },
 ]
 
 function isTab(value: string | null): value is Tab {
-  return value === 'avatar' || value === 'background' || value === 'camera' || value === 'movement'
+  return value === 'avatar' || value === 'background' || value === 'shot_type' || value === 'motion_style' || value === 'video_flow'
 }
 
 interface UserModel {
@@ -443,21 +445,25 @@ export default function MarketplaceClient({
   backgroundTemplates,
   cameraTemplates,
   movementTemplates,
+  videoFlowTemplates,
 }: {
   avatarTemplates: MarketplaceTemplate[]
   backgroundTemplates: MarketplaceTemplate[]
   cameraTemplates: MarketplaceTemplate[]
   movementTemplates: MarketplaceTemplate[]
+  videoFlowTemplates: MarketplaceTemplate[]
 }) {
   const {
     avatarConfig,
     setAvatarConfig,
     backgroundConfig,
     setBackgroundConfig,
-    cameraTemplateId,
-    setCameraTemplateId,
-    movementTemplateId,
-    setMovementTemplateId,
+    shotTypeTemplateId,
+    setShotTypeTemplateId,
+    motionStyleTemplateId,
+    setMotionStyleTemplateId,
+    videoFlowTemplateId,
+    setVideoFlowTemplateId,
   } = usePreferences()
 
   const { balance, refreshBalance } = useTokens()
@@ -471,8 +477,9 @@ export default function MarketplaceClient({
   const [pageByTab, setPageByTab] = useState<Record<Tab, number>>({
     avatar: 1,
     background: 1,
-    camera: 1,
-    movement: 1,
+    shot_type: 1,
+    motion_style: 1,
+    video_flow: 1,
   })
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [customFaceUrl, setCustomFaceUrl] = useState<string | null>(
@@ -530,18 +537,29 @@ export default function MarketplaceClient({
     savePrefs({ background_config: config })
   }
 
-  function handleSelectCamera(id: string) {
+  function handleSelectShotType(id: string) {
     if (isPending) return
     setSavingId(id)
-    setCameraTemplateId(id)
-    savePrefs({ camera_template_id: id, movement_template_id: movementTemplateId })
+    setShotTypeTemplateId(id)
+    savePrefs({ shot_type_template_id: id, motion_style_template_id: motionStyleTemplateId })
   }
 
-  function handleSelectMovement(id: string) {
+  function handleSelectMotionStyle(id: string) {
     if (isPending) return
     setSavingId(id)
-    setMovementTemplateId(id)
-    savePrefs({ camera_template_id: cameraTemplateId, movement_template_id: id })
+    setMotionStyleTemplateId(id)
+    savePrefs({ shot_type_template_id: shotTypeTemplateId, motion_style_template_id: id })
+  }
+
+  function handleSelectVideoFlow(id: string) {
+    if (isPending) return
+    setSavingId(id)
+    setVideoFlowTemplateId(id)
+    savePrefs({
+      shot_type_template_id: shotTypeTemplateId,
+      motion_style_template_id: motionStyleTemplateId,
+      video_flow_template_id: id,
+    })
   }
 
   async function handleCustomFace(event: React.ChangeEvent<HTMLInputElement>) {
@@ -701,8 +719,9 @@ export default function MarketplaceClient({
   const templatesByTab: Record<Tab, MarketplaceTemplate[]> = {
     avatar: visibleAvatarTemplates,
     background: backgroundTemplates,
-    camera: cameraTemplates,
-    movement: movementTemplates,
+    shot_type: cameraTemplates,
+    motion_style: movementTemplates,
+    video_flow: videoFlowTemplates,
   }
 
   const currentTemplates = templatesByTab[tab]
@@ -925,11 +944,11 @@ export default function MarketplaceClient({
         )
       )}
 
-      {tab === 'camera' && (
+      {tab === 'shot_type' && (
         <div className="max-w-5xl space-y-3">
-          <p className="text-xs text-brand-text/40">Sets the framing of your AI-generated image.</p>
+          <p className="text-xs text-brand-text/40">Sets the framing and composition of your AI-generated image.</p>
           {cameraTemplates.length === 0 ? (
-            <p className="text-sm italic text-brand-text/25">No camera templates available.</p>
+            <p className="text-sm italic text-brand-text/25">No shot-type templates available.</p>
           ) : (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
@@ -941,9 +960,9 @@ export default function MarketplaceClient({
                     thumbnailUrl={getTemplatePrimaryImageUrl(template)}
                     badge={template.badge}
                     eager={index < EAGER_IMAGE_COUNT}
-                    isSelected={cameraTemplateId === template.id}
+                    isSelected={shotTypeTemplateId === template.id}
                     isSaving={savingId === template.id}
-                    onSelect={() => handleSelectCamera(template.id)}
+                    onSelect={() => handleSelectShotType(template.id)}
                   />
                 ))}
               </div>
@@ -953,11 +972,11 @@ export default function MarketplaceClient({
         </div>
       )}
 
-      {tab === 'movement' && (
+      {tab === 'motion_style' && (
         <div className="max-w-5xl space-y-3">
-          <p className="text-xs text-brand-text/40">The motion your model performs in the video.</p>
+          <p className="text-xs text-brand-text/40">Controls how the final image animates in video, including subject motion and shot energy.</p>
           {movementTemplates.length === 0 ? (
-            <p className="text-sm italic text-brand-text/25">No movement templates available.</p>
+            <p className="text-sm italic text-brand-text/25">No motion-style templates available.</p>
           ) : (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
@@ -969,9 +988,37 @@ export default function MarketplaceClient({
                     thumbnailUrl={getTemplatePrimaryImageUrl(template)}
                     badge={template.badge}
                     eager={index < EAGER_IMAGE_COUNT}
-                    isSelected={movementTemplateId === template.id}
+                    isSelected={motionStyleTemplateId === template.id}
                     isSaving={savingId === template.id}
-                    onSelect={() => handleSelectMovement(template.id)}
+                    onSelect={() => handleSelectMotionStyle(template.id)}
+                  />
+                ))}
+              </div>
+              <PaginationControls currentPage={currentPage} totalPages={totalPages} onPageChange={changePage} />
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === 'video_flow' && (
+        <div className="max-w-5xl space-y-3">
+          <p className="text-xs text-brand-text/40">Bundles short-form beats into a repeatable TikTok-style sequence, so one hook does not have to carry the whole ad.</p>
+          {videoFlowTemplates.length === 0 ? (
+            <p className="text-sm italic text-brand-text/25">No video-flow templates available.</p>
+          ) : (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+                {visibleTemplates.map((template, index) => (
+                  <MarketplaceCard
+                    key={template.id}
+                    label={template.title}
+                    description={template.description ?? undefined}
+                    thumbnailUrl={getTemplatePrimaryImageUrl(template)}
+                    badge={template.badge}
+                    eager={index < EAGER_IMAGE_COUNT}
+                    isSelected={videoFlowTemplateId === template.id}
+                    isSaving={savingId === template.id}
+                    onSelect={() => handleSelectVideoFlow(template.id)}
                   />
                 ))}
               </div>

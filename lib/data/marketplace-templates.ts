@@ -6,6 +6,22 @@ import type { MarketplaceTemplate, TemplateCategory } from '@/lib/types/marketpl
 
 type MarketplaceTemplateGroups = Record<TemplateCategory, MarketplaceTemplate[]>
 
+function normalizeTemplateCategory(category: string): TemplateCategory {
+  if (category === 'camera') return 'shot_type'
+  if (category === 'movement') return 'motion_style'
+  if (
+    category === 'avatar'
+    || category === 'background'
+    || category === 'shot_type'
+    || category === 'motion_style'
+    || category === 'video_flow'
+    || category === 'other'
+  ) {
+    return category
+  }
+  return 'other'
+}
+
 export const getPublishedMarketplaceTemplates = cache(async (): Promise<MarketplaceTemplate[]> => {
   const admin = createAdminClient()
   const { data, error } = await admin
@@ -26,13 +42,18 @@ export async function getPublishedMarketplaceTemplateGroups(): Promise<Marketpla
   const templates = await getPublishedMarketplaceTemplates()
 
   return templates.reduce<MarketplaceTemplateGroups>((groups, template) => {
-    groups[template.category].push(template)
+    const normalizedCategory = normalizeTemplateCategory(template.category)
+    groups[normalizedCategory].push({
+      ...template,
+      category: normalizedCategory,
+    })
     return groups
   }, {
     avatar: [],
     background: [],
-    camera: [],
-    movement: [],
+    shot_type: [],
+    motion_style: [],
+    video_flow: [],
     other: [],
   })
 }
@@ -49,8 +70,9 @@ export async function getMarketplaceTemplateDefaults() {
   return {
     avatarTemplateId: groups.avatar[0]?.id ?? '',
     backgroundTemplateId: groups.background[0]?.id ?? '',
-    cameraTemplateId: groups.camera[0]?.id ?? '',
-    movementTemplateId: groups.movement[0]?.id ?? '',
+    shotTypeTemplateId: groups.shot_type[0]?.id ?? '',
+    motionStyleTemplateId: groups.motion_style[0]?.id ?? '',
+    videoFlowTemplateId: groups.video_flow[0]?.id ?? '',
   }
 }
 

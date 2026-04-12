@@ -9,6 +9,7 @@ export interface Plan {
   /** Price in PHP centavos (e.g. 109900 = ₱1,099) */
   monthlyPriceCentavos: number
   tokensPerMonth: number
+  monthlyReleaseTranches: number
   storageGb: number
   rolloverDays: number
   /** PayMongo Plan ID — set after creating plans in PayMongo dashboard/API */

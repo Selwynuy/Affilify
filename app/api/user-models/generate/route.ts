@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { deductTokens, getTokenBalance } from '@/lib/billing/tokens'
+import { deductTokens, getTokenBalance, syncSubscriptionTokenAccrual } from '@/lib/billing/tokens'
 import { TOKEN_COSTS } from '@/lib/data/plans'
 import { logger } from '@/lib/logger'
 import { rateLimit } from '@/lib/db-rate-limit'
@@ -9,6 +9,7 @@ import { getPublishedMarketplaceTemplateById } from '@/lib/data/marketplace-temp
 import { getTemplateGenerationImageUrl } from '@/lib/marketplace-template-media'
 import { getGoogleVendorCostUsd, recordVendorCostEvent } from '@/lib/analytics/profitability'
 import { isUuid, isSafeHttpUrl, sanitizeText, verifySameOrigin } from '@/lib/security'
+import { StorageLimitError, assertStorageCapacity } from '@/lib/storage/quota'
 
 const GEMINI_MODEL = 'gemini-3.1-flash-image-preview'
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`
@@ -130,6 +131,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Token check before heavy work
+  await syncSubscriptionTokenAccrual(user.id)
   const balance = await getTokenBalance(user.id)
   if (balance < TOKEN_COSTS.model_gen) {
     return NextResponse.json(
@@ -240,6 +242,15 @@ export async function POST(req: NextRequest) {
 
   const admin = createAdminClient()
   const buffer = Buffer.from(b64, 'base64')
+
+  try {
+    await assertStorageCapacity(admin, user.id, buffer.byteLength)
+  } catch (error) {
+    if (error instanceof StorageLimitError) {
+      return NextResponse.json({ error: error.message }, { status: 409 })
+    }
+    throw error
+  }
 
   const { error: uploadError } = await admin.storage
     .from('generated')

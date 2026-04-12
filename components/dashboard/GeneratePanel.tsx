@@ -247,7 +247,7 @@ export function GeneratePanel({
   movementTemplates: MarketplaceTemplate[]
 }) {
   const notify = useNotify()
-  const { avatarConfig, backgroundConfig, cameraTemplateId, movementTemplateId, setAvatarConfig, setBackgroundConfig } = usePreferences()
+  const { avatarConfig, backgroundConfig, shotTypeTemplateId, motionStyleTemplateId, setAvatarConfig, setBackgroundConfig } = usePreferences()
   const { balance: tokenBalance, planId: contextPlanId, refreshBalance } = useTokens()
 
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -270,11 +270,11 @@ export function GeneratePanel({
   )
 
   // Local copies of template IDs — synced from context but overrideable per-run
-  const [localCameraId, setLocalCameraId] = useState(cameraTemplateId || cameraTemplates[0]?.id || '')
-  const [localMovementId, setLocalMovementId] = useState(movementTemplateId || movementTemplates[0]?.id || '')
+  const [localCameraId, setLocalCameraId] = useState(shotTypeTemplateId || cameraTemplates[0]?.id || '')
+  const [localMovementId, setLocalMovementId] = useState(motionStyleTemplateId || movementTemplates[0]?.id || '')
 
-  useEffect(() => { setLocalCameraId(cameraTemplateId) }, [cameraTemplateId])
-  useEffect(() => { setLocalMovementId(movementTemplateId) }, [movementTemplateId])
+  useEffect(() => { setLocalCameraId(shotTypeTemplateId) }, [shotTypeTemplateId])
+  useEffect(() => { setLocalMovementId(motionStyleTemplateId) }, [motionStyleTemplateId])
 
   useEffect(() => {
     fetch('/api/history').then((r) => r.json()).then((d) => { setHistoryRuns(d.runs ?? []); setHistoryLoaded(true) }).catch(() => setHistoryLoaded(true))
@@ -642,7 +642,7 @@ export function GeneratePanel({
                   REVIEW YOUR IMAGE
                 </h2>
                 <p className="text-xs text-brand-text/40 mt-1">
-                  Happy with it? Approve to create the video. Not happy? Regenerate free of charge.
+                  Happy with it? Approve to create the video. Not happy? Regenerate to create a new image result.
                 </p>
               </div>
 
@@ -685,7 +685,7 @@ export function GeneratePanel({
                     ))}
                     {availableModels.length < VIDEO_MODELS.length && (
                       <p className="text-[10px] text-brand-text/25 px-1">
-                        Higher-tier models are temporarily unavailable while subscriptions are offline.
+                        Higher-tier models require an active staggered model.
                       </p>
                     )}
                   </div>
@@ -757,7 +757,7 @@ export function GeneratePanel({
                   className="w-full h-10 rounded-xl border border-white/10 hover:border-brand-accent/40 bg-transparent hover:bg-brand-accent/5 text-sm text-brand-text/60 hover:text-brand-text transition-all flex items-center justify-center gap-2"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
-                  Regenerate free
+                  Regenerate image
                   <span className="flex items-center gap-0.5 text-[10px] text-brand-text/30 border border-white/8 rounded px-1.5 py-0.5 ml-1">
                     <Zap className="w-2.5 h-2.5" />{TOKEN_COSTS.image_gen}
                   </span>

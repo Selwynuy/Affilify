@@ -5,13 +5,15 @@ export const PLANS: Plan[] = [
     id: 'starter',
     name: 'Starter',
     monthlyPriceCentavos: 109900,   // ₱1,099/mo
-    tokensPerMonth: 4250,
+    tokensPerMonth: 4000,
+    monthlyReleaseTranches: 30,
     storageGb: 3,
     rolloverDays: 0,
     paymongoMonthlyPlanId: process.env.PAYMONGO_PLAN_STARTER ?? '',
     features: [
-      '4,250 tokens/month',
-      '~88 full video runs',
+      '4,000 tokens/month',
+      'Released daily in 30 tranches during launch',
+      '~100 Hailuo Fast 6s runs',
       'Standard models (Hailuo Fast, Wan 2.1)',
       '3 GB storage',
       'No rollover',
@@ -22,6 +24,7 @@ export const PLANS: Plan[] = [
     name: 'Growth',
     monthlyPriceCentavos: 219900,   // ₱2,199/mo
     tokensPerMonth: 9500,
+    monthlyReleaseTranches: 30,
     storageGb: 10,
     rolloverDays: 30,
     paymongoMonthlyPlanId: process.env.PAYMONGO_PLAN_GROWTH ?? '',
@@ -39,6 +42,7 @@ export const PLANS: Plan[] = [
     name: 'Pro',
     monthlyPriceCentavos: 499900,   // ₱4,999/mo
     tokensPerMonth: 22000,
+    monthlyReleaseTranches: 30,
     storageGb: 15,
     rolloverDays: 30,
     paymongoMonthlyPlanId: process.env.PAYMONGO_PLAN_PRO ?? '',
@@ -56,6 +60,7 @@ export const PLANS: Plan[] = [
     name: 'Business',
     monthlyPriceCentavos: 1099900,  // ₱10,999/mo
     tokensPerMonth: 60000,
+    monthlyReleaseTranches: 30,
     storageGb: 50,
     rolloverDays: 60,
     paymongoMonthlyPlanId: process.env.PAYMONGO_PLAN_BUSINESS ?? '',
@@ -94,7 +99,7 @@ const BILLING_SMOKE_PACK_ENABLED = process.env.NEXT_PUBLIC_ENABLE_BILLING_SMOKE_
 // Credit packs — one-time QRPH purchases (no subscription required)
 // Priced at a premium vs subscriptions: packs = convenience, subs = volume discount
 const BASE_CREDIT_PACKS: CreditPack[] = [
-  { id: 'spark',   name: 'Spark',   tokens: 200,   priceCentavos: 10000  }, // ₱100  — ₱0.500/token
+  { id: 'spark',   name: 'Spark',   tokens: 200,   priceCentavos: 9900   }, // ₱99   — ₱0.495/token
   { id: 'trial',   name: 'Trial',   tokens: 520,   priceCentavos: 24900  }, // ₱249  — ₱0.479/token
   { id: 'basic',   name: 'Basic',   tokens: 1500,  priceCentavos: 64900  }, // ₱649  — ₱0.433/token
   { id: 'creator', name: 'Creator', tokens: 4000,  priceCentavos: 149900 }, // ₱1,499 — ₱0.375/token

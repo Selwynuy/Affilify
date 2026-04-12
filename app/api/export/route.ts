@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { deductTokens, getTokenBalance, getUserPlanId, refundTokens } from '@/lib/billing/tokens'
+import { deductTokens, getTokenBalance, getUserPlanId, refundTokens, syncSubscriptionTokenAccrual } from '@/lib/billing/tokens'
 import { getAvailableModels, VIDEO_MODELS } from '@/lib/data/plans'
 import { logger } from '@/lib/logger'
 import { rateLimit } from '@/lib/db-rate-limit'
@@ -10,6 +10,7 @@ import type { VideoGenerationSettings } from '@/lib/video-generation'
 import { getVideoGenerationProfile, getVideoGenerationTokenCost, normalizeVideoGenerationSettings } from '@/lib/video-generation'
 import { recordVendorCostEvent } from '@/lib/analytics/profitability'
 import { isUuid, parseInteger, sanitizeText, verifySameOrigin } from '@/lib/security'
+import { assertStorageCapacity } from '@/lib/storage/quota'
 
 const REPLICATE_API_KEY = process.env.REPLICATE_API_KEY
 
@@ -218,6 +219,8 @@ async function archiveVideoToStorage(
   if (!isValidMp4) {
     throw new Error('Replicate returned a file that does not appear to be a valid MP4')
   }
+
+  await assertStorageCapacity(createAdminClient(), userId, videoBuffer.byteLength)
   const storagePath = `${userId}/${projectId}/video-${index + 1}-${Date.now()}.mp4`
 
   const admin = createAdminClient()
@@ -284,6 +287,7 @@ export async function POST(req: NextRequest) {
     return new Response(JSON.stringify({ error: 'motionPrompt required' }), { status: 400 })
   }
 
+  await syncSubscriptionTokenAccrual(user.id)
   const planId = await getUserPlanId(user.id)
   const availableModels = planId ? getAvailableModels(planId) : [VIDEO_MODELS[0]]
   const videoModel = availableModels.find((m) => m.id === videoModelId) ?? availableModels[0]

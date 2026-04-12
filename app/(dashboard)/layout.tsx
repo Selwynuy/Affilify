@@ -21,7 +21,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const supabase = await createClient()
   const { data: prefs } = await supabase
     .from('user_preferences')
-    .select('avatar_config, background_config, camera_template_id, movement_template_id')
+    .select('avatar_config, background_config, shot_type_template_id, motion_style_template_id, video_flow_template_id')
     .eq('user_id', session.user.id)
     .single()
 
@@ -29,8 +29,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const {
     avatar: avatarTemplates,
     background: backgroundTemplates,
-    camera: cameraTemplates,
-    movement: movementTemplates,
+    shot_type: shotTypeTemplates,
+    motion_style: motionStyleTemplates,
+    video_flow: videoFlowTemplates,
   } =
     await getPublishedMarketplaceTemplateGroups()
 
@@ -43,19 +44,25 @@ export default async function DashboardLayout({ children }: { children: React.Re
     ?? backgroundTemplates[0]
     ?? null
 
-  const preferredCameraTemplateId = typeof prefs?.camera_template_id === 'string'
-    ? prefs.camera_template_id
+  const preferredShotTypeTemplateId = typeof prefs?.shot_type_template_id === 'string'
+    ? prefs.shot_type_template_id
     : null
-  const preferredMovementTemplateId = typeof prefs?.movement_template_id === 'string'
-    ? prefs.movement_template_id
+  const preferredMotionStyleTemplateId = typeof prefs?.motion_style_template_id === 'string'
+    ? prefs.motion_style_template_id
+    : null
+  const preferredVideoFlowTemplateId = typeof prefs?.video_flow_template_id === 'string'
+    ? prefs.video_flow_template_id
     : null
 
-  const initialCameraTemplateId = cameraTemplates.some((template) => template.id === preferredCameraTemplateId)
-    ? preferredCameraTemplateId!
-    : templateDefaults.cameraTemplateId
-  const initialMovementTemplateId = movementTemplates.some((template) => template.id === preferredMovementTemplateId)
-    ? preferredMovementTemplateId!
-    : templateDefaults.movementTemplateId
+  const initialShotTypeTemplateId = shotTypeTemplates.some((template) => template.id === preferredShotTypeTemplateId)
+    ? preferredShotTypeTemplateId!
+    : templateDefaults.shotTypeTemplateId
+  const initialMotionStyleTemplateId = motionStyleTemplates.some((template) => template.id === preferredMotionStyleTemplateId)
+    ? preferredMotionStyleTemplateId!
+    : templateDefaults.motionStyleTemplateId
+  const initialVideoFlowTemplateId = videoFlowTemplates.some((template) => template.id === preferredVideoFlowTemplateId)
+    ? preferredVideoFlowTemplateId!
+    : templateDefaults.videoFlowTemplateId
 
   const initialAvatarConfig =
     (prefs?.avatar_config as AvatarConfig | null) ?? buildAvatarConfigFromTemplate(defaultAvatarTemplate)
@@ -67,8 +74,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
       <PreferencesProvider
         initialAvatarConfig={initialAvatarConfig}
         initialBackgroundConfig={initialBackgroundConfig}
-        initialCameraTemplateId={initialCameraTemplateId}
-        initialMovementTemplateId={initialMovementTemplateId}
+        initialShotTypeTemplateId={initialShotTypeTemplateId}
+        initialMotionStyleTemplateId={initialMotionStyleTemplateId}
+        initialVideoFlowTemplateId={initialVideoFlowTemplateId}
       >
         <div className="flex h-screen overflow-hidden bg-brand-bg">
           <Sidebar />

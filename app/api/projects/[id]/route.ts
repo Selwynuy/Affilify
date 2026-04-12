@@ -39,7 +39,7 @@ export async function GET(req: NextRequest, { params }: Params) {
   // Fetch videos
   const { data: videos } = await admin
     .from('project_videos')
-    .select('id, image_id, video_url, status, created_at')
+    .select('id, image_id, url, status, created_at')
     .eq('project_id', id)
     .order('created_at', { ascending: false })
 

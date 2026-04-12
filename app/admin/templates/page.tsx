@@ -13,7 +13,7 @@ function parseStatus(value?: string) {
 }
 
 function parseCategory(value?: string) {
-  return (['camera', 'movement', 'avatar', 'background', 'other'].includes(value ?? '') ? value : 'all') as TemplateCategory | 'all'
+  return (['shot_type', 'motion_style', 'video_flow', 'avatar', 'background', 'other'].includes(value ?? '') ? value : 'all') as TemplateCategory | 'all'
 }
 
 function parsePage(value?: string) {

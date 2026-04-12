@@ -17,7 +17,7 @@ export async function GET() {
 
   const { data } = await supabase
     .from('user_preferences')
-    .select('avatar_config, background_config, camera_template_id, movement_template_id')
+    .select('avatar_config, background_config, shot_type_template_id, motion_style_template_id, video_flow_template_id')
     .eq('user_id', user.id)
     .single()
 
@@ -39,8 +39,9 @@ export async function GET() {
   return NextResponse.json({
     avatar_config: data?.avatar_config ?? buildAvatarConfigFromTemplate(defaultAvatarTemplate),
     background_config: data?.background_config ?? buildBackgroundConfigFromTemplate(defaultBackgroundTemplate),
-    camera_template_id: data?.camera_template_id ?? null,
-    movement_template_id: data?.movement_template_id ?? null,
+    shot_type_template_id: data?.shot_type_template_id ?? null,
+    motion_style_template_id: data?.motion_style_template_id ?? null,
+    video_flow_template_id: data?.video_flow_template_id ?? null,
   })
 }
 
@@ -103,8 +104,9 @@ export async function POST(req: NextRequest) {
     update.background_config = null
   }
 
-  if ('camera_template_id' in body) update.camera_template_id = isUuid(body.camera_template_id) ? body.camera_template_id : null
-  if ('movement_template_id' in body) update.movement_template_id = isUuid(body.movement_template_id) ? body.movement_template_id : null
+  if ('shot_type_template_id' in body) update.shot_type_template_id = isUuid(body.shot_type_template_id) ? body.shot_type_template_id : null
+  if ('motion_style_template_id' in body) update.motion_style_template_id = isUuid(body.motion_style_template_id) ? body.motion_style_template_id : null
+  if ('video_flow_template_id' in body) update.video_flow_template_id = isUuid(body.video_flow_template_id) ? body.video_flow_template_id : null
 
   const { error } = await supabase
     .from('user_preferences')

@@ -48,6 +48,17 @@ interface Analytics {
     trackedJobs: number
     unpricedGoogleJobs: number
   }
+  billingControls: {
+    topupsEnabled: boolean
+    subscriptionsEnabled: boolean
+    capacity: {
+      fundsUsd: number | null
+      fundedTokenCostUsd: number
+      maxFundedTokens: number | null
+      outstandingTokens: number
+      remainingFundedTokens: number | null
+    }
+  }
   recentPayments: {
     pack_name: string
     amount_centavos: number
@@ -263,9 +274,58 @@ export default function AdminOverviewPage() {
                   <p className="text-[11px] text-white/25 mt-1">Rows with cost/value snapshots</p>
                 </div>
               </div>
+
+              <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-5 space-y-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/5 text-cyan-300">
+                  <CreditCard className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-white">
+                    {data?.billingControls.capacity.maxFundedTokens != null
+                      ? data.billingControls.capacity.remainingFundedTokens?.toLocaleString()
+                      : 'Unlimited'}
+                  </p>
+                  <p className="text-xs text-white/40 mt-0.5">Remaining funded tokens</p>
+                  <p className="text-[11px] text-white/25 mt-1">
+                    {data?.billingControls.capacity.fundsUsd != null
+                      ? `$${data.billingControls.capacity.fundsUsd.toFixed(2)} float at $${data.billingControls.capacity.fundedTokenCostUsd.toFixed(4)}/token`
+                      : 'No funding cap configured'}
+                  </p>
+                </div>
+              </div>
             </>
           )}
       </div>
+
+      {!loading && data && (
+        <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-6">
+          <div className="mb-4">
+            <h2 className="text-sm font-semibold text-white">Launch Funding Controls</h2>
+            <p className="text-xs text-white/40 mt-0.5">Operational token exposure based on funded float.</p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+            <div className="rounded-xl border border-white/8 bg-white/[0.02] p-4">
+              <p className="text-xs text-white/40">Top-ups</p>
+              <p className="text-lg font-bold text-white mt-1">{data.billingControls.topupsEnabled ? 'Enabled' : 'Paused'}</p>
+            </div>
+            <div className="rounded-xl border border-white/8 bg-white/[0.02] p-4">
+              <p className="text-xs text-white/40">Subscriptions</p>
+              <p className="text-lg font-bold text-white mt-1">{data.billingControls.subscriptionsEnabled ? 'Enabled' : 'Paused'}</p>
+            </div>
+            <div className="rounded-xl border border-white/8 bg-white/[0.02] p-4">
+              <p className="text-xs text-white/40">Outstanding token liability</p>
+              <p className="text-lg font-bold text-white mt-1">{data.billingControls.capacity.outstandingTokens.toLocaleString()}</p>
+            </div>
+            <div className="rounded-xl border border-white/8 bg-white/[0.02] p-4">
+              <p className="text-xs text-white/40">Funded capacity</p>
+              <p className="text-lg font-bold text-white mt-1">
+                {data.billingControls.capacity.maxFundedTokens?.toLocaleString() ?? 'Unlimited'}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {!loading && data && (
         <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-6">

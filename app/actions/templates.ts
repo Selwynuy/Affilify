@@ -37,12 +37,27 @@ function buildConfig(formData: FormData, category: TemplateCategory): TemplateCo
   const config: TemplateConfig = {}
 
   switch (category) {
-    case 'camera':
+    case 'shot_type':
       config.cameraAnglePrompt = (formData.get('config.cameraAnglePrompt') as string) ?? ''
       break
-    case 'movement':
+    case 'motion_style':
       config.promptFragment = (formData.get('config.promptFragment') as string) ?? ''
       break
+    case 'video_flow': {
+      config.flowSummary = (formData.get('config.flowSummary') as string) ?? ''
+      config.defaultStepId = (formData.get('config.defaultStepId') as string) ?? ''
+      const stepsJson = (formData.get('config.stepsJson') as string) ?? '[]'
+      try {
+        const parsed = JSON.parse(stepsJson)
+        if (!Array.isArray(parsed)) {
+          throw new Error('Video flow steps must be a JSON array')
+        }
+        config.steps = parsed
+      } catch {
+        throw new Error('Video flow steps JSON must be a valid array')
+      }
+      break
+    }
     case 'avatar':
       config.gender = (formData.get('config.gender') as string) ?? ''
       config.style  = (formData.get('config.style')  as string) ?? ''
@@ -115,7 +130,12 @@ export async function createTemplate(
   if (!fields.title)    return { error: 'Title is required' }
   if (!fields.category) return { error: 'Category is required' }
 
-  const config = buildConfig(formData, fields.category)
+  let config: TemplateConfig
+  try {
+    config = buildConfig(formData, fields.category)
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Invalid template config' }
+  }
 
   const admin = createAdminClient()
   const { data, error } = await admin
@@ -146,7 +166,12 @@ export async function updateTemplate(
   if (!fields.title)    return { error: 'Title is required' }
   if (!fields.category) return { error: 'Category is required' }
 
-  const config = buildConfig(formData, fields.category)
+  let config: TemplateConfig
+  try {
+    config = buildConfig(formData, fields.category)
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Invalid template config' }
+  }
 
   const admin = createAdminClient()
   const { error } = await admin

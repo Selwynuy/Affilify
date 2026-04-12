@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { deductTokens, getTokenBalance } from '@/lib/billing/tokens'
+import { deductTokens, getTokenBalance, syncSubscriptionTokenAccrual } from '@/lib/billing/tokens'
 import { TOKEN_COSTS } from '@/lib/data/plans'
 import { logger } from '@/lib/logger'
 import { rateLimit } from '@/lib/db-rate-limit'
@@ -13,6 +13,7 @@ import {
 } from '@/lib/data/marketplace-templates'
 import { resolveProjectThumbnailUrl } from '@/lib/projects/thumbnail'
 import { isUuid, sanitizeText, verifySameOrigin } from '@/lib/security'
+import { StorageLimitError, assertStorageCapacity } from '@/lib/storage/quota'
 
 const GEMINI_MODEL = 'gemini-3.1-flash-image-preview'
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`
@@ -118,6 +119,7 @@ export async function POST(req: NextRequest) {
   if (!projectId) return new Response(JSON.stringify({ error: 'projectId required' }), { status: 400 })
 
   // Token check
+  await syncSubscriptionTokenAccrual(user.id)
   const balance = await getTokenBalance(user.id)
   if (balance < TOKEN_COSTS.image_gen) {
     return new Response(JSON.stringify({ error: 'Insufficient tokens. Top up your balance to continue.' }), { status: 402 })
@@ -157,8 +159,8 @@ export async function POST(req: NextRequest) {
     return new Response(JSON.stringify({ error: 'No product images found for this project' }), { status: 400 })
   }
 
-  const { cameraTemplateId: defaultCameraTemplateId } = await getMarketplaceTemplateDefaults()
-  const selectedCameraTemplate = await getPublishedMarketplaceTemplateById(cameraTemplateId || defaultCameraTemplateId)
+  const { shotTypeTemplateId: defaultShotTypeTemplateId } = await getMarketplaceTemplateDefaults()
+  const selectedCameraTemplate = await getPublishedMarketplaceTemplateById(cameraTemplateId || defaultShotTypeTemplateId)
   const cameraAnglePrompt = getTemplateConfigValue(
     selectedCameraTemplate,
     'cameraAnglePrompt',
@@ -258,6 +260,16 @@ export async function POST(req: NextRequest) {
           const storagePath = `${user.id}/${projectId}/round-${generationRound}/generated-${i}-${Date.now()}.${ext}`
 
           const buffer = Buffer.from(b64, 'base64')
+          try {
+            await assertStorageCapacity(admin, user.id, buffer.byteLength)
+          } catch (error) {
+            const message = error instanceof StorageLimitError
+              ? error.message
+              : 'Storage limit check failed.'
+            controller.enqueue(encode({ type: 'image_error', index: i, error: message }))
+            continue
+          }
+
           await admin.storage.from('generated').upload(storagePath, buffer, { contentType: mimeType, upsert: true })
 
           const { data: imgRow } = await admin.from('project_images').insert({

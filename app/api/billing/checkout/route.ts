@@ -16,6 +16,8 @@ import { createClient } from '@/lib/supabase/server'
 import { createPaymentIntent, createQRPHPaymentMethod, attachQRPHPaymentMethod } from '@/lib/billing/paymongo'
 import { createBillingPayment } from '@/lib/billing/payments'
 import { getCreditPack } from '@/lib/data/plans'
+import { getBillingControls } from '@/lib/billing/launch-control'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { logger } from '@/lib/logger'
 import { rateLimit } from '@/lib/db-rate-limit'
 import { sanitizeText, verifySameOrigin } from '@/lib/security'
@@ -49,6 +51,14 @@ export async function POST(req: NextRequest) {
   const pack = getCreditPack(packId)
   if (!pack) {
     return NextResponse.json({ error: 'Invalid pack' }, { status: 400 })
+  }
+
+  const billingControls = await getBillingControls(createAdminClient())
+  if (!billingControls.topupsEnabled) {
+    return NextResponse.json(
+      { error: billingControls.topupMessage ?? 'Token top-ups are temporarily unavailable.' },
+      { status: 409 },
+    )
   }
 
   try {

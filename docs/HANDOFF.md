@@ -1,5 +1,164 @@
 # Handoff
 
+## 2026-04-11 Video export / template taxonomy pass
+
+### Current state
+
+This pass focused on two areas:
+
+- video export reliability for Replicate on Vercel Hobby
+- reducing template/UX confusion by separating still-image composition from video animation behavior
+
+Video export state now:
+
+- `/api/export` is confirmed reaching Replicate successfully.
+- A real test submitted a prediction and got back to the archive phase.
+- The observed failure was not Replicate; it was Supabase Storage missing the `videos` bucket.
+- Token refund on video failure worked correctly.
+- `app/api/export/route.ts` now uses `maxDuration = 300`, which is valid for Vercel Hobby deployments.
+
+Template/UX state now:
+
+- Runtime and admin naming were moved toward:
+  - `shot_type` = still-image framing/composition at image-generation time
+  - `motion_style` = how the final generated image animates at video time
+- A Supabase migration was added to rename marketplace template categories from `camera` / `movement` to `shot_type` / `motion_style`.
+- New `user_preferences` columns were added in that migration:
+  - `shot_type_template_id`
+  - `motion_style_template_id`
+- The app was updated to read/write those new preference keys.
+- A backward-compatibility normalization layer was added in `lib/data/marketplace-templates.ts` so the app will not crash if the DB still contains old `camera` / `movement` category values before or during migration rollout.
+
+Prompting state now:
+
+- Video export prompting no longer depends on avatar gender or background room labels.
+- Export prompting is now grounded in the final generated image and the selected motion template.
+- The prompt explicitly tells Replicate to preserve:
+  - exact model identity and styling
+  - existing products
+  - existing composition/scene
+- The prompt explicitly forbids:
+  - extra people
+  - extra products
+  - extra props/background elements
+  - products being added behind/beside/on the model
+
+### Files touched in this pass
+
+- `app/api/export/route.ts`
+- `app/api/generate/route.ts`
+- `app/api/generate/route.test.ts`
+- `app/api/preferences/route.ts`
+- `app/(dashboard)/layout.tsx`
+- `app/(dashboard)/dashboard/page.tsx`
+- `app/(dashboard)/templates/page.tsx`
+- `app/(dashboard)/templates/_components/marketplace-client.tsx`
+- `app/admin/templates/page.tsx`
+- `app/admin/templates/_components/template-form.tsx`
+- `app/admin/templates/_components/templates-table.tsx`
+- `app/actions/templates.ts`
+- `components/dashboard/GeneratePanel.tsx`
+- `components/studio/StudioCanvas.tsx`
+- `lib/context/preferences-context.tsx`
+- `lib/data/marketplace-templates.ts`
+- `lib/types/marketplace.ts`
+- `lib/types/preferences.ts`
+- `lib/video-prompt.ts`
+- `supabase/migrations/20260411_shot_type_motion_style_templates.sql`
+
+### Verification done
+
+- `npm run verify:replicate-versions`
+  - passed
+  - pinned versions matched Replicate `latest_version` for the currently active video models
+
+- `npm run build`
+  - passed after lowering `/api/export` `maxDuration` from `660` to `300` for Vercel Hobby
+
+- Real export test
+  - Replicate prediction submission succeeded
+  - polling advanced far enough to reach archive/upload
+  - failure was `Bucket not found` for Supabase Storage bucket `videos`
+  - token refund path executed successfully
+
+### Infra/setup notes
+
+1. Supabase Storage must contain a bucket named `videos`.
+   - Current code uploads finished Replicate outputs there and then calls `getPublicUrl(...)`.
+   - For the current app behavior, this bucket should be public.
+
+2. The new migration was manually corrected during rollout.
+   - The initial migration used `COALESCE(uuid, text)` and failed in SQL Editor.
+   - The working SQL used explicit UUID casts / safe conversion for old preference columns.
+   - If the repo migration file is used later in another environment, re-check that SQL before applying.
+
+3. Runtime compatibility was added intentionally.
+   - Even if DB rows still use old category names (`camera`, `movement`), the app now normalizes them to `shot_type` / `motion_style` on read.
+
+### Product/UX decision reached
+
+The previous model was confusing because:
+
+- image generation had a camera/angle control
+- video generation had movement templates
+- some movement templates were actually camera-direction templates
+- this caused conflicts between established still-image framing and video-stage motion instructions
+
+The intended model going forward is:
+
+- `Shot Type`
+  - image-generation stage
+  - controls framing/composition of the generated still image
+- `Motion Style`
+  - video-generation stage
+  - controls how the final generated image animates
+  - should not behave like a second framing control
+
+This means:
+
+- old camera-heavy “movement” templates likely need review/reclassification
+- anything that mainly defines framing should become `shot_type`
+- `motion_style` templates should mostly describe in-frame animation, subject motion, editorial energy, and only subtle camera behavior
+
+### Remaining follow-up items
+
+1. Create the Supabase Storage bucket:
+   - name: `videos`
+   - public bucket: enabled
+
+2. Review the migration file in-repo:
+   - `supabase/migrations/20260411_shot_type_motion_style_templates.sql`
+   - update it so the preference-copy SQL uses explicit UUID-safe conversion, matching what was run manually
+
+3. Audit current templates in Supabase:
+   - identify which old `movement` templates are really framing/shot templates
+   - move or rewrite those into `shot_type`
+   - leave only true animation behaviors in `motion_style`
+
+4. Content pass still needed:
+   - rewrite `motion_style` template prompts so they do not conflict with the generated image framing
+   - avoid strong reframing terms like reveal/pan/snap/settle unless deliberately supported
+
+5. Naming cleanup is still incomplete in some component internals:
+   - several variables still use legacy local names like `cameraTemplates` / `movementTemplates`
+   - runtime behavior is okay, but code readability is not fully cleaned up
+
+6. Push status:
+   - one local commit exists for the Hobby timeout fix:
+     - `894b91d` `Lower export timeout for Vercel Hobby`
+   - push failed in this environment because Git SSH auth is not configured (`Permission denied (publickey)`)
+
+### Practical next step
+
+When work resumes, do this in order:
+
+1. Confirm the `videos` bucket exists and rerun one real export.
+2. Review current `motion_style` template content in Supabase.
+3. Split/rewrite templates so:
+   - `shot_type` owns still-image composition
+   - `motion_style` owns animation only
+4. If needed, do a second prompt-builder pass after template cleanup.
+
 ## Current state
 
 Two areas changed recently and are now in a better state:

@@ -122,7 +122,7 @@ describe('POST /api/generate', () => {
     rateLimit.mockResolvedValue({ allowed: true, resetAt: Date.now() + 1_000 })
     getTokenBalance.mockResolvedValue(1000)
     deductTokens.mockResolvedValue(true)
-    getMarketplaceTemplateDefaults.mockResolvedValue({ cameraTemplateId: 'cam_1' })
+    getMarketplaceTemplateDefaults.mockResolvedValue({ shotTypeTemplateId: 'cam_1' })
     getPublishedMarketplaceTemplateById.mockResolvedValue({})
     getTemplateConfigValue.mockReturnValue('eye level')
 

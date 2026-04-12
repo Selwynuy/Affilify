@@ -199,12 +199,12 @@ function ConfigSection({
   category: TemplateCategory
   config: Record<string, unknown>
 }) {
-  if (category === 'camera') {
+  if (category === 'shot_type') {
     return (
       <FieldGroup
         name="config.cameraAnglePrompt"
-        label="Camera Angle Prompt"
-        hint="Describe the camera viewpoint only, not the model's body. Be explicit about camera height, direction, and framing."
+        label="Shot Type Prompt"
+        hint="Describe the still-image framing and composition. This shapes the generated image before video animation."
         defaultValue={(config.cameraAnglePrompt as string) ?? ''}
         multiline
         required
@@ -212,16 +212,46 @@ function ConfigSection({
     )
   }
 
-  if (category === 'movement') {
+  if (category === 'motion_style') {
     return (
       <FieldGroup
         name="config.promptFragment"
-        label="Movement Prompt"
-        hint="Describes the model's motion for video generation. No speaking or lip-sync."
+        label="Motion Style Prompt"
+        hint="Describe how the final generated image should animate. Focus on subject motion and shot energy; avoid conflicting reframing directives."
         defaultValue={(config.promptFragment as string) ?? ''}
         multiline
         required
       />
+    )
+  }
+
+  if (category === 'video_flow') {
+    return (
+      <div className="space-y-4">
+        <FieldGroup
+          name="config.flowSummary"
+          label="Flow Summary"
+          hint="Short operator-facing summary of what this sequence is for, such as hook + demo + payoff."
+          defaultValue={(config.flowSummary as string) ?? ''}
+          multiline
+          required
+        />
+        <FieldGroup
+          name="config.defaultStepId"
+          label="Default Step ID"
+          hint="Which step should the app preselect first when this flow is chosen."
+          defaultValue={(config.defaultStepId as string) ?? ''}
+          required
+        />
+        <FieldGroup
+          name="config.stepsJson"
+          label="Flow Steps JSON"
+          hint="Ordered array of steps with id, title, beatGoal, shotTypeTemplateId, motionStyleTemplateId, durationSec, and promptFragment."
+          defaultValue={JSON.stringify(config.steps ?? [], null, 2)}
+          multiline
+          required
+        />
+      </div>
     )
   }
 
@@ -441,7 +471,7 @@ export default function TemplateForm({ template }: { template?: MarketplaceTempl
   const action = isEdit ? updateTemplate : createTemplate
   const [state, formAction, isPending] = useActionState(action, {})
 
-  const [category, setCategory] = useState<TemplateCategory>(template?.category ?? 'camera')
+  const [category, setCategory] = useState<TemplateCategory>(template?.category ?? 'shot_type')
   const [imageUrl, setImageUrl] = useState(getTemplatePrimaryImageUrl(template) ?? '')
   const isImageTemplate = category === 'avatar' || category === 'background'
 
@@ -484,8 +514,9 @@ export default function TemplateForm({ template }: { template?: MarketplaceTempl
                 onChange={(event) => setCategory(event.target.value as TemplateCategory)}
                 className={inputCls}
               >
-                <option value="camera" className="bg-[#0d0d14] text-white">Camera</option>
-                <option value="movement" className="bg-[#0d0d14] text-white">Movement</option>
+                <option value="shot_type" className="bg-[#0d0d14] text-white">Shot Type</option>
+                <option value="motion_style" className="bg-[#0d0d14] text-white">Motion Style</option>
+                <option value="video_flow" className="bg-[#0d0d14] text-white">Video Flow</option>
                 <option value="avatar" className="bg-[#0d0d14] text-white">Avatar</option>
                 <option value="background" className="bg-[#0d0d14] text-white">Background</option>
                 <option value="other" className="bg-[#0d0d14] text-white">Other</option>
@@ -591,7 +622,7 @@ export default function TemplateForm({ template }: { template?: MarketplaceTempl
 
         {isEdit && template!.status === 'published' && (
           <a
-            href={`/templates?tab=${template!.category === 'movement' ? 'movement' : template!.category === 'avatar' ? 'avatar' : template!.category === 'background' ? 'background' : 'camera'}`}
+            href={`/templates?tab=${template!.category === 'motion_style' ? 'motion_style' : template!.category === 'video_flow' ? 'video_flow' : template!.category === 'avatar' ? 'avatar' : template!.category === 'background' ? 'background' : 'shot_type'}`}
             target="_blank"
             rel="noopener noreferrer"
             className="flex w-full items-center gap-2 rounded-xl border border-white/8 bg-white/[0.02] px-3 py-2.5 text-sm text-white/50 transition-colors hover:text-white/80"

@@ -29,7 +29,8 @@ import { cn } from "@/lib/utils";
 import { useNotify } from "@/components/feedback/use-notify";
 import { usePreferences } from "@/lib/context/preferences-context";
 import type { MarketplaceTemplate } from "@/lib/types/marketplace";
-import type { AvatarConfig, BackgroundConfig } from "@/lib/types/preferences";
+import type { VideoFlowStepConfig } from "@/lib/types/marketplace";
+import type { AvatarConfig } from "@/lib/types/preferences";
 import {
   buildAvatarConfigFromTemplate,
   buildBackgroundConfigFromTemplate,
@@ -38,8 +39,15 @@ import {
 } from "@/lib/preferences";
 import { getTemplatePrimaryImageUrl } from "@/lib/marketplace-template-media";
 import { VIDEO_MODELS } from "@/lib/data/plans";
+import { TOKEN_COSTS } from "@/lib/data/plans";
 import type { VideoModel } from "@/lib/types/billing";
 import { buildFinalImageVideoPrompt } from "@/lib/video-prompt";
+import {
+  getDefaultVideoFlowStep,
+  getVideoFlowStepById,
+  getVideoFlowSteps,
+  getVideoFlowSummary,
+} from "@/lib/video-flow";
 import {
   getAllVideoOptionChoices,
   getDefaultVideoGenerationSettings,
@@ -80,6 +88,13 @@ interface GeneratedCard extends CardBase {
   videoUrl?: string;
   videoFileName?: string;
   videoStorageFileId?: string | null;
+  generatedVideos?: GeneratedVideoResult[];
+  flowGroupId?: string;
+  flowTitle?: string;
+  flowStepId?: string;
+  flowStepTitle?: string;
+  flowShotTypeTemplateId?: string;
+  flowMotionStyleTemplateId?: string;
   isLoading?: boolean;
   hasError?: boolean;
 }
@@ -121,8 +136,25 @@ interface PersistedGeneratedCard extends CardBase {
   videoUrl?: string;
   videoFileName?: string;
   videoStorageFileId?: string | null;
+  generatedVideos?: GeneratedVideoResult[];
+  flowGroupId?: string;
+  flowTitle?: string;
+  flowStepId?: string;
+  flowStepTitle?: string;
+  flowShotTypeTemplateId?: string;
+  flowMotionStyleTemplateId?: string;
   isLoading?: boolean;
   hasError?: boolean;
+}
+
+interface GeneratedVideoResult {
+  id: string;
+  title: string;
+  stepId?: string;
+  stepTitle?: string;
+  videoUrl: string;
+  fileName: string;
+  storageFileId?: string | null;
 }
 
 interface PersistedStudioState {
@@ -134,10 +166,19 @@ interface PersistedStudioState {
   pan: { x: number; y: number };
 }
 
+interface StudioProjectVideoRecord {
+  id: string;
+  image_id: string | null;
+  url: string | null;
+  status: string;
+  created_at: string;
+}
+
 export interface StudioCanvasProps {
   userId: string;
   cameraTemplates: MarketplaceTemplate[];
   movementTemplates: MarketplaceTemplate[];
+  videoFlowTemplates: MarketplaceTemplate[];
   avatarTemplates: MarketplaceTemplate[];
   backgroundTemplates: MarketplaceTemplate[];
 }
@@ -148,6 +189,12 @@ const CARD_W = 196;
 const CARD_IMG_H = 320;
 const CARD_FOOT_H = 56;
 const CARD_H = CARD_IMG_H + CARD_FOOT_H;
+/** Space above the top flow beat for the Flow Group header bar (px). Must be ≥ rendered header height or cards overlap the title. */
+const FLOW_GROUP_TOP_RESERVE = 76;
+/** Extra padding below the bottom edge of beat cards (shadows / footer / rounding extend past CARD_H). */
+const FLOW_GROUP_BOTTOM_PAD = 32;
+/** Horizontal inset around the flow beat row. */
+const FLOW_GROUP_PAD_X = 18;
 const PORT_R = 9; // port circle radius
 const DRAG_THRESH = 5;
 const GAP = 22;
@@ -372,6 +419,79 @@ async function saveStudioState(
   });
 }
 
+async function hydrateGeneratedCardVideos(
+  cards: Array<PersistedProductCard | PersistedGeneratedCard>,
+): Promise<Array<PersistedProductCard | PersistedGeneratedCard>> {
+  const generatedCards = cards.filter(
+    (card): card is PersistedGeneratedCard =>
+      card.type === "generated" && !!card.projectId && !!card.generatedImageId,
+  );
+
+  if (generatedCards.length === 0) return cards;
+
+  const projectIds = [...new Set(generatedCards.map((card) => card.projectId!))];
+  const videosByProject = new Map<string, StudioProjectVideoRecord[]>();
+
+  await Promise.all(
+    projectIds.map(async (projectId) => {
+      try {
+        const res = await fetch(`/api/projects/${projectId}`, {
+          method: "GET",
+          credentials: "same-origin",
+        });
+        if (!res.ok) return;
+        const data = (await res.json()) as { videos?: StudioProjectVideoRecord[] };
+        videosByProject.set(projectId, data.videos ?? []);
+      } catch {
+        // Keep local state if the project lookup fails.
+      }
+    }),
+  );
+
+  return cards.map((card) => {
+    if (
+      card.type !== "generated" ||
+      !card.projectId ||
+      !card.generatedImageId
+    ) {
+      return card;
+    }
+
+    const matchingVideos = (videosByProject.get(card.projectId) ?? [])
+      .filter(
+        (video) =>
+          video.status === "ready" &&
+          video.image_id === card.generatedImageId &&
+          !!video.url,
+      )
+      .sort((left, right) => right.created_at.localeCompare(left.created_at));
+
+    if (matchingVideos.length === 0) return card;
+
+    const generatedVideos: GeneratedVideoResult[] = matchingVideos.map(
+      (video, index) => ({
+        id: video.id,
+        title:
+          card.flowStepTitle && index === 0
+            ? `${card.flowStepTitle} clip`
+            : `Clip ${index + 1}`,
+        stepId: card.flowStepId,
+        stepTitle: card.flowStepTitle,
+        videoUrl: video.url!,
+        fileName: `genetrify-video-${index + 1}.mp4`,
+        storageFileId: null,
+      }),
+    );
+
+    return {
+      ...card,
+      videoUrl: generatedVideos[0]?.videoUrl ?? card.videoUrl,
+      videoFileName: generatedVideos[0]?.fileName ?? card.videoFileName,
+      generatedVideos,
+    };
+  });
+}
+
 async function clearStudioState(storageKey: string) {
   const db = await openStudioDb();
   return new Promise<void>((resolve, reject) => {
@@ -394,17 +514,14 @@ function revokeProductObjectUrls(cards: Card[]) {
 function buildStudioVideoPrompt(
   basePrompt: string,
   movementTemplate: MarketplaceTemplate | undefined,
-  avatarConfig: AvatarConfig | null,
-  backgroundConfig: BackgroundConfig | null,
+  flowStep?: VideoFlowStepConfig | null,
 ) {
-  void avatarConfig;
-  void backgroundConfig;
-  return buildFinalImageVideoPrompt(basePrompt, movementTemplate);
+  return buildFinalImageVideoPrompt(basePrompt, movementTemplate, flowStep);
 }
 
 // ── StatusChip ────────────────────────────────────────────────────────────────
 
-type TemplateCategory = "avatar" | "background" | "camera" | "movement";
+type TemplateCategory = "avatar" | "background" | "shot_type" | "motion_style" | "video_flow";
 
 function StatusChip({
   icon: Icon,
@@ -452,6 +569,7 @@ function TemplatePanel({
   backgroundTemplates,
   cameraTemplates,
   movementTemplates,
+  videoFlowTemplates,
   onClose,
 }: {
   category: TemplateCategory;
@@ -459,6 +577,7 @@ function TemplatePanel({
   backgroundTemplates: MarketplaceTemplate[];
   cameraTemplates: MarketplaceTemplate[];
   movementTemplates: MarketplaceTemplate[];
+  videoFlowTemplates: MarketplaceTemplate[];
   onClose: () => void;
 }) {
   const {
@@ -466,21 +585,22 @@ function TemplatePanel({
     setAvatarConfig,
     backgroundConfig,
     setBackgroundConfig,
-    cameraTemplateId,
-    setCameraTemplateId,
-    movementTemplateId,
-    setMovementTemplateId,
+    shotTypeTemplateId: cameraTemplateId,
+    setShotTypeTemplateId: setCameraTemplateId,
+    motionStyleTemplateId: movementTemplateId,
+    setMotionStyleTemplateId: setMovementTemplateId,
+    videoFlowTemplateId,
+    setVideoFlowTemplateId,
   } = usePreferences();
 
   const notify = useNotify();
   const [isPending, startTransition] = useTransition();
   const [savingId, setSavingId] = useState<string | null>(null);
   const [userModels, setUserModels] = useState<UserModel[]>([]);
-  const [userModelsLoading, setUserModelsLoading] = useState(false);
+  const [userModelsLoading, setUserModelsLoading] = useState(category === "avatar");
 
   useEffect(() => {
     if (category !== "avatar") return;
-    setUserModelsLoading(true);
     fetch("/api/user-models")
       .then((r) => r.json())
       .then((d) => setUserModels(d.models ?? []))
@@ -528,8 +648,8 @@ function TemplatePanel({
     setSavingId(id);
     setCameraTemplateId(id);
     savePrefs({
-      camera_template_id: id,
-      movement_template_id: movementTemplateId,
+      shot_type_template_id: id,
+      motion_style_template_id: movementTemplateId,
     });
     onClose();
   }
@@ -539,8 +659,20 @@ function TemplatePanel({
     setSavingId(id);
     setMovementTemplateId(id);
     savePrefs({
-      camera_template_id: cameraTemplateId,
-      movement_template_id: id,
+      shot_type_template_id: cameraTemplateId,
+      motion_style_template_id: id,
+    });
+    onClose();
+  }
+
+  function handleSelectVideoFlow(id: string) {
+    if (isPending) return;
+    setSavingId(id);
+    setVideoFlowTemplateId(id);
+    savePrefs({
+      shot_type_template_id: cameraTemplateId,
+      motion_style_template_id: movementTemplateId,
+      video_flow_template_id: id,
     });
     onClose();
   }
@@ -619,8 +751,9 @@ function TemplatePanel({
   > = {
     avatar: { label: "Avatar", icon: User },
     background: { label: "Background", icon: Layers },
-    camera: { label: "Camera", icon: Camera },
-    movement: { label: "Movement", icon: Wind },
+    shot_type: { label: "Shot Type", icon: Camera },
+    motion_style: { label: "Motion Style", icon: Wind },
+    video_flow: { label: "Video Flow", icon: Film },
   };
   const meta = CATEGORY_META[category];
 
@@ -635,13 +768,16 @@ function TemplatePanel({
       ? visibleAvatars
       : category === "background"
         ? backgroundTemplates
-        : category === "camera"
+        : category === "shot_type"
           ? cameraTemplates
-          : movementTemplates;
+          : category === "motion_style"
+            ? movementTemplates
+            : videoFlowTemplates;
 
   function isSelected(t: MarketplaceTemplate) {
-    if (category === "camera") return t.id === cameraTemplateId;
-    if (category === "movement") return t.id === movementTemplateId;
+    if (category === "shot_type") return t.id === cameraTemplateId;
+    if (category === "motion_style") return t.id === movementTemplateId;
+    if (category === "video_flow") return t.id === videoFlowTemplateId;
     if (category === "avatar")
       return avatarConfig?.type === "preset" && avatarConfig.presetId === t.id;
     if (category === "background")
@@ -655,8 +791,9 @@ function TemplatePanel({
   function handleSelect(t: MarketplaceTemplate) {
     if (category === "avatar") handleSelectAvatar(t);
     if (category === "background") handleSelectBackground(t);
-    if (category === "camera") handleSelectCamera(t.id);
-    if (category === "movement") handleSelectMovement(t.id);
+    if (category === "shot_type") handleSelectCamera(t.id);
+    if (category === "motion_style") handleSelectMovement(t.id);
+    if (category === "video_flow") handleSelectVideoFlow(t.id);
   }
 
   return (
@@ -948,6 +1085,7 @@ function CardComp({
   onPtrDown,
   onPortPtrDown,
   onVideoOpen,
+  onRegenerateBeat,
   onDelete,
   onPreview,
 }: {
@@ -957,6 +1095,7 @@ function CardComp({
   onPtrDown: (e: React.PointerEvent, id: string) => void;
   onPortPtrDown: (e: React.PointerEvent, id: string, side: Side) => void;
   onVideoOpen?: (c: GeneratedCard) => void;
+  onRegenerateBeat?: (c: GeneratedCard) => void;
   onDelete: (id: string) => void;
   onPreview?: (url: string, label: string) => void;
 }) {
@@ -1147,6 +1286,11 @@ function CardComp({
                     {(card as GeneratedCard).prompt}
                   </p>
                 )}
+                {(card as GeneratedCard).flowStepTitle && (
+                  <p className="text-[10px] text-brand-accent/75 font-semibold">
+                    {(card as GeneratedCard).flowStepTitle}
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -1169,6 +1313,16 @@ function CardComp({
             title="Create video"
           >
             <Film size={13} />
+          </button>
+        )}
+        {card.type === "generated" && !card.isLoading && (card as GeneratedCard).flowGroupId && (
+          <button
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={() => onRegenerateBeat?.(card as GeneratedCard)}
+            className="p-2 rounded-xl bg-[#1b1b2e]/90 border border-white/10 text-white/50 hover:text-amber-300 hover:bg-amber-500/10 hover:border-amber-400/20 transition-all backdrop-blur-sm"
+            title="Regenerate beat image"
+          >
+            <RefreshCw size={13} />
           </button>
         )}
         {card.type === "generated" &&
@@ -1232,6 +1386,7 @@ function CtxPanel({
   promptInputRef,
   onPromptChange,
   onGenerate,
+  onOpenFlowPicker,
   onDelete,
 }: {
   selCards: Card[];
@@ -1242,21 +1397,23 @@ function CtxPanel({
   promptInputRef?: React.RefObject<HTMLTextAreaElement | null>;
   onPromptChange: (v: string) => void;
   onGenerate: () => void;
+  onOpenFlowPicker: () => void;
   onDelete: () => void;
 }) {
   const canGenerate =
     selProducts.length > 0 || selCards.some((c) => c.type === "generated");
   const isRegenerate =
     selProducts.length === 0 && selCards.some((c) => c.type === "generated");
+  const canGenerateFlow = selProducts.length > 0;
 
   return (
-    <div className="w-full sm:w-[272px] bg-[#12121b] border border-white/[0.09] rounded-2xl shadow-[0_24px_64px_rgba(0,0,0,0.7)] p-3">
+    <div className="w-full sm:w-[288px] bg-[#17171f] border border-white/15 rounded-2xl shadow-[0_24px_64px_rgba(0,0,0,0.7)] ring-1 ring-white/[0.06] p-3">
       <div className="flex items-center gap-2 mb-2.5">
         <div className="flex -space-x-2">
           {selCards.slice(0, 3).map((c, i) => (
             <div
               key={c.id}
-              className="w-5 h-5 rounded-full overflow-hidden border-[1.5px] border-[#12121b] bg-white/10"
+              className="w-5 h-5 rounded-full overflow-hidden border-[1.5px] border-[#17171f] bg-white/10"
               style={{ zIndex: 3 - i }}
             >
               {c.imageUrl && (
@@ -1265,7 +1422,7 @@ function CtxPanel({
             </div>
           ))}
         </div>
-        <span className="flex-1 text-[10px] text-white/30 leading-snug">
+        <span className="flex-1 text-[11px] leading-snug text-zinc-200">
           {isRegenerate
             ? "Edit prompt and Go to regenerate"
             : selProducts.length === 0
@@ -1277,18 +1434,18 @@ function CtxPanel({
         <button
           type="button"
           onClick={onDelete}
-          className="shrink-0 p-1 rounded-lg text-white/25 hover:text-red-400 hover:bg-red-500/10 transition-all"
+          className="shrink-0 p-1 rounded-lg text-zinc-400 hover:text-red-400 hover:bg-red-500/10 transition-all"
           title="Delete selected"
         >
           <Trash2 size={12} />
         </button>
       </div>
-      <div className="flex gap-2 items-end">
+      <div className="flex flex-col gap-2.5">
         <textarea
           ref={promptInputRef}
           value={prompt}
           onChange={(e) => onPromptChange(e.target.value)}
-          rows={2}
+          rows={3}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
@@ -1302,21 +1459,40 @@ function CtxPanel({
                 ? "Describe the outfit..."
                 : "Describe the product..."
           }
-          className="flex-1 min-w-0 max-h-40 min-h-[44px] resize-none overflow-hidden bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2 text-xs leading-relaxed text-white placeholder-white/20 outline-none focus:border-brand-accent/40 transition-colors font-mono [scrollbar-width:thin] [scrollbar-color:rgba(168,85,247,0.5)_transparent]"
+          className="w-full min-h-[72px] max-h-40 resize-y overflow-y-auto bg-zinc-900/80 border border-white/15 rounded-xl px-3 py-2 text-xs leading-relaxed text-zinc-100 placeholder:text-zinc-500 outline-none focus:border-brand-accent/55 focus:ring-1 focus:ring-brand-accent/25 transition-colors font-mono [scrollbar-width:thin] [scrollbar-color:rgba(192,132,252,0.75)_rgba(255,255,255,0.08)]"
         />
-        <button
-          onClick={onGenerate}
-          disabled={isGenerating || !canGenerate}
-          className={cn(
-            "shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all",
-            isGenerating || !canGenerate
-              ? "bg-white/[0.04] text-white/[0.18] cursor-not-allowed"
-              : "bg-brand-accent text-white hover:bg-brand-accent-hover shadow-[0_0_18px_rgba(139,92,246,0.38)]",
+        <div className="flex w-full gap-2 items-stretch">
+          <button
+            type="button"
+            onClick={onGenerate}
+            disabled={isGenerating || !canGenerate}
+            className={cn(
+              "shrink-0 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all",
+              isGenerating || !canGenerate
+                ? "bg-white/[0.04] text-white/[0.18] cursor-not-allowed"
+                : "bg-brand-accent text-white hover:bg-brand-accent-hover shadow-[0_0_18px_rgba(139,92,246,0.38)]",
+            )}
+          >
+            <Sparkles size={11} />
+            {isGenerating ? "..." : "Go"}
+          </button>
+          {canGenerateFlow && (
+            <button
+              type="button"
+              onClick={onOpenFlowPicker}
+              disabled={isGenerating}
+              className={cn(
+                "flex flex-1 items-center justify-center gap-1.5 rounded-xl border px-4 py-2.5 text-xs font-semibold transition-all",
+                isGenerating
+                  ? "border-white/[0.06] bg-white/[0.03] text-white/[0.18] cursor-not-allowed"
+                  : "border-brand-accent/45 bg-brand-accent/12 text-white hover:bg-brand-accent/18 hover:border-brand-accent/55",
+              )}
+            >
+              <Film size={11} />
+              {isGenerating ? "..." : "Flow"}
+            </button>
           )}
-        >
-          <Sparkles size={11} />
-          {isGenerating ? "..." : "Go"}
-        </button>
+        </div>
       </div>
       {errorMessage ? (
         <p className="mt-2 text-[11px] leading-relaxed text-red-300/80">
@@ -1333,6 +1509,7 @@ export function StudioCanvas({
   userId,
   cameraTemplates,
   movementTemplates,
+  videoFlowTemplates,
   avatarTemplates,
   backgroundTemplates,
 }: StudioCanvasProps) {
@@ -1340,8 +1517,9 @@ export function StudioCanvas({
   const {
     avatarConfig,
     backgroundConfig,
-    cameraTemplateId,
-    movementTemplateId,
+    shotTypeTemplateId: cameraTemplateId,
+    motionStyleTemplateId: movementTemplateId,
+    videoFlowTemplateId,
   } = usePreferences();
   const [activeTemplatePanel, setActiveTemplatePanel] =
     useState<TemplateCategory | null>(null);
@@ -1372,13 +1550,12 @@ export function StudioCanvas({
     label: string;
   } | null>(null);
   const [videoMovement, setVideoMovement] = useState(movementTemplateId);
+  const [videoFlowId, setVideoFlowId] = useState(videoFlowTemplateId);
+  const [videoFlowStepId, setVideoFlowStepId] = useState<string>("");
+  const [showFlowPickerModal, setShowFlowPickerModal] = useState(false);
   const [isCreatingVideo, setIsCreatingVideo] = useState(false);
   const [videoError, setVideoError] = useState("");
-  const [videoResult, setVideoResult] = useState<{
-    videoUrl: string;
-    fileName: string;
-    storageFileId?: string | null;
-  } | null>(null);
+  const [videoResults, setVideoResults] = useState<GeneratedVideoResult[]>([]);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isMouseInCanvas, setIsMouseInCanvas] = useState(false);
@@ -1447,10 +1624,12 @@ export function StudioCanvas({
     let cancelled = false;
 
     loadStudioState(storageKey)
-      .then((saved) => {
+      .then(async (saved) => {
         if (cancelled || storageKeyRef.current !== storageKey) return;
         if (!saved) return;
-        const restoredCards = saved.cards.map((card) => {
+        const hydratedCards = await hydrateGeneratedCardVideos(saved.cards);
+        if (cancelled || storageKeyRef.current !== storageKey) return;
+        const restoredCards = hydratedCards.map((card) => {
           if (card.type === "product") {
             return {
               ...card,
@@ -1509,6 +1688,13 @@ export function StudioCanvas({
           videoUrl: card.videoUrl,
           videoFileName: card.videoFileName,
           videoStorageFileId: card.videoStorageFileId,
+          generatedVideos: card.generatedVideos,
+          flowGroupId: card.flowGroupId,
+          flowTitle: card.flowTitle,
+          flowStepId: card.flowStepId,
+          flowStepTitle: card.flowStepTitle,
+          flowShotTypeTemplateId: card.flowShotTypeTemplateId,
+          flowMotionStyleTemplateId: card.flowMotionStyleTemplateId,
           isLoading: card.isLoading,
           hasError: card.hasError,
         } satisfies PersistedGeneratedCard;
@@ -1886,6 +2072,64 @@ export function StudioCanvas({
   );
 
   // ── Generate ──────────────────────────────────────────────────────────────────
+  const uploadStudioProducts = useCallback(async (
+    productCards: ProductCard[],
+    existingProjectId?: string,
+  ) => {
+    const fd = new FormData();
+    fd.append("usePreferences", "true");
+    if (existingProjectId) {
+      fd.append("projectId", existingProjectId);
+    }
+    productCards.forEach((c) => fd.append("products", c.file));
+
+    const upRes = await fetch("/api/upload", { method: "POST", body: fd });
+    if (!upRes.ok) {
+      const error = await upRes.json().catch(() => null);
+      throw new Error(error?.error ?? "Upload failed");
+    }
+
+    return await upRes.json() as { projectId: string; projectName?: string };
+  }, []);
+
+  const generateStudioImage = useCallback(async ({
+    projectId,
+    productDescription,
+    shotTypeId,
+  }: {
+    projectId: string;
+    productDescription: string;
+    shotTypeId: string;
+  }) => {
+    const genRes = await fetch("/api/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        projectId,
+        productDescription,
+        cameraTemplateId: shotTypeId,
+      }),
+    });
+    if (!genRes.ok) {
+      const error = await genRes.json().catch(() => null);
+      throw new Error(error?.error ?? "Generate failed");
+    }
+
+    let imageUrl = "";
+    let generatedImageId: string | undefined;
+    for await (const evt of readNDJSON(genRes)) {
+      if (
+        evt.type === "image" &&
+        (evt as { image?: { id?: string; url?: string } }).image?.url
+      ) {
+        imageUrl = (evt as { image: { url: string } }).image.url;
+        generatedImageId = (evt as { image: { id?: string } }).image.id;
+      }
+    }
+
+    return { imageUrl, generatedImageId };
+  }, []);
+
   const handleGenerate = useCallback(async () => {
     setGenerateError("");
 
@@ -1936,45 +2180,15 @@ export function StudioCanvas({
     setIsGenerating(true);
 
     try {
-      const fd = new FormData();
-      fd.append("usePreferences", "true");
-      if (resolvedProject.projectId) {
-        fd.append("projectId", resolvedProject.projectId);
-      }
-      productCards.forEach((c) => fd.append("products", c.file));
-
-      const upRes = await fetch("/api/upload", { method: "POST", body: fd });
-      if (!upRes.ok) {
-        const error = await upRes.json().catch(() => null);
-        throw new Error(error?.error ?? "Upload failed");
-      }
-      const { projectId, projectName } = await upRes.json();
-
-      const genRes = await fetch("/api/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          projectId,
-          productDescription: normalizedPrompt,
-          cameraTemplateId,
-        }),
+      const { projectId, projectName } = await uploadStudioProducts(
+        productCards,
+        resolvedProject.projectId,
+      );
+      const { imageUrl, generatedImageId } = await generateStudioImage({
+        projectId,
+        productDescription: normalizedPrompt,
+        shotTypeId: cameraTemplateId,
       });
-      if (!genRes.ok) {
-        const error = await genRes.json().catch(() => null);
-        throw new Error(error?.error ?? "Generate failed");
-      }
-
-      let imageUrl = "";
-      let generatedImageId: string | undefined;
-      for await (const evt of readNDJSON(genRes)) {
-        if (
-          evt.type === "image" &&
-          (evt as { image?: { id?: string; url?: string } }).image?.url
-        ) {
-          imageUrl = (evt as { image: { url: string } }).image.url;
-          generatedImageId = (evt as { image: { id?: string } }).image.id;
-        }
-      }
       setCards((prev) =>
         prev.map((c) =>
           c.type === "product" && sourceIds.includes(c.id)
@@ -2009,7 +2223,169 @@ export function StudioCanvas({
     } finally {
       setIsGenerating(false);
     }
-  }, [prompt, cameraTemplateId, notify]);
+  }, [prompt, cameraTemplateId, generateStudioImage, notify, uploadStudioProducts]);
+
+  const handleGenerateFlow = useCallback(async () => {
+    setGenerateError("");
+
+    const expanded = expandGroup(selectedRef.current, connectionsRef.current);
+    const productCards = cardsRef.current.filter(
+      (c) => expanded.has(c.id) && c.type === "product",
+    ) as ProductCard[];
+
+    if (!productCards.length) return;
+    const flowTemplate =
+      videoFlowTemplates.find((template) => template.id === videoFlowId) ?? null;
+    const flowSteps = getVideoFlowSteps(flowTemplate);
+
+    if (!flowTemplate || flowSteps.length === 0) {
+      setGenerateError("Select a video flow first.");
+      return;
+    }
+
+    const normalizedPrompt = prompt.trim();
+    const resolvedProject = resolveStudioProject(productCards, cardsRef.current);
+    if (resolvedProject.error) {
+      setGenerateError(resolvedProject.error);
+      return;
+    }
+
+    const bounds = selBounds(cardsRef.current, selectedRef.current);
+    const flowGroupId = uid();
+    const baseX = bounds ? bounds.right + GAP + 24 : 120;
+    const baseY = bounds ? bounds.top : 80;
+    const sourceIds = productCards.map((c) => c.id);
+
+    const tempCards = flowSteps.map((step, index) => ({
+      id: `${flowGroupId}-${step.id}`,
+      type: "generated" as const,
+      x: baseX + index * (CARD_W + GAP),
+      y: baseY + 36,
+      imageUrl: "",
+      prompt: normalizedPrompt,
+      sourceIds,
+      projectId: resolvedProject.projectId,
+      projectName: resolvedProject.projectName,
+      flowGroupId,
+      flowTitle: flowTemplate.title,
+      flowStepId: step.id,
+      flowStepTitle: step.title,
+      flowShotTypeTemplateId: step.shotTypeTemplateId,
+      flowMotionStyleTemplateId: step.motionStyleTemplateId,
+      isLoading: true,
+    } satisfies GeneratedCard));
+
+    setCards((prev) => [...prev, ...tempCards]);
+    setSelectedIds(new Set(tempCards.map((card) => card.id)));
+    setIsGenerating(true);
+
+    try {
+      const { projectId, projectName } = await uploadStudioProducts(
+        productCards,
+        resolvedProject.projectId,
+      );
+
+      setCards((prev) =>
+        prev.map((c) =>
+          c.type === "product" && sourceIds.includes(c.id)
+            ? { ...c, projectId, projectName }
+            : c.type === "generated" && c.flowGroupId === flowGroupId
+              ? { ...c, projectId, projectName }
+              : c,
+        ),
+      );
+
+      for (const step of flowSteps) {
+        const shotTypeId = step.shotTypeTemplateId ?? cameraTemplateId;
+        const { imageUrl, generatedImageId } = await generateStudioImage({
+          projectId,
+          productDescription: normalizedPrompt,
+          shotTypeId,
+        });
+
+        setCards((prev) =>
+          prev.map((c) =>
+            c.type === "generated" && c.flowGroupId === flowGroupId && c.flowStepId === step.id
+              ? {
+                  ...c,
+                  imageUrl,
+                  projectId,
+                  projectName,
+                  generatedImageId,
+                  isLoading: false,
+                  hasError: !imageUrl,
+                }
+              : c,
+          ),
+        );
+      }
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Flow generation failed";
+      setGenerateError(message);
+      notify.error({ title: "Flow generation failed", description: message });
+      setCards((prev) =>
+        prev.map((c) =>
+          c.type === "generated" && c.flowGroupId === flowGroupId
+            ? { ...c, isLoading: false, hasError: true }
+            : c,
+        ),
+      );
+    } finally {
+      setIsGenerating(false);
+    }
+  }, [
+    cameraTemplateId,
+    generateStudioImage,
+    notify,
+    prompt,
+    uploadStudioProducts,
+    videoFlowId,
+    videoFlowTemplates,
+  ]);
+
+  const regenerateFlowBeat = useCallback(async (card: GeneratedCard) => {
+    if (!card.flowStepId || !card.projectId) return;
+    setGenerateError("");
+    setIsGenerating(true);
+    setCards((prev) =>
+      prev.map((item) =>
+        item.type === "generated" && item.id === card.id
+          ? { ...item, isLoading: true, hasError: false }
+          : item,
+      ),
+    );
+
+    try {
+      const shotTypeId = card.flowShotTypeTemplateId ?? cameraTemplateId;
+      const { imageUrl, generatedImageId } = await generateStudioImage({
+        projectId: card.projectId,
+        productDescription: card.prompt,
+        shotTypeId,
+      });
+
+      setCards((prev) =>
+        prev.map((item) =>
+          item.type === "generated" && item.id === card.id
+            ? {
+                ...item,
+                imageUrl,
+                generatedImageId,
+                isLoading: false,
+                hasError: !imageUrl,
+              }
+            : item,
+        ),
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Beat regeneration failed";
+      setGenerateError(message);
+      notify.error({ title: "Beat regeneration failed", description: message });
+    } finally {
+      setIsGenerating(false);
+    }
+  }, [cameraTemplateId, generateStudioImage, notify]);
 
   // ── Card ops ──────────────────────────────────────────────────────────────────
   const deleteCard = useCallback((id: string) => {
@@ -2042,7 +2418,7 @@ export function StudioCanvas({
     setPrompt("");
     setVideoCard(null);
     setVideoError("");
-    setVideoResult(null);
+    setVideoResults([]);
     clearStudioState(storageKeyRef.current).catch(() => {});
   }, []);
 
@@ -2094,10 +2470,244 @@ export function StudioCanvas({
     : "Choose BG";
   const cameraLabel =
     cameraTemplates.find((t) => t.id === cameraTemplateId)?.title ??
-    "Choose camera";
+    "Choose shot type";
   const movementLabel =
     movementTemplates.find((t) => t.id === movementTemplateId)?.title ??
-    "Choose movement";
+    "Choose motion style";
+  const selectedVideoFlow =
+    videoFlowTemplates.find((template) => template.id === videoFlowId) ?? null;
+  const selectedVideoFlowSteps = getVideoFlowSteps(selectedVideoFlow);
+  const selectedVideoFlowStep =
+    getVideoFlowStepById(selectedVideoFlow, videoFlowStepId) ??
+    getDefaultVideoFlowStep(selectedVideoFlow);
+  const selectedVideoFlowSummary = getVideoFlowSummary(selectedVideoFlow);
+  const selectedFlowClipCount = selectedVideoFlowSteps.length > 0 ? selectedVideoFlowSteps.length : 1;
+  const selectedFlowTokenCost = selectedVideoTokenCost * selectedFlowClipCount;
+  const flowOptions = videoFlowTemplates.map((template) => {
+    const beatCount = Math.max(1, getVideoFlowSteps(template).length);
+    return {
+      id: template.id,
+      title: template.title,
+      description: template.description,
+      beatCount,
+      imageCost: TOKEN_COSTS.image_gen * beatCount,
+      videoCost: selectedVideoTokenCost * beatCount,
+    };
+  });
+  const selectedFlowOption =
+    flowOptions.find((option) => option.id === videoFlowId) ?? flowOptions[0] ?? null;
+
+  const flowGroups = Array.from(
+    cards.reduce((groups, card) => {
+      if (card.type !== "generated" || !card.flowGroupId) return groups;
+      const existing = groups.get(card.flowGroupId) ?? [];
+      existing.push(card);
+      groups.set(card.flowGroupId, existing);
+      return groups;
+    }, new Map<string, GeneratedCard[]>()),
+  ).map(([groupId, groupCards]) => {
+    const left = Math.min(...groupCards.map((card) => card.x)) - FLOW_GROUP_PAD_X;
+    const top = Math.min(...groupCards.map((card) => card.y)) - FLOW_GROUP_TOP_RESERVE;
+    const right = Math.max(...groupCards.map((card) => card.x + CARD_W)) + FLOW_GROUP_PAD_X;
+    const bottom =
+      Math.max(...groupCards.map((card) => card.y + CARD_H)) + FLOW_GROUP_BOTTOM_PAD;
+    return {
+      groupId,
+      cards: groupCards,
+      title: groupCards[0]?.flowTitle ?? "Flow",
+      left,
+      top,
+      width: right - left,
+      height: bottom - top,
+      isReady: groupCards.every((card) => !card.isLoading && !card.hasError && Boolean(card.imageUrl)),
+    };
+  });
+
+  useEffect(() => {
+    setVideoMovement(movementTemplateId);
+  }, [movementTemplateId]);
+
+  useEffect(() => {
+    setVideoFlowId(videoFlowTemplateId);
+  }, [videoFlowTemplateId]);
+
+  useEffect(() => {
+    const defaultStep = getDefaultVideoFlowStep(selectedVideoFlow);
+    setVideoFlowStepId(defaultStep?.id ?? "");
+  }, [selectedVideoFlow]);
+
+  const exportSingleVideoClip = useCallback(async ({
+    targetCard,
+    motionPrompt,
+    title,
+    stepId,
+    stepTitle,
+  }: {
+    targetCard: GeneratedCard;
+    motionPrompt: string;
+    title: string;
+    stepId?: string;
+    stepTitle?: string;
+  }): Promise<GeneratedVideoResult> => {
+    if (!targetCard.projectId || !targetCard.generatedImageId || !targetCard.imageUrl) {
+      throw new Error(
+        "This generated image is missing export metadata. Regenerate it before creating a video.",
+      );
+    }
+
+    const exportRes = await fetch("/api/export", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        projectId: targetCard.projectId,
+        imageIds: [targetCard.generatedImageId],
+        imageUrls: [targetCard.imageUrl],
+        motionPrompt,
+        videoModelId: selectedVideoModel.id,
+        ...selectedVideoSettings,
+      }),
+    });
+
+    if (!exportRes.ok) {
+      const error = await exportRes.json().catch(() => null);
+      if (exportRes.status === 402) {
+        throw new Error(error?.error ?? "Insufficient tokens. Please top up and try again.");
+      }
+      throw new Error(error?.error ?? "Video generation failed");
+    }
+
+    let createdVideo: {
+      videoUrl: string;
+      filename: string;
+      storageFileId?: string | null;
+    } | null = null;
+
+    for await (const event of readNDJSON(exportRes)) {
+      if (event.type === "video") {
+        createdVideo = event.video as {
+          videoUrl: string;
+          filename: string;
+          storageFileId?: string | null;
+        };
+      } else if (event.type === "video_error") {
+        throw new Error(
+          typeof event.error === "string"
+            ? event.error
+            : "Video generation failed",
+        );
+      }
+    }
+
+    if (!createdVideo) {
+      throw new Error("Video generation did not return a result");
+    }
+
+    return {
+      id: `${stepId ?? "clip"}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      title,
+      stepId,
+      stepTitle,
+      videoUrl: createdVideo.videoUrl,
+      fileName: createdVideo.filename,
+      storageFileId: createdVideo.storageFileId,
+    };
+  }, [
+    selectedVideoModel.id,
+    selectedVideoSettings,
+  ]);
+
+  const createFlowVideos = useCallback(async (groupId: string) => {
+    const groupCards = cardsRef.current.filter(
+      (card): card is GeneratedCard =>
+        card.type === "generated" && card.flowGroupId === groupId,
+    );
+    if (!groupCards.length) return;
+
+    const incomplete = groupCards.some(
+      (card) => !card.generatedImageId || !card.imageUrl || card.isLoading || card.hasError,
+    );
+    if (incomplete) {
+      setGenerateError("Finish or regenerate all beat images before creating flow videos.");
+      return;
+    }
+
+    setIsCreatingVideo(true);
+    setVideoError("");
+    setVideoResults([]);
+
+    try {
+      const sortedCards = [...groupCards].sort((left, right) => left.x - right.x);
+      const clips: GeneratedVideoResult[] = [];
+
+      for (const card of sortedCards) {
+        const movementTemplate = movementTemplates.find(
+          (template) => template.id === card.flowMotionStyleTemplateId,
+        ) ?? movementTemplates.find((template) => template.id === videoMovement);
+
+        const flowStep: VideoFlowStepConfig | null = card.flowStepId
+          ? {
+              id: card.flowStepId,
+              title: card.flowStepTitle ?? "Beat",
+              promptFragment: selectedVideoFlowSteps.find((step) => step.id === card.flowStepId)?.promptFragment,
+              beatGoal: selectedVideoFlowSteps.find((step) => step.id === card.flowStepId)?.beatGoal,
+            }
+          : null;
+
+        const clip = await exportSingleVideoClip({
+          targetCard: card,
+          motionPrompt: buildStudioVideoPrompt(card.prompt, movementTemplate, flowStep),
+          title: `${card.flowTitle ?? "Flow"} · ${card.flowStepTitle ?? "Beat"}`,
+          stepId: card.flowStepId,
+          stepTitle: card.flowStepTitle,
+        });
+        clips.push(clip);
+        setVideoResults([...clips]);
+      }
+
+      setCards((prev) =>
+        prev.map((card) =>
+          card.type === "generated" && card.flowGroupId === groupId
+            ? {
+                ...card,
+                generatedVideos: clips.filter((clip) => clip.stepId === card.flowStepId),
+                videoUrl: clips.find((clip) => clip.stepId === card.flowStepId)?.videoUrl ?? card.videoUrl,
+                videoFileName: clips.find((clip) => clip.stepId === card.flowStepId)?.fileName ?? card.videoFileName,
+                videoStorageFileId: clips.find((clip) => clip.stepId === card.flowStepId)?.storageFileId ?? card.videoStorageFileId,
+              }
+            : card,
+        ),
+      );
+
+      // Open the video modal: `videoResults` only render inside `{videoCard && (...)}`, so batch
+      // flow export must set a card or the three clips never appear in the UI.
+      const firstBeat = sortedCards[0];
+      setVideoCard(firstBeat);
+      setVideoPrompt(firstBeat.prompt);
+      if (firstBeat.flowMotionStyleTemplateId) {
+        setVideoMovement(firstBeat.flowMotionStyleTemplateId);
+      }
+      setVideoFlowStepId(firstBeat.flowStepId ?? "");
+      setVideoResults(clips);
+
+      notify.success({
+        title: "Flow videos ready",
+        description: "All reviewed beats have been exported to video.",
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Flow video export failed";
+      setVideoError(message);
+      notify.error({ title: "Flow video export failed", description: message });
+    } finally {
+      setIsCreatingVideo(false);
+    }
+  }, [
+    exportSingleVideoClip,
+    movementTemplates,
+    notify,
+    selectedVideoFlowSteps,
+    videoMovement,
+  ]);
 
   const handleCreateVideo = useCallback(async () => {
     if (
@@ -2113,82 +2723,67 @@ export function StudioCanvas({
 
     setIsCreatingVideo(true);
     setVideoError("");
-    setVideoResult(null);
+    setVideoResults([]);
 
     try {
-      const movementTemplate = movementTemplates.find(
-        (template) => template.id === videoMovement,
-      );
-      const motionPrompt = buildStudioVideoPrompt(
-        videoPrompt || videoCard.prompt,
-        movementTemplate,
-        avatarConfig,
-        backgroundConfig,
-      );
-      const exportRes = await fetch("/api/export", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          projectId: videoCard.projectId,
-          imageIds: [videoCard.generatedImageId],
-          imageUrls: [videoCard.imageUrl],
-          motionPrompt,
-          videoModelId: selectedVideoModel.id,
-          ...selectedVideoSettings,
-        }),
-      });
+      const clips: GeneratedVideoResult[] = [];
 
-      if (!exportRes.ok) {
-        const error = await exportRes.json().catch(() => null);
-        if (exportRes.status === 402) {
-          throw new Error(error?.error ?? "Insufficient tokens. Please top up and try again.");
-        }
-        throw new Error(error?.error ?? "Video generation failed");
-      }
-
-      let createdVideo: {
-        videoUrl: string;
-        filename: string;
-        storageFileId?: string | null;
-      } | null = null;
-      for await (const event of readNDJSON(exportRes)) {
-        if (event.type === "video") {
-          createdVideo = event.video as {
-            videoUrl: string;
-            filename: string;
-            storageFileId?: string | null;
-          };
-        } else if (event.type === "video_error") {
-          // Surface the exact message — includes refund confirmation when applicable
-          throw new Error(
-            typeof event.error === "string"
-              ? event.error
-              : "Video generation failed",
+      if (selectedVideoFlowSteps.length > 0) {
+        for (const step of selectedVideoFlowSteps) {
+          const stepMotionTemplate = movementTemplates.find(
+            (template) => template.id === step.motionStyleTemplateId,
+          ) ?? movementTemplates.find((template) => template.id === videoMovement);
+          const motionPrompt = buildStudioVideoPrompt(
+            videoPrompt || videoCard.prompt,
+            stepMotionTemplate,
+            step,
           );
+        const clip = await exportSingleVideoClip({
+          targetCard: videoCard,
+          motionPrompt,
+          title: `${selectedVideoFlow?.title ?? "Flow"} · ${step.title}`,
+          stepId: step.id,
+            stepTitle: step.title,
+          });
+          clips.push(clip);
+          setVideoResults([...clips]);
         }
+      } else {
+        const movementTemplate = movementTemplates.find(
+          (template) => template.id === videoMovement,
+        );
+        const motionPrompt = buildStudioVideoPrompt(
+          videoPrompt || videoCard.prompt,
+          movementTemplate,
+          selectedVideoFlowStep,
+        );
+        const clip = await exportSingleVideoClip({
+          targetCard: videoCard,
+          motionPrompt,
+          title: selectedVideoFlowStep?.title ?? "Single clip",
+          stepId: selectedVideoFlowStep?.id,
+          stepTitle: selectedVideoFlowStep?.title,
+        });
+        clips.push(clip);
+        setVideoResults([clip]);
       }
 
-      if (!createdVideo) {
-        throw new Error("Video generation did not return a result");
-      }
-
-      setVideoResult({
-        videoUrl: createdVideo.videoUrl,
-        fileName: createdVideo.filename,
-        storageFileId: createdVideo.storageFileId,
-      });
       notify.success({
-        title: "Video ready",
-        description: "Your generated video is ready for preview and download.",
+        title: clips.length > 1 ? "Flow ready" : "Video ready",
+        description:
+          clips.length > 1
+            ? "Your flow clips are ready for preview and download."
+            : "Your generated video is ready for preview and download.",
       });
       setCards((prev) =>
         prev.map((card) =>
-          card.id === videoCard.id
+          card.type === "generated" && card.id === videoCard.id
             ? {
                 ...card,
-                videoUrl: createdVideo.videoUrl,
-                videoFileName: createdVideo.filename,
-                videoStorageFileId: createdVideo.storageFileId ?? null,
+                videoUrl: clips[0]?.videoUrl ?? card.videoUrl,
+                videoFileName: clips[0]?.fileName ?? card.videoFileName,
+                videoStorageFileId: clips[0]?.storageFileId ?? card.videoStorageFileId,
+                generatedVideos: clips,
               }
             : card,
         ),
@@ -2202,12 +2797,12 @@ export function StudioCanvas({
       setIsCreatingVideo(false);
     }
   }, [
-    avatarConfig,
-    backgroundConfig,
     movementTemplates,
     notify,
-    selectedVideoSettings,
-    selectedVideoModel.id,
+    exportSingleVideoClip,
+    selectedVideoFlow,
+    selectedVideoFlowSteps,
+    selectedVideoFlowStep,
     videoCard,
     videoMovement,
     videoPrompt,
@@ -2221,6 +2816,53 @@ export function StudioCanvas({
     setSelectedVideoSettings((current) =>
       updateVideoGenerationSettings(selectedVideoModel, current, key, value as never),
     );
+  }
+
+  function applyVideoFlowStep(stepId: string) {
+    const step = getVideoFlowStepById(selectedVideoFlow, stepId);
+    if (!step) return;
+
+    setVideoFlowStepId(step.id);
+
+    if (step.motionStyleTemplateId) {
+      setVideoMovement(step.motionStyleTemplateId);
+    }
+
+    if (typeof step.durationSec === "number") {
+      const durationSec = step.durationSec;
+      setSelectedVideoSettings((current) =>
+        updateVideoGenerationSettings(
+          selectedVideoModel,
+          current,
+          "duration",
+          durationSec,
+        ),
+      );
+    }
+  }
+
+  function handleSelectVideoFlow(flowId: string) {
+    setVideoFlowId(flowId);
+    const flow = videoFlowTemplates.find((template) => template.id === flowId) ?? null;
+    const defaultStep = getDefaultVideoFlowStep(flow);
+
+    if (defaultStep) {
+      setVideoFlowStepId(defaultStep.id);
+      if (defaultStep.motionStyleTemplateId) {
+        setVideoMovement(defaultStep.motionStyleTemplateId);
+      }
+      if (typeof defaultStep.durationSec === "number") {
+        const durationSec = defaultStep.durationSec;
+        setSelectedVideoSettings((current) =>
+          updateVideoGenerationSettings(
+            selectedVideoModel,
+            current,
+            "duration",
+            durationSec,
+          ),
+        );
+      }
+    }
   }
 
   const renderConnections = () => {
@@ -2356,30 +2998,30 @@ export function StudioCanvas({
               </button>
               <button
                 type="button"
-                onClick={() => setActiveTemplatePanel((p) => (p === "camera" ? null : "camera"))}
+                onClick={() => setActiveTemplatePanel((p) => (p === "shot_type" ? null : "shot_type"))}
                 className={cn(
                   "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium border transition-all select-none cursor-pointer",
-                  activeTemplatePanel === "camera"
+                  activeTemplatePanel === "shot_type"
                     ? "bg-brand-accent/15 border-brand-accent/35 text-brand-accent"
                     : "bg-white/4 border-white/8 text-white/55 hover:bg-white/[0.07] hover:border-white/[0.14] hover:text-white/75",
                 )}
               >
                 <Camera size={11} />
-                <span>Angle</span>
+                <span>Shot</span>
                 <RefreshCw size={9} className="opacity-60" />
               </button>
               <button
                 type="button"
-                onClick={() => setActiveTemplatePanel((p) => (p === "movement" ? null : "movement"))}
+                onClick={() => setActiveTemplatePanel((p) => (p === "motion_style" ? null : "motion_style"))}
                 className={cn(
                   "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium border transition-all select-none cursor-pointer",
-                  activeTemplatePanel === "movement"
+                  activeTemplatePanel === "motion_style"
                     ? "bg-brand-accent/15 border-brand-accent/35 text-brand-accent"
                     : "bg-white/4 border-white/8 text-white/55 hover:bg-white/[0.07] hover:border-white/[0.14] hover:text-white/75",
                 )}
               >
                 <Wind size={11} />
-                <span>Movement</span>
+                <span>Motion</span>
                 <RefreshCw size={9} className="opacity-60" />
               </button>
             </div>
@@ -2523,6 +3165,51 @@ export function StudioCanvas({
           </svg>
 
           {/* Cards */}
+          {flowGroups.map((group) => (
+            <div
+              key={group.groupId}
+              data-flow-chrome
+              className="absolute rounded-[28px] border border-brand-accent/20 bg-brand-accent/[0.04] shadow-[0_16px_48px_rgba(0,0,0,0.35)]"
+              style={{
+                left: group.left,
+                top: group.top,
+                width: group.width,
+                height: group.height,
+                /* Above SVG connections (z-5), below cards (z-10) — was z-1 so chrome sat under wires and felt unclickable */
+                zIndex: 6,
+              }}
+            >
+              <div
+                className="flex items-center justify-between gap-3 px-4 py-3 border-b border-brand-accent/15 bg-[#120f1d] rounded-t-[28px]"
+                style={{ minHeight: FLOW_GROUP_TOP_RESERVE }}
+              >
+                <div>
+                  <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-brand-accent/70">Flow Group</p>
+                  <p className="text-sm font-semibold text-white">{group.title}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-white/40">
+                    {group.cards.length} beats
+                  </span>
+                  <button
+                    type="button"
+                    disabled={!group.isReady || isCreatingVideo}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={() => createFlowVideos(group.groupId)}
+                    className={cn(
+                      "rounded-xl px-3 py-2 text-[11px] font-semibold transition-all",
+                      !group.isReady || isCreatingVideo
+                        ? "bg-white/[0.04] text-white/[0.2] cursor-not-allowed"
+                        : "bg-brand-accent text-white hover:bg-brand-accent-hover shadow-[0_0_18px_rgba(139,92,246,0.32)]",
+                    )}
+                  >
+                    {isCreatingVideo ? "Creating..." : `Create Flow Videos · ${group.cards.length * selectedVideoTokenCost}`}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+
           {cards.map((card) => (
             <CardComp
               key={card.id}
@@ -2535,25 +3222,35 @@ export function StudioCanvas({
                 card.type === "generated"
                   ? (c) => {
                       const generatedCard = c as GeneratedCard;
+                      const defaultFlow =
+                        videoFlowTemplates.find((template) => template.id === videoFlowTemplateId) ?? null;
+                      const defaultFlowStep = getDefaultVideoFlowStep(defaultFlow);
                       setVideoCard(generatedCard);
                       setVideoPrompt(generatedCard.prompt);
                       setVideoMovement(movementTemplateId);
+                      setVideoFlowId(defaultFlow?.id ?? "");
+                      setVideoFlowStepId(defaultFlowStep?.id ?? "");
                       setVideoError("");
-                      setVideoResult(
-                        generatedCard.videoUrl
-                          ? {
-                              videoUrl: generatedCard.videoUrl,
-                              fileName:
-                                generatedCard.videoFileName ??
-                                "genetrify-video.mp4",
-                              storageFileId:
-                                generatedCard.videoStorageFileId ?? null,
-                            }
-                          : null,
+                      setVideoResults(
+                        generatedCard.generatedVideos && generatedCard.generatedVideos.length > 0
+                          ? generatedCard.generatedVideos
+                          : generatedCard.videoUrl
+                            ? [{
+                                id: `legacy-${generatedCard.id}`,
+                                title: "Latest clip",
+                                videoUrl: generatedCard.videoUrl,
+                                fileName:
+                                  generatedCard.videoFileName ??
+                                  "genetrify-video.mp4",
+                                storageFileId:
+                                  generatedCard.videoStorageFileId ?? null,
+                              }]
+                            : [],
                       );
                     }
                   : undefined
               }
+              onRegenerateBeat={regenerateFlowBeat}
               onDelete={deleteCard}
               onPreview={(url, label) => setPreviewImage({ url, label })}
             />
@@ -2602,6 +3299,7 @@ export function StudioCanvas({
                   promptInputRef={promptInputRef}
                   onPromptChange={setPrompt}
                   onGenerate={handleGenerate}
+                  onOpenFlowPicker={() => setShowFlowPickerModal(true)}
                   onDelete={deleteSelected}
                 />
               </motion.div>
@@ -2625,8 +3323,8 @@ export function StudioCanvas({
               [
                 { icon: User,   cat: "avatar"     as TemplateCategory, name: "Avatar"   },
                 { icon: Layers, cat: "background" as TemplateCategory, name: "BG"       },
-                { icon: Camera, cat: "camera"     as TemplateCategory, name: "Angle"    },
-                { icon: Wind,   cat: "movement"   as TemplateCategory, name: "Movement" },
+                { icon: Camera, cat: "shot_type"     as TemplateCategory, name: "Shot"   },
+                { icon: Wind,   cat: "motion_style"  as TemplateCategory, name: "Motion" },
               ] as { icon: React.ElementType; cat: TemplateCategory; name: string }[]
             ).map(({ icon: Icon, cat, name }) => {
               const isActive = activeTemplatePanel === cat;
@@ -2673,9 +3371,120 @@ export function StudioCanvas({
               errorMessage={generateError}
               onPromptChange={setPrompt}
               onGenerate={handleGenerate}
+              onOpenFlowPicker={() => setShowFlowPickerModal(true)}
               onDelete={deleteSelected}
             />
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showFlowPickerModal && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.18 }}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[420]"
+              onClick={() => setShowFlowPickerModal(false)}
+            />
+
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 12 }}
+              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+              className="fixed inset-0 z-[430] flex items-center justify-center p-4 pointer-events-none"
+            >
+              <div
+                className="pointer-events-auto w-full max-w-xl rounded-3xl overflow-hidden border border-white/[0.08] bg-[#111119]"
+                style={{ boxShadow: "0 32px 80px rgba(0,0,0,0.7)" }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06]">
+                  <div>
+                    <h3 className="text-sm font-semibold text-white">Choose Flow</h3>
+                    <p className="text-[11px] text-white/30 mt-0.5">
+                      Choose the flow preset before generating the beat images.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setShowFlowPickerModal(false)}
+                    className="p-1.5 rounded-lg text-white/30 hover:text-white hover:bg-white/[0.07] transition-all"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+
+                <div className="px-5 py-4 space-y-3 max-h-[70vh] overflow-y-auto">
+                  {flowOptions.map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      onClick={() => handleSelectVideoFlow(option.id)}
+                      className={cn(
+                        "w-full rounded-2xl border px-4 py-3 text-left transition-all",
+                        videoFlowId === option.id
+                          ? "border-brand-accent/40 bg-brand-accent/12"
+                          : "border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] hover:border-white/[0.14]",
+                      )}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <span className={cn(
+                          "text-sm font-semibold",
+                          videoFlowId === option.id ? "text-brand-accent" : "text-white/75",
+                        )}>
+                          {option.title}
+                        </span>
+                        <span className="text-[10px] text-white/30">{option.beatCount} beats</span>
+                      </div>
+                      {option.description && (
+                        <p className="mt-1 text-[11px] leading-relaxed text-white/38">
+                          {option.description}
+                        </p>
+                      )}
+                      <p className="mt-2 text-[11px] text-white/30 tabular-nums">
+                        {option.imageCost + option.videoCost} total tokens
+                      </p>
+                    </button>
+                  ))}
+                </div>
+
+                <div className="px-5 pt-3 pb-5 border-t border-white/[0.06]">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-[10px] text-white/28 font-mono">Selected</span>
+                    <div className="text-right">
+                      <p className="text-[11px] text-white/60 font-medium">
+                        {selectedFlowOption?.title ?? "No flow selected"}
+                      </p>
+                      {selectedFlowOption && (
+                        <p className="text-[10px] text-white/28 tabular-nums">
+                          {selectedFlowOption.imageCost + selectedFlowOption.videoCost} total tokens
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowFlowPickerModal(false);
+                      handleGenerateFlow();
+                    }}
+                    disabled={isGenerating || !selectedFlowOption}
+                    className={cn(
+                      "w-full rounded-xl px-3 py-3 text-sm font-semibold transition-all",
+                      isGenerating || !selectedFlowOption
+                        ? "bg-white/[0.04] text-white/[0.18] cursor-not-allowed"
+                        : "bg-brand-accent text-white hover:bg-brand-accent-hover shadow-[0_0_18px_rgba(139,92,246,0.38)]",
+                    )}
+                  >
+                    Generate Flow Images
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
 
@@ -2689,6 +3498,7 @@ export function StudioCanvas({
             backgroundTemplates={backgroundTemplates}
             cameraTemplates={cameraTemplates}
             movementTemplates={movementTemplates}
+            videoFlowTemplates={videoFlowTemplates}
             onClose={() => setActiveTemplatePanel(null)}
           />
         )}
@@ -2847,9 +3657,95 @@ export function StudioCanvas({
                         );
                       })}
 
+                    <div>
+                      <div className="mb-2 flex items-center justify-between gap-3">
+                        <p className="text-[9px] text-white/22 font-mono uppercase tracking-widest">Video Flow</p>
+                        {selectedVideoFlowSummary && (
+                          <span className="text-[10px] text-white/32">{selectedVideoFlowSummary}</span>
+                        )}
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        {videoFlowTemplates.map((template) => (
+                          <button
+                            key={template.id}
+                            type="button"
+                            onClick={() => handleSelectVideoFlow(template.id)}
+                            className={cn(
+                              "px-3 py-2 rounded-lg text-left transition-all border",
+                              videoFlowId === template.id
+                                ? "bg-brand-accent/12 border-brand-accent/35 text-brand-accent"
+                                : "bg-white/[0.03] border-white/[0.07] text-white/38 hover:bg-white/[0.06] hover:text-white/65",
+                            )}
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="text-[11px] font-medium">{template.title}</span>
+                              <span className="text-[10px] text-white/28">
+                                {getVideoFlowSteps(template).length} beats
+                              </span>
+                            </div>
+                            {template.description && (
+                              <p className="mt-1 text-[10px] leading-relaxed text-white/30">
+                                {template.description}
+                              </p>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {selectedVideoFlowSteps.length > 0 && (
+                      <div>
+                        <p className="text-[9px] text-white/22 font-mono uppercase tracking-widest mb-2">Flow Beat</p>
+                        <div className="space-y-1.5">
+                          {selectedVideoFlowSteps.map((step, index) => {
+                            const stepMotionLabel =
+                              movementTemplates.find((template) => template.id === step.motionStyleTemplateId)?.title ??
+                              "Custom motion";
+                            const stepShotLabel =
+                              cameraTemplates.find((template) => template.id === step.shotTypeTemplateId)?.title ??
+                              "Current shot";
+
+                            return (
+                              <button
+                                key={step.id}
+                                type="button"
+                                onClick={() => applyVideoFlowStep(step.id)}
+                                className={cn(
+                                  "w-full rounded-lg border px-3 py-2 text-left transition-all",
+                                  selectedVideoFlowStep?.id === step.id
+                                    ? "bg-brand-accent/12 border-brand-accent/35"
+                                    : "bg-white/[0.03] border-white/[0.07] hover:bg-white/[0.06]",
+                                )}
+                              >
+                                <div className="flex items-center justify-between gap-3">
+                                  <span className={cn(
+                                    "text-[11px] font-medium",
+                                    selectedVideoFlowStep?.id === step.id ? "text-brand-accent" : "text-white/65",
+                                  )}>
+                                    {index + 1}. {step.title}
+                                  </span>
+                                  {typeof step.durationSec === "number" && (
+                                    <span className="text-[10px] text-white/28">{step.durationSec}s</span>
+                                  )}
+                                </div>
+                                {(step.description || step.beatGoal) && (
+                                  <p className="mt-1 text-[10px] leading-relaxed text-white/30">
+                                    {step.description ?? step.beatGoal}
+                                  </p>
+                                )}
+                                <p className="mt-1 text-[10px] text-white/24">
+                                  Best with {stepShotLabel} + {stepMotionLabel}
+                                </p>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
                     {/* Movement */}
                     <div>
-                      <p className="text-[9px] text-white/22 font-mono uppercase tracking-widest mb-2">Movement</p>
+                      <p className="text-[9px] text-white/22 font-mono uppercase tracking-widest mb-2">Motion Style</p>
                       <div className="flex flex-col gap-1.5">
                         {movementTemplates.map((t) => (
                           <button
@@ -2874,20 +3770,36 @@ export function StudioCanvas({
                       </div>
                     )}
 
-                    {videoResult && (
+                    {videoResults.length > 0 && (
                       <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-3 space-y-2">
-                        <p className="text-[11px] font-medium text-emerald-200">Video ready</p>
-                        <div className="rounded-lg overflow-hidden border border-white/10 bg-black">
-                          <video src={videoResult.videoUrl} controls playsInline className="w-full max-h-48 object-contain" />
+                        <p className="text-[11px] font-medium text-emerald-200">
+                          {videoResults.length > 1 ? "Flow clips ready" : "Video ready"}
+                        </p>
+                        <div className="space-y-3">
+                          {videoResults.map((result, index) => (
+                            <div key={result.id} className="space-y-2">
+                              <div className="flex items-center justify-between gap-3">
+                                <p className="text-[10px] text-emerald-50/90">
+                                  {index + 1}. {result.title}
+                                </p>
+                                {result.stepTitle && (
+                                  <span className="text-[10px] text-emerald-100/70">{result.stepTitle}</span>
+                                )}
+                              </div>
+                              <div className="rounded-lg overflow-hidden border border-white/10 bg-black">
+                                <video src={result.videoUrl} controls playsInline className="w-full max-h-48 object-contain" />
+                              </div>
+                              <a
+                                href={result.videoUrl}
+                                download={result.fileName}
+                                className="inline-flex items-center gap-1.5 text-[11px] text-emerald-100 hover:text-white"
+                              >
+                                <Download size={11} />
+                                Download clip
+                              </a>
+                            </div>
+                          ))}
                         </div>
-                        <a
-                          href={videoResult.videoUrl}
-                          download={videoResult.fileName}
-                          className="inline-flex items-center gap-1.5 text-[11px] text-emerald-100 hover:text-white"
-                        >
-                          <Download size={11} />
-                          Download video
-                        </a>
                       </div>
                     )}
                   </div>
@@ -2898,7 +3810,7 @@ export function StudioCanvas({
                       <span className="text-[10px] text-white/28 font-mono">Cost</span>
                       <span className="flex items-center gap-1 text-[11px] font-semibold text-white/60 font-mono">
                         <Zap size={10} className="text-yellow-400/70" />
-                        {selectedVideoTokenCost} tokens
+                        {selectedFlowTokenCost} tokens
                       </span>
                     </div>
                     <button
@@ -2914,12 +3826,12 @@ export function StudioCanvas({
                       {isCreatingVideo ? (
                         <>
                           <div className="w-3.5 h-3.5 rounded-full border-[1.5px] border-white/20 border-t-white animate-spin" />
-                          Creating...
+                          {selectedFlowClipCount > 1 ? "Creating flow..." : "Creating..."}
                         </>
                       ) : (
                         <>
                           <Film size={14} />
-                          Create Video
+                          {selectedFlowClipCount > 1 ? `Create ${selectedFlowClipCount}-Clip Flow` : "Create Video"}
                         </>
                       )}
                     </button>

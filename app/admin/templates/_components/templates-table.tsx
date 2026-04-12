@@ -32,8 +32,9 @@ const STATUS_TABS: { id: StatusTab; label: string }[] = [
 
 const CATEGORY_OPTIONS: { id: CategoryFilter; label: string }[] = [
   { id: 'all', label: 'All categories' },
-  { id: 'camera', label: 'Camera' },
-  { id: 'movement', label: 'Movement' },
+  { id: 'shot_type', label: 'Shot Type' },
+  { id: 'motion_style', label: 'Motion Style' },
+  { id: 'video_flow', label: 'Video Flow' },
   { id: 'avatar', label: 'Avatar' },
   { id: 'background', label: 'Background' },
   { id: 'other', label: 'Other' },
