@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useNotify } from "@/components/feedback/use-notify";
+import { TikTokShareButton } from "@/components/dashboard/TikTokShareButton";
 import { usePreferences } from "@/lib/context/preferences-context";
 import type { MarketplaceTemplate } from "@/lib/types/marketplace";
 import type { VideoFlowStepConfig } from "@/lib/types/marketplace";
@@ -46,7 +47,6 @@ import {
   getDefaultVideoFlowStep,
   getVideoFlowStepById,
   getVideoFlowSteps,
-  getVideoFlowSummary,
 } from "@/lib/video-flow";
 import {
   getAllVideoOptionChoices,
@@ -99,7 +99,26 @@ interface GeneratedCard extends CardBase {
   hasError?: boolean;
 }
 
-type Card = ProductCard | GeneratedCard;
+type VideoCardStatus = "pending" | "ready" | "error";
+
+interface VideoCard extends CardBase {
+  type: "video";
+  imageUrl?: string;
+  sourceGeneratedCardId: string;
+  sourceGeneratedImageId?: string;
+  projectId?: string;
+  projectName?: string;
+  title: string;
+  stepId?: string;
+  stepTitle?: string;
+  videoUrl?: string;
+  fileName?: string;
+  storageFileId?: string | null;
+  status: VideoCardStatus;
+  errorMessage?: string;
+}
+
+type Card = ProductCard | GeneratedCard | VideoCard;
 
 type Side = "left" | "right" | "top" | "bottom";
 
@@ -147,6 +166,23 @@ interface PersistedGeneratedCard extends CardBase {
   hasError?: boolean;
 }
 
+interface PersistedVideoCard extends CardBase {
+  type: "video";
+  imageUrl?: string;
+  sourceGeneratedCardId: string;
+  sourceGeneratedImageId?: string;
+  projectId?: string;
+  projectName?: string;
+  title: string;
+  stepId?: string;
+  stepTitle?: string;
+  videoUrl?: string;
+  fileName?: string;
+  storageFileId?: string | null;
+  status: VideoCardStatus;
+  errorMessage?: string;
+}
+
 interface GeneratedVideoResult {
   id: string;
   title: string;
@@ -158,7 +194,7 @@ interface GeneratedVideoResult {
 }
 
 interface PersistedStudioState {
-  cards: Array<PersistedProductCard | PersistedGeneratedCard>;
+  cards: Array<PersistedProductCard | PersistedGeneratedCard | PersistedVideoCard>;
   connections: Connection[];
   selectedIds: string[];
   prompt: string;
@@ -420,8 +456,8 @@ async function saveStudioState(
 }
 
 async function hydrateGeneratedCardVideos(
-  cards: Array<PersistedProductCard | PersistedGeneratedCard>,
-): Promise<Array<PersistedProductCard | PersistedGeneratedCard>> {
+  cards: Array<PersistedProductCard | PersistedGeneratedCard | PersistedVideoCard>,
+): Promise<Array<PersistedProductCard | PersistedGeneratedCard | PersistedVideoCard>> {
   const generatedCards = cards.filter(
     (card): card is PersistedGeneratedCard =>
       card.type === "generated" && !!card.projectId && !!card.generatedImageId,
@@ -804,7 +840,7 @@ function TemplatePanel({
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         transition={{ duration: 0.15 }}
-        className="fixed inset-0 bg-black/30 z-[300]"
+        className="fixed inset-0 bg-black/30 z-[520]"
         onClick={onClose}
       />
 
@@ -815,7 +851,7 @@ function TemplatePanel({
         exit={{ x: "100%" }}
         transition={{ type: "spring", damping: 32, stiffness: 300 }}
         className={cn(
-          "fixed right-0 top-0 bottom-0 z-[400] flex flex-col",
+          "fixed right-0 top-0 bottom-0 z-[530] flex flex-col",
           "w-full sm:w-[320px]",
           "bg-[#111119] border-l border-white/[0.07]",
         )}
@@ -1133,7 +1169,8 @@ function CardComp({
         <div
           className={cn(
             "relative bg-[#1b1b24] overflow-hidden",
-            card.type === "generated" && !(card as GeneratedCard).prompt
+            (card.type === "generated" && !(card as GeneratedCard).prompt) ||
+              card.type === "video"
               ? "rounded-2xl"
               : "rounded-t-2xl",
           )}
@@ -1156,6 +1193,37 @@ function CardComp({
                 Generation failed
               </span>
             </div>
+          ) : card.type === "video" && card.status === "pending" ? (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+              <div className="relative w-9 h-9">
+                <div className="absolute inset-0 rounded-full border-[1.5px] border-brand-accent/20 animate-ping" />
+                <div className="absolute inset-[3px] rounded-full border-[1.5px] border-brand-accent border-t-transparent animate-spin" />
+              </div>
+              <span className="text-[10px] text-white/30 font-mono tracking-widest">
+                RENDERING VIDEO
+              </span>
+            </div>
+          ) : card.type === "video" && card.status === "error" ? (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-3 text-center">
+              <AlertCircle size={18} className="text-red-400/50" />
+              <span className="text-[10px] text-white/25 font-mono">
+                Video failed
+              </span>
+              {card.errorMessage ? (
+                <span className="text-[10px] text-red-200/70 line-clamp-3">{card.errorMessage}</span>
+              ) : null}
+            </div>
+          ) : card.type === "video" && card.videoUrl ? (
+            <video
+              data-no-card-drag
+              src={card.videoUrl}
+              controls
+              playsInline
+              preload="metadata"
+              className="w-full h-full object-contain"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
+            />
           ) : card.imageUrl ? (
             <img
               src={card.imageUrl}
@@ -1171,14 +1239,14 @@ function CardComp({
           {/* Action overlay — delete only */}
           <div
             className={cn(
-              "absolute inset-0 flex items-start justify-end p-2 transition-opacity duration-150",
+              "absolute inset-0 flex items-start justify-end p-2 transition-opacity duration-150 pointer-events-none",
               hover || selected ? "opacity-100" : "opacity-0",
             )}
           >
             <button
               onPointerDown={(e) => e.stopPropagation()}
               onClick={() => onDelete(card.id)}
-              className="p-1.5 rounded-lg bg-black/75 border border-white/10 text-white/30 hover:text-red-400 hover:border-red-500/20 hover:bg-red-500/10 transition-all"
+              className="p-1.5 rounded-lg bg-black/75 border border-white/10 text-white/30 hover:text-red-400 hover:border-red-500/20 hover:bg-red-500/10 transition-all pointer-events-auto"
               title="Delete"
             >
               <X size={11} />
@@ -1192,10 +1260,12 @@ function CardComp({
                 "text-[9px] px-1.5 py-0.5 rounded-full font-mono tracking-widest leading-none",
                 card.type === "product"
                   ? "bg-black/60 text-white/35 border border-white/10"
-                  : "bg-brand-accent/15 text-brand-accent border border-brand-accent/25",
+                  : card.type === "video"
+                    ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/25"
+                    : "bg-brand-accent/15 text-brand-accent border border-brand-accent/25",
               )}
             >
-              {card.type === "product" ? "PRODUCT" : "AI GEN"}
+              {card.type === "product" ? "PRODUCT" : card.type === "video" ? "VIDEO" : "AI GEN"}
             </span>
           </div>
 
@@ -1257,7 +1327,10 @@ function CardComp({
         </div>
 
         {/* Footer */}
-        {(card.type === "product" || (card as GeneratedCard).prompt || (card as GeneratedCard).projectName) && (
+        {(card.type === "product" ||
+          card.type === "video" ||
+          (card as GeneratedCard).prompt ||
+          (card as GeneratedCard).projectName) && (
           <div
             className="bg-[#15151e] px-3 py-2.5 rounded-b-2xl"
             style={{ minHeight: card.type === "product" ? CARD_FOOT_H : undefined }}
@@ -1266,6 +1339,16 @@ function CardComp({
               <p className="text-[11px] text-white/35 truncate font-mono mt-1">
                 {card.fileName}
               </p>
+            ) : card.type === "video" ? (
+              <div className="flex flex-col gap-1">
+                <p className="text-[11px] text-emerald-200/90 truncate font-medium">{card.title}</p>
+                {card.stepTitle ? (
+                  <p className="text-[10px] text-emerald-300/70">{card.stepTitle}</p>
+                ) : null}
+                {card.projectName ? (
+                  <p className="text-[10px] text-white/35 truncate">{card.projectName}</p>
+                ) : null}
+              </div>
             ) : (
               <div className="flex flex-col gap-1">
                 {(card as GeneratedCard).projectName && (
@@ -1315,6 +1398,28 @@ function CardComp({
             <Film size={13} />
           </button>
         )}
+        {card.type === "video" && card.status === "ready" && card.videoUrl && (
+          <a
+            onPointerDown={(e) => e.stopPropagation()}
+            href={card.videoUrl}
+            download={card.fileName ?? `${card.id}.mp4`}
+            className="p-2 rounded-xl bg-[#1b1b2e]/90 border border-white/10 text-white/50 hover:text-emerald-400 hover:bg-emerald-500/10 hover:border-emerald-500/20 transition-all backdrop-blur-sm"
+            title="Download video"
+          >
+            <Download size={13} />
+          </a>
+        )}
+        {card.type === "video" && card.storageFileId && card.videoUrl && (
+          <div onPointerDown={(e) => e.stopPropagation()}>
+            <TikTokShareButton
+              storageFileId={card.storageFileId}
+              fileName={card.fileName ?? "genetrify-video.mp4"}
+              fileUrl={card.videoUrl}
+              buttonLabel=""
+              className="h-8 w-8"
+            />
+          </div>
+        )}
         {card.type === "generated" && !card.isLoading && (card as GeneratedCard).flowGroupId && (
           <button
             onPointerDown={(e) => e.stopPropagation()}
@@ -1358,12 +1463,16 @@ function CardComp({
           !(card.type === "generated" && (card.isLoading || card.hasError)) && (
             <button
               onPointerDown={(e) => e.stopPropagation()}
-              onClick={() =>
-                onPreview?.(
-                  card.imageUrl,
-                  card.type === "product" ? card.fileName : card.prompt,
-                )
-              }
+              onClick={() => {
+                if (!card.imageUrl) return;
+                const previewLabel =
+                  card.type === "product"
+                    ? card.fileName
+                    : card.type === "generated"
+                      ? card.prompt
+                      : card.title;
+                onPreview?.(card.imageUrl, previewLabel);
+              }}
               className="p-2 rounded-xl bg-[#1b1b2e]/90 border border-white/10 text-white/50 hover:text-white hover:bg-white/10 hover:border-white/20 transition-all backdrop-blur-sm"
               title="Preview image"
             >
@@ -1553,6 +1662,7 @@ export function StudioCanvas({
   const [videoFlowId, setVideoFlowId] = useState(videoFlowTemplateId);
   const [videoFlowStepId, setVideoFlowStepId] = useState<string>("");
   const [showFlowPickerModal, setShowFlowPickerModal] = useState(false);
+  const [videoWizardStep, setVideoWizardStep] = useState<1 | 2 | 3 | 4>(1);
   const [isCreatingVideo, setIsCreatingVideo] = useState(false);
   const [videoError, setVideoError] = useState("");
   const [videoResults, setVideoResults] = useState<GeneratedVideoResult[]>([]);
@@ -1636,7 +1746,10 @@ export function StudioCanvas({
               imageUrl: URL.createObjectURL(card.file),
             } satisfies ProductCard;
           }
-          return card satisfies GeneratedCard;
+          if (card.type === "generated") {
+            return card satisfies GeneratedCard;
+          }
+          return card satisfies VideoCard;
         });
         setCards(restoredCards);
         setConnections(saved.connections ?? []);
@@ -1674,30 +1787,51 @@ export function StudioCanvas({
             projectName: card.projectName,
           } satisfies PersistedProductCard;
         }
+        if (card.type === "generated") {
+          return {
+            id: card.id,
+            type: "generated",
+            x: card.x,
+            y: card.y,
+            imageUrl: card.imageUrl,
+            prompt: card.prompt,
+            sourceIds: card.sourceIds,
+            projectId: card.projectId,
+            projectName: card.projectName,
+            generatedImageId: card.generatedImageId,
+            videoUrl: card.videoUrl,
+            videoFileName: card.videoFileName,
+            videoStorageFileId: card.videoStorageFileId,
+            generatedVideos: card.generatedVideos,
+            flowGroupId: card.flowGroupId,
+            flowTitle: card.flowTitle,
+            flowStepId: card.flowStepId,
+            flowStepTitle: card.flowStepTitle,
+            flowShotTypeTemplateId: card.flowShotTypeTemplateId,
+            flowMotionStyleTemplateId: card.flowMotionStyleTemplateId,
+            isLoading: card.isLoading,
+            hasError: card.hasError,
+          } satisfies PersistedGeneratedCard;
+        }
         return {
           id: card.id,
-          type: "generated",
+          type: "video",
+          imageUrl: card.imageUrl,
           x: card.x,
           y: card.y,
-          imageUrl: card.imageUrl,
-          prompt: card.prompt,
-          sourceIds: card.sourceIds,
+          sourceGeneratedCardId: card.sourceGeneratedCardId,
+          sourceGeneratedImageId: card.sourceGeneratedImageId,
           projectId: card.projectId,
           projectName: card.projectName,
-          generatedImageId: card.generatedImageId,
+          title: card.title,
+          stepId: card.stepId,
+          stepTitle: card.stepTitle,
           videoUrl: card.videoUrl,
-          videoFileName: card.videoFileName,
-          videoStorageFileId: card.videoStorageFileId,
-          generatedVideos: card.generatedVideos,
-          flowGroupId: card.flowGroupId,
-          flowTitle: card.flowTitle,
-          flowStepId: card.flowStepId,
-          flowStepTitle: card.flowStepTitle,
-          flowShotTypeTemplateId: card.flowShotTypeTemplateId,
-          flowMotionStyleTemplateId: card.flowMotionStyleTemplateId,
-          isLoading: card.isLoading,
-          hasError: card.hasError,
-        } satisfies PersistedGeneratedCard;
+          fileName: card.fileName,
+          storageFileId: card.storageFileId,
+          status: card.status,
+          errorMessage: card.errorMessage,
+        } satisfies PersistedVideoCard;
       }),
       connections,
       selectedIds: [...selectedIds],
@@ -1946,6 +2080,14 @@ export function StudioCanvas({
   const onCardPtrDown = useCallback(
     (e: React.PointerEvent, cardId: string) => {
       e.stopPropagation();
+      const target = e.target as HTMLElement | null;
+      if (
+        target?.closest(
+          "video,button,a,input,textarea,select,[data-no-card-drag]",
+        )
+      ) {
+        return;
+      }
       if (connectingRef.current !== null) return;
       const pos = toCanvas(e.clientX, e.clientY);
       if (!pos) return;
@@ -1980,6 +2122,32 @@ export function StudioCanvas({
         if (idsToMove.includes(c.id)) snap.set(c.id, { x: c.x, y: c.y });
       });
       cardStartPos.current = snap;
+    },
+    [toCanvas],
+  );
+
+  const onFlowGroupPtrDown = useCallback(
+    (e: React.PointerEvent, groupId: string) => {
+      e.stopPropagation();
+      if (connectingRef.current !== null) return;
+      const pos = toCanvas(e.clientX, e.clientY);
+      if (!pos) return;
+
+      const groupCards = cardsRef.current.filter(
+        (card): card is GeneratedCard =>
+          card.type === "generated" && card.flowGroupId === groupId,
+      );
+      if (groupCards.length === 0) return;
+
+      const groupIds = new Set(groupCards.map((card) => card.id));
+      setSelectedIds(groupIds);
+
+      dragMode.current = "card";
+      dragStart.current = pos;
+      didDrag.current = false;
+      cardStartPos.current = new Map(
+        groupCards.map((card) => [card.id, { x: card.x, y: card.y }]),
+      );
     },
     [toCanvas],
   );
@@ -2474,15 +2642,15 @@ export function StudioCanvas({
   const movementLabel =
     movementTemplates.find((t) => t.id === movementTemplateId)?.title ??
     "Choose motion style";
+  const selectedVideoMotionLabel = videoMovement
+    ? movementTemplates.find((t) => t.id === videoMovement)?.title ?? "Selected motion"
+    : "None (prompt only)";
   const selectedVideoFlow =
     videoFlowTemplates.find((template) => template.id === videoFlowId) ?? null;
   const selectedVideoFlowSteps = getVideoFlowSteps(selectedVideoFlow);
   const selectedVideoFlowStep =
     getVideoFlowStepById(selectedVideoFlow, videoFlowStepId) ??
     getDefaultVideoFlowStep(selectedVideoFlow);
-  const selectedVideoFlowSummary = getVideoFlowSummary(selectedVideoFlow);
-  const selectedFlowClipCount = selectedVideoFlowSteps.length > 0 ? selectedVideoFlowSteps.length : 1;
-  const selectedFlowTokenCost = selectedVideoTokenCost * selectedFlowClipCount;
   const flowOptions = videoFlowTemplates.map((template) => {
     const beatCount = Math.max(1, getVideoFlowSteps(template).length);
     return {
@@ -2536,18 +2704,50 @@ export function StudioCanvas({
     setVideoFlowStepId(defaultStep?.id ?? "");
   }, [selectedVideoFlow]);
 
+  const getVideoCardId = useCallback(
+    (sourceCardId: string, stepId?: string) =>
+      `video-${sourceCardId}-${stepId ?? "single"}`,
+    [],
+  );
+
+  const upsertVideoCard = useCallback((videoCard: VideoCard) => {
+    setCards((prev) => {
+      const existingIndex = prev.findIndex((card) => card.id === videoCard.id);
+      if (existingIndex === -1) return [...prev, videoCard];
+      const next = [...prev];
+      next[existingIndex] = { ...next[existingIndex], ...videoCard } as VideoCard;
+      return next;
+    });
+    setConnections((prev) => {
+      const connectionId = `${videoCard.sourceGeneratedCardId}->${videoCard.id}`;
+      if (prev.some((conn) => conn.id === connectionId)) return prev;
+      return [
+        ...prev,
+        {
+          id: connectionId,
+          from: videoCard.sourceGeneratedCardId,
+          fromSide: "right",
+          to: videoCard.id,
+          toSide: "left",
+        },
+      ];
+    });
+  }, []);
+
   const exportSingleVideoClip = useCallback(async ({
     targetCard,
     motionPrompt,
     title,
     stepId,
     stepTitle,
+    stepOrder = 0,
   }: {
     targetCard: GeneratedCard;
     motionPrompt: string;
     title: string;
     stepId?: string;
     stepTitle?: string;
+    stepOrder?: number;
   }): Promise<GeneratedVideoResult> => {
     if (!targetCard.projectId || !targetCard.generatedImageId || !targetCard.imageUrl) {
       throw new Error(
@@ -2555,65 +2755,124 @@ export function StudioCanvas({
       );
     }
 
-    const exportRes = await fetch("/api/export", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        projectId: targetCard.projectId,
-        imageIds: [targetCard.generatedImageId],
-        imageUrls: [targetCard.imageUrl],
-        motionPrompt,
-        videoModelId: selectedVideoModel.id,
-        ...selectedVideoSettings,
-      }),
-    });
-
-    if (!exportRes.ok) {
-      const error = await exportRes.json().catch(() => null);
-      if (exportRes.status === 402) {
-        throw new Error(error?.error ?? "Insufficient tokens. Please top up and try again.");
-      }
-      throw new Error(error?.error ?? "Video generation failed");
-    }
-
-    let createdVideo: {
-      videoUrl: string;
-      filename: string;
-      storageFileId?: string | null;
-    } | null = null;
-
-    for await (const event of readNDJSON(exportRes)) {
-      if (event.type === "video") {
-        createdVideo = event.video as {
-          videoUrl: string;
-          filename: string;
-          storageFileId?: string | null;
-        };
-      } else if (event.type === "video_error") {
-        throw new Error(
-          typeof event.error === "string"
-            ? event.error
-            : "Video generation failed",
-        );
-      }
-    }
-
-    if (!createdVideo) {
-      throw new Error("Video generation did not return a result");
-    }
-
-    return {
-      id: `${stepId ?? "clip"}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    const videoCardId = getVideoCardId(targetCard.id, stepId);
+    upsertVideoCard({
+      id: videoCardId,
+      type: "video",
+      imageUrl: targetCard.imageUrl,
+      x: targetCard.x + CARD_W + GAP,
+      y: targetCard.y + stepOrder * 42,
+      sourceGeneratedCardId: targetCard.id,
+      sourceGeneratedImageId: targetCard.generatedImageId,
+      projectId: targetCard.projectId,
+      projectName: targetCard.projectName,
       title,
       stepId,
       stepTitle,
-      videoUrl: createdVideo.videoUrl,
-      fileName: createdVideo.filename,
-      storageFileId: createdVideo.storageFileId,
-    };
+      status: "pending",
+    });
+
+    try {
+      const exportRes = await fetch("/api/export", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId: targetCard.projectId,
+          imageIds: [targetCard.generatedImageId],
+          imageUrls: [targetCard.imageUrl],
+          motionPrompt,
+          videoModelId: selectedVideoModel.id,
+          ...selectedVideoSettings,
+        }),
+      });
+
+      if (!exportRes.ok) {
+        const error = await exportRes.json().catch(() => null);
+        if (exportRes.status === 402) {
+          throw new Error(error?.error ?? "Insufficient tokens. Please top up and try again.");
+        }
+        throw new Error(error?.error ?? "Video generation failed");
+      }
+
+      let createdVideo: {
+        videoUrl: string;
+        filename: string;
+        storageFileId?: string | null;
+      } | null = null;
+
+      for await (const event of readNDJSON(exportRes)) {
+        if (event.type === "video") {
+          createdVideo = event.video as {
+            videoUrl: string;
+            filename: string;
+            storageFileId?: string | null;
+          };
+          upsertVideoCard({
+            id: videoCardId,
+            type: "video",
+            imageUrl: targetCard.imageUrl,
+            x: targetCard.x + CARD_W + GAP,
+            y: targetCard.y + stepOrder * 42,
+            sourceGeneratedCardId: targetCard.id,
+            sourceGeneratedImageId: targetCard.generatedImageId,
+            projectId: targetCard.projectId,
+            projectName: targetCard.projectName,
+            title,
+            stepId,
+            stepTitle,
+            status: "ready",
+            videoUrl: createdVideo.videoUrl,
+            fileName: createdVideo.filename,
+            storageFileId: createdVideo.storageFileId ?? null,
+          });
+        } else if (event.type === "video_error") {
+          const message =
+            typeof event.error === "string"
+              ? event.error
+              : "Video generation failed";
+          throw new Error(message);
+        }
+      }
+
+      if (!createdVideo) {
+        throw new Error("Video generation did not return a result");
+      }
+
+      return {
+        id: `${stepId ?? "clip"}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        title,
+        stepId,
+        stepTitle,
+        videoUrl: createdVideo.videoUrl,
+        fileName: createdVideo.filename,
+        storageFileId: createdVideo.storageFileId,
+      };
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Video generation failed";
+      upsertVideoCard({
+        id: videoCardId,
+        type: "video",
+        imageUrl: targetCard.imageUrl,
+        x: targetCard.x + CARD_W + GAP,
+        y: targetCard.y + stepOrder * 42,
+        sourceGeneratedCardId: targetCard.id,
+        sourceGeneratedImageId: targetCard.generatedImageId,
+        projectId: targetCard.projectId,
+        projectName: targetCard.projectName,
+        title,
+        stepId,
+        stepTitle,
+        status: "error",
+        errorMessage: message,
+      });
+      throw error;
+    }
   }, [
+    getVideoCardId,
     selectedVideoModel.id,
     selectedVideoSettings,
+    upsertVideoCard,
   ]);
 
   const createFlowVideos = useCallback(async (groupId: string) => {
@@ -2639,7 +2898,7 @@ export function StudioCanvas({
       const sortedCards = [...groupCards].sort((left, right) => left.x - right.x);
       const clips: GeneratedVideoResult[] = [];
 
-      for (const card of sortedCards) {
+      for (const [index, card] of sortedCards.entries()) {
         const movementTemplate = movementTemplates.find(
           (template) => template.id === card.flowMotionStyleTemplateId,
         ) ?? movementTemplates.find((template) => template.id === videoMovement);
@@ -2659,6 +2918,7 @@ export function StudioCanvas({
           title: `${card.flowTitle ?? "Flow"} · ${card.flowStepTitle ?? "Beat"}`,
           stepId: card.flowStepId,
           stepTitle: card.flowStepTitle,
+          stepOrder: index,
         });
         clips.push(clip);
         setVideoResults([...clips]);
@@ -2682,6 +2942,7 @@ export function StudioCanvas({
       // flow export must set a card or the three clips never appear in the UI.
       const firstBeat = sortedCards[0];
       setVideoCard(firstBeat);
+      setVideoWizardStep(1);
       setVideoPrompt(firstBeat.prompt);
       if (firstBeat.flowMotionStyleTemplateId) {
         setVideoMovement(firstBeat.flowMotionStyleTemplateId);
@@ -2727,46 +2988,31 @@ export function StudioCanvas({
 
     try {
       const clips: GeneratedVideoResult[] = [];
-
-      if (selectedVideoFlowSteps.length > 0) {
-        for (const step of selectedVideoFlowSteps) {
-          const stepMotionTemplate = movementTemplates.find(
-            (template) => template.id === step.motionStyleTemplateId,
-          ) ?? movementTemplates.find((template) => template.id === videoMovement);
-          const motionPrompt = buildStudioVideoPrompt(
-            videoPrompt || videoCard.prompt,
-            stepMotionTemplate,
-            step,
-          );
-        const clip = await exportSingleVideoClip({
-          targetCard: videoCard,
-          motionPrompt,
-          title: `${selectedVideoFlow?.title ?? "Flow"} · ${step.title}`,
-          stepId: step.id,
-            stepTitle: step.title,
-          });
-          clips.push(clip);
-          setVideoResults([...clips]);
-        }
-      } else {
-        const movementTemplate = movementTemplates.find(
-          (template) => template.id === videoMovement,
-        );
-        const motionPrompt = buildStudioVideoPrompt(
-          videoPrompt || videoCard.prompt,
-          movementTemplate,
-          selectedVideoFlowStep,
-        );
-        const clip = await exportSingleVideoClip({
-          targetCard: videoCard,
-          motionPrompt,
-          title: selectedVideoFlowStep?.title ?? "Single clip",
-          stepId: selectedVideoFlowStep?.id,
-          stepTitle: selectedVideoFlowStep?.title,
-        });
-        clips.push(clip);
-        setVideoResults([clip]);
-      }
+      const movementTemplate = videoMovement
+        ? movementTemplates.find((template) => template.id === videoMovement)
+        : undefined;
+      const lockedStep =
+        videoCard.flowStepId || videoCard.flowStepTitle
+          ? {
+              id: videoCard.flowStepId ?? "locked-step",
+              title: videoCard.flowStepTitle ?? "Locked beat",
+            }
+          : null;
+      const motionPrompt = buildStudioVideoPrompt(
+        videoPrompt || videoCard.prompt,
+        movementTemplate,
+        lockedStep,
+      );
+      const clip = await exportSingleVideoClip({
+        targetCard: videoCard,
+        motionPrompt,
+        title: videoCard.flowStepTitle ?? "Single clip",
+        stepId: videoCard.flowStepId,
+        stepTitle: videoCard.flowStepTitle,
+        stepOrder: 0,
+      });
+      clips.push(clip);
+      setVideoResults([clip]);
 
       notify.success({
         title: clips.length > 1 ? "Flow ready" : "Video ready",
@@ -2800,9 +3046,6 @@ export function StudioCanvas({
     movementTemplates,
     notify,
     exportSingleVideoClip,
-    selectedVideoFlow,
-    selectedVideoFlowSteps,
-    selectedVideoFlowStep,
     videoCard,
     videoMovement,
     videoPrompt,
@@ -2866,11 +3109,9 @@ export function StudioCanvas({
   }
 
   const renderConnections = () => {
-    const productCards = cards.filter((c) => c.type === "product");
-
     return connections.map((conn) => {
-      const from = productCards.find((c) => c.id === conn.from);
-      const to = productCards.find((c) => c.id === conn.to);
+      const from = cards.find((c) => c.id === conn.from);
+      const to = cards.find((c) => c.id === conn.to);
       if (!from || !to) return null;
 
       const fromSide: Side = conn.fromSide ?? "right";
@@ -3169,7 +3410,7 @@ export function StudioCanvas({
             <div
               key={group.groupId}
               data-flow-chrome
-              className="absolute rounded-[28px] border border-brand-accent/20 bg-brand-accent/[0.04] shadow-[0_16px_48px_rgba(0,0,0,0.35)]"
+              className="absolute rounded-[28px] border border-brand-accent/20 bg-brand-accent/[0.04] shadow-[0_16px_48px_rgba(0,0,0,0.35)] cursor-grab"
               style={{
                 left: group.left,
                 top: group.top,
@@ -3178,6 +3419,7 @@ export function StudioCanvas({
                 /* Above SVG connections (z-5), below cards (z-10) — was z-1 so chrome sat under wires and felt unclickable */
                 zIndex: 6,
               }}
+              onPointerDown={(e) => onFlowGroupPtrDown(e, group.groupId)}
             >
               <div
                 className="flex items-center justify-between gap-3 px-4 py-3 border-b border-brand-accent/15 bg-[#120f1d] rounded-t-[28px]"
@@ -3230,6 +3472,7 @@ export function StudioCanvas({
                       setVideoMovement(movementTemplateId);
                       setVideoFlowId(defaultFlow?.id ?? "");
                       setVideoFlowStepId(defaultFlowStep?.id ?? "");
+                      setVideoWizardStep(1);
                       setVideoError("");
                       setVideoResults(
                         generatedCard.generatedVideos && generatedCard.generatedVideos.length > 0
@@ -3504,339 +3747,306 @@ export function StudioCanvas({
         )}
       </AnimatePresence>
 
-      {/* ── Video modal ───────────────────────────────────────────────────────── */}
+      {/* ── Video creation wizard (right dock) ───────────────────────────────── */}
       <AnimatePresence>
         {videoCard && (
           <>
-            {/* Backdrop */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.18 }}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[400]"
+              className="fixed inset-0 z-[480] bg-black/60 backdrop-blur-sm"
               onClick={() => setVideoCard(null)}
             />
 
-            {/* Modal */}
             <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 12 }}
+              initial={{ opacity: 0, scale: 0.96, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 12 }}
+              exit={{ opacity: 0, scale: 0.96, y: 10 }}
               transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-              className="fixed inset-0 z-[500] flex items-center justify-center p-4 sm:p-6 pointer-events-none"
+              className="fixed inset-0 z-[500] flex items-center justify-center p-4 pointer-events-none"
             >
               <div
-                className="pointer-events-auto w-full max-w-2xl max-h-[90vh] flex flex-col sm:flex-row rounded-2xl overflow-hidden border border-white/[0.08] bg-[#111119]"
-                style={{ boxShadow: "0 32px 80px rgba(0,0,0,0.7)" }}
+                className="pointer-events-auto w-[560px] max-w-[92vw] max-h-[calc(100vh-4rem)] rounded-2xl border border-white/[0.08] bg-[#111119] shadow-[0_32px_80px_rgba(0,0,0,0.7)] flex flex-col"
                 onClick={(e) => e.stopPropagation()}
               >
-                {/* Left — image preview */}
-                <div className="sm:w-52 shrink-0 bg-[#0d0d15] flex items-center justify-center">
-                  <img
-                    src={videoCard.imageUrl}
-                    alt=""
-                    className="w-full h-full object-contain"
-                  />
-                </div>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.06]">
+              <div>
+                <p className="text-sm font-semibold text-white">Video Creation</p>
+                <p className="text-[11px] text-white/35">Step {videoWizardStep} of 4</p>
+              </div>
+              <button
+                onClick={() => setVideoCard(null)}
+                className="p-1.5 rounded-lg text-white/30 hover:text-white hover:bg-white/[0.07] transition-all"
+              >
+                <X size={14} />
+              </button>
+            </div>
 
-                {/* Right — controls */}
-                <div className="flex-1 flex flex-col min-h-0">
-                  {/* Header */}
-                  <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06] shrink-0">
-                    <div>
-                      <h3 className="text-sm font-semibold text-white">Create Video</h3>
-                      <p className="text-[11px] text-white/30 mt-0.5">Animate this image</p>
-                    </div>
-                    <button
-                      onClick={() => setVideoCard(null)}
-                      className="p-1.5 rounded-lg text-white/30 hover:text-white hover:bg-white/[0.07] transition-all"
-                    >
-                      <X size={14} />
-                    </button>
+            <div className="px-4 py-2 border-b border-white/[0.06] grid grid-cols-4 gap-1">
+              {[
+                { id: 1, label: "Source" },
+                { id: 2, label: "Motion" },
+                { id: 3, label: "Model" },
+                { id: 4, label: "Generate" },
+              ].map((step) => (
+                <button
+                  key={step.id}
+                  type="button"
+                  onClick={() => setVideoWizardStep(step.id as 1 | 2 | 3 | 4)}
+                  className={cn(
+                    "rounded-lg px-2 py-1.5 text-[10px] font-medium transition-all",
+                    videoWizardStep === step.id
+                      ? "bg-brand-accent/18 text-brand-accent"
+                      : "bg-white/[0.03] text-white/40 hover:text-white/65",
+                  )}
+                >
+                  {step.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex-1 min-h-0 flex flex-col sm:flex-row">
+              <div className="sm:w-[220px] shrink-0 border-b sm:border-b-0 sm:border-r border-white/[0.06] p-3 sm:p-4">
+                <p className="text-[10px] text-white/30 uppercase tracking-wider mb-2">Preview</p>
+                <div className="mx-auto w-full max-w-[180px] aspect-[9/16] rounded-xl overflow-hidden border border-white/10 bg-black">
+                  {videoResults[0]?.videoUrl ? (
+                    <video
+                      src={videoResults[0].videoUrl}
+                      controls
+                      playsInline
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <img
+                      src={videoCard.imageUrl}
+                      alt=""
+                      className="w-full h-full object-cover"
+                    />
+                  )}
+                </div>
+                <p className="mt-2 text-[11px] text-white/45 text-center">
+                  {videoResults[0]?.videoUrl
+                    ? "Generated preview"
+                    : videoCard.flowStepTitle
+                      ? `Current beat: ${videoCard.flowStepTitle}`
+                      : "Single image clip mode"}
+                </p>
+              </div>
+
+              <div className="flex-1 min-h-0 flex flex-col">
+                <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 scrollbar-brand">
+              {videoWizardStep === 1 && (
+                <div className="space-y-3">
+                  <p className="text-[10px] text-white/30 uppercase tracking-wider">Source</p>
+                  <p className="text-[11px] text-white/45">
+                    Confirm your source on the left preview panel, then continue to set motion and model.
+                  </p>
+                </div>
+              )}
+
+              {videoWizardStep === 2 && (
+                <>
+                  <div>
+                    <p className="text-[9px] text-white/22 font-mono uppercase tracking-widest mb-1.5">Prompt</p>
+                    <textarea
+                      value={videoPrompt}
+                      onChange={(e) => setVideoPrompt(e.target.value)}
+                      rows={3}
+                      placeholder="Describe the motion or scene..."
+                      className="w-full resize-none text-[11px] text-white/70 font-mono bg-white/[0.04] border border-white/[0.08] focus:border-brand-accent/40 focus:bg-white/[0.06] rounded-lg px-3 py-2 leading-relaxed outline-none transition-all placeholder:text-white/20"
+                    />
                   </div>
 
-                  {/* Scrollable body */}
-                  <div className="flex-1 overflow-y-auto min-h-0 px-5 py-4 flex flex-col gap-4 scrollbar-brand">
-                    {/* Prompt */}
-                    <div>
-                      <p className="text-[9px] text-white/22 font-mono uppercase tracking-widest mb-1.5">Prompt</p>
-                      <textarea
-                        value={videoPrompt}
-                        onChange={(e) => setVideoPrompt(e.target.value)}
-                        rows={3}
-                        placeholder="Describe the motion or scene..."
-                        className="w-full resize-none text-[11px] text-white/70 font-mono bg-white/[0.04] border border-white/[0.08] focus:border-brand-accent/40 focus:bg-white/[0.06] rounded-lg px-3 py-2 leading-relaxed outline-none transition-all placeholder:text-white/20"
+                  {videoCard.flowStepTitle ? (
+                    <div className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2">
+                      <p className="text-[9px] text-white/22 font-mono uppercase tracking-widest mb-1">Locked Beat</p>
+                      <p className="text-[11px] text-white/65">{videoCard.flowStepTitle}</p>
+                    </div>
+                  ) : null}
+
+                  <div className="space-y-2">
+                    <p className="text-[9px] text-white/22 font-mono uppercase tracking-widest">Motion Style</p>
+                    <div className="flex items-center gap-2">
+                      <StatusChip
+                        icon={Wind}
+                        label="Motion"
+                        value={selectedVideoMotionLabel}
+                        active={activeTemplatePanel === "motion_style"}
+                        onClick={() =>
+                          setActiveTemplatePanel((p) =>
+                            p === "motion_style" ? null : "motion_style",
+                          )
+                        }
                       />
+                      {videoMovement ? (
+                        <button
+                          type="button"
+                          onClick={() => setVideoMovement("")}
+                          className="px-2.5 py-1.5 rounded-lg text-[11px] font-medium border border-white/[0.08] text-white/45 hover:text-white/70 hover:bg-white/[0.06] transition-all"
+                        >
+                          Deselect
+                        </button>
+                      ) : null}
                     </div>
+                    <p className="text-[10px] text-white/30">
+                      Use the motion slide panel to pick a motion, or deselect to rely on prompt-only motion.
+                    </p>
+                  </div>
+                </>
+              )}
 
-                    {/* Model */}
-                    <div>
-                      <p className="text-[9px] text-white/22 font-mono uppercase tracking-widest mb-2">Model</p>
-                      <div className="flex flex-col gap-1.5">
-                        {VIDEO_MODELS.map((m) => (
-                          <button
-                            key={m.id}
-                            onClick={() => {
-                              setSelectedVideoModel(m);
-                              setSelectedVideoSettings(getDefaultVideoGenerationSettings(m));
-                            }}
-                            className={cn(
-                              "px-3 py-2 rounded-lg text-left transition-all border",
-                              selectedVideoModel.id === m.id
-                                ? "bg-brand-accent/12 border-brand-accent/35"
-                                : "bg-white/[0.03] border-white/[0.07] hover:bg-white/[0.06] hover:border-white/[0.12]",
-                            )}
-                          >
-                            <div className="flex items-center justify-between gap-2">
-                              <span className={cn("text-[11px] font-medium", selectedVideoModel.id === m.id ? "text-brand-accent" : "text-white/55")}>
-                                {m.name}
-                              </span>
-                              <div className="flex items-center gap-1.5 shrink-0">
-                                <span className={cn(
-                                  "text-[9px] px-1.5 py-0.5 rounded-full font-mono",
-                                  m.qualityLabel === "Elite"
-                                    ? "bg-amber-500/15 text-amber-400 border border-amber-500/25"
-                                    : m.qualityLabel === "Pro"
-                                      ? "bg-violet-500/15 text-violet-400 border border-violet-500/25"
-                                      : "bg-white/[0.06] text-white/35 border border-white/[0.08]",
-                                )}>
-                                  {m.qualityLabel}
-                                </span>
-                                <span className="flex items-center gap-0.5 text-[10px] text-white/30 font-mono">
-                                  <Zap size={9} className="text-yellow-500/60" />from {getMinimumVideoGenerationTokenCost(m)}
-                                </span>
-                              </div>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
+              {videoWizardStep === 3 && (
+                <>
+                  <div>
+                    <p className="text-[9px] text-white/22 font-mono uppercase tracking-widest mb-2">Model</p>
+                    <div className="flex flex-col gap-1.5">
+                      {VIDEO_MODELS.map((m) => (
+                        <button
+                          key={m.id}
+                          onClick={() => {
+                            setSelectedVideoModel(m);
+                            setSelectedVideoSettings(getDefaultVideoGenerationSettings(m));
+                          }}
+                          className={cn(
+                            "px-3 py-2 rounded-lg text-left transition-all border",
+                            selectedVideoModel.id === m.id
+                              ? "bg-brand-accent/12 border-brand-accent/35"
+                              : "bg-white/[0.03] border-white/[0.07] hover:bg-white/[0.06] hover:border-white/[0.12]",
+                          )}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className={cn("text-[11px] font-medium", selectedVideoModel.id === m.id ? "text-brand-accent" : "text-white/55")}>
+                              {m.name}
+                            </span>
+                            <span className="flex items-center gap-0.5 text-[10px] text-white/30 font-mono">
+                              <Zap size={9} className="text-yellow-500/60" />from {getMinimumVideoGenerationTokenCost(m)}
+                            </span>
+                          </div>
+                        </button>
+                      ))}
                     </div>
+                  </div>
 
-                    {(["duration", "resolution", "mode", "generateAudio"] as VideoOptionKey[])
-                      .filter((key) => hasMultipleVideoOptionChoices(selectedVideoModel, key))
-                      .map((key) => {
-                        const allChoices = getAllVideoOptionChoices(selectedVideoModel, key);
-                        const availableChoices = new Set(
-                          getVideoOptionChoices(selectedVideoModel, selectedVideoSettings, key).map(
-                            (choice) => choice.value,
-                          ),
-                        );
+                  {(["duration", "resolution", "mode", "generateAudio"] as VideoOptionKey[])
+                    .filter((key) => hasMultipleVideoOptionChoices(selectedVideoModel, key))
+                    .map((key) => {
+                      const allChoices = getAllVideoOptionChoices(selectedVideoModel, key);
+                      const availableChoices = new Set(
+                        getVideoOptionChoices(selectedVideoModel, selectedVideoSettings, key).map((choice) => choice.value),
+                      );
+                      return (
+                        <div key={key}>
+                          <p className="text-[9px] text-white/22 font-mono uppercase tracking-widest mb-2">
+                            {VIDEO_OPTION_LABELS[key]}
+                          </p>
+                          <div className="flex gap-1.5 flex-wrap">
+                            {allChoices.map((choice) => {
+                              const isSelected = selectedVideoSettings[key] === choice.value;
+                              const isAvailable = availableChoices.has(choice.value);
+                              return (
+                                <button
+                                  key={`${key}-${String(choice.value)}`}
+                                  type="button"
+                                  disabled={!isAvailable}
+                                  onClick={() => handleVideoOptionChange(key, choice.value)}
+                                  className={cn(
+                                    "px-3 py-1.5 rounded-lg text-[11px] font-mono border transition-all",
+                                    isSelected
+                                      ? "bg-brand-accent/12 border-brand-accent/35 text-brand-accent font-semibold"
+                                      : isAvailable
+                                        ? "bg-white/[0.03] border-white/[0.07] text-white/38 hover:bg-white/[0.06] hover:text-white/65"
+                                        : "bg-white/[0.01] border-white/[0.05] text-white/18 cursor-not-allowed",
+                                  )}
+                                >
+                                  {choice.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                </>
+              )}
 
-                        return (
-                          <div key={key}>
-                            <p className="text-[9px] text-white/22 font-mono uppercase tracking-widest mb-2">
-                              {VIDEO_OPTION_LABELS[key]}
-                            </p>
-                            <div className="flex gap-1.5 flex-wrap">
-                              {allChoices.map((choice) => {
-                                const isSelected = selectedVideoSettings[key] === choice.value;
-                                const isAvailable = availableChoices.has(choice.value);
+              {videoWizardStep === 4 && (
+                <div className="space-y-3">
+                  {videoError ? (
+                    <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-[11px] text-red-200">
+                      {videoError}
+                    </div>
+                  ) : null}
 
-                                return (
-                                  <button
-                                    key={`${key}-${String(choice.value)}`}
-                                    type="button"
-                                    disabled={!isAvailable}
-                                    onClick={() => handleVideoOptionChange(key, choice.value)}
-                                    className={cn(
-                                      "px-3 py-1.5 rounded-lg text-[11px] font-mono border transition-all",
-                                      isSelected
-                                        ? "bg-brand-accent/12 border-brand-accent/35 text-brand-accent font-semibold"
-                                        : isAvailable
-                                          ? "bg-white/[0.03] border-white/[0.07] text-white/38 hover:bg-white/[0.06] hover:text-white/65"
-                                          : "bg-white/[0.01] border-white/[0.05] text-white/18 cursor-not-allowed",
-                                    )}
-                                  >
-                                    {choice.label}
-                                  </button>
-                                );
-                              })}
+                  {videoResults.length > 0 ? (
+                    <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-3 space-y-2">
+                      <p className="text-[11px] font-medium text-emerald-200">
+                        {videoResults.length > 1 ? "Flow clips ready" : "Video ready"}
+                      </p>
+                      <div className="space-y-3">
+                        {videoResults.map((result, index) => (
+                          <div key={result.id} className="space-y-2">
+                            <p className="text-[10px] text-emerald-50/90">{index + 1}. {result.title}</p>
+                            <div className="rounded-lg overflow-hidden border border-white/10 bg-black">
+                              <video src={result.videoUrl} controls playsInline className="w-full max-h-40 object-contain" />
                             </div>
                           </div>
-                        );
-                      })}
-
-                    <div>
-                      <div className="mb-2 flex items-center justify-between gap-3">
-                        <p className="text-[9px] text-white/22 font-mono uppercase tracking-widest">Video Flow</p>
-                        {selectedVideoFlowSummary && (
-                          <span className="text-[10px] text-white/32">{selectedVideoFlowSummary}</span>
-                        )}
-                      </div>
-                      <div className="flex flex-col gap-1.5">
-                        {videoFlowTemplates.map((template) => (
-                          <button
-                            key={template.id}
-                            type="button"
-                            onClick={() => handleSelectVideoFlow(template.id)}
-                            className={cn(
-                              "px-3 py-2 rounded-lg text-left transition-all border",
-                              videoFlowId === template.id
-                                ? "bg-brand-accent/12 border-brand-accent/35 text-brand-accent"
-                                : "bg-white/[0.03] border-white/[0.07] text-white/38 hover:bg-white/[0.06] hover:text-white/65",
-                            )}
-                          >
-                            <div className="flex items-center justify-between gap-3">
-                              <span className="text-[11px] font-medium">{template.title}</span>
-                              <span className="text-[10px] text-white/28">
-                                {getVideoFlowSteps(template).length} beats
-                              </span>
-                            </div>
-                            {template.description && (
-                              <p className="mt-1 text-[10px] leading-relaxed text-white/30">
-                                {template.description}
-                              </p>
-                            )}
-                          </button>
                         ))}
                       </div>
                     </div>
-
-                    {selectedVideoFlowSteps.length > 0 && (
-                      <div>
-                        <p className="text-[9px] text-white/22 font-mono uppercase tracking-widest mb-2">Flow Beat</p>
-                        <div className="space-y-1.5">
-                          {selectedVideoFlowSteps.map((step, index) => {
-                            const stepMotionLabel =
-                              movementTemplates.find((template) => template.id === step.motionStyleTemplateId)?.title ??
-                              "Custom motion";
-                            const stepShotLabel =
-                              cameraTemplates.find((template) => template.id === step.shotTypeTemplateId)?.title ??
-                              "Current shot";
-
-                            return (
-                              <button
-                                key={step.id}
-                                type="button"
-                                onClick={() => applyVideoFlowStep(step.id)}
-                                className={cn(
-                                  "w-full rounded-lg border px-3 py-2 text-left transition-all",
-                                  selectedVideoFlowStep?.id === step.id
-                                    ? "bg-brand-accent/12 border-brand-accent/35"
-                                    : "bg-white/[0.03] border-white/[0.07] hover:bg-white/[0.06]",
-                                )}
-                              >
-                                <div className="flex items-center justify-between gap-3">
-                                  <span className={cn(
-                                    "text-[11px] font-medium",
-                                    selectedVideoFlowStep?.id === step.id ? "text-brand-accent" : "text-white/65",
-                                  )}>
-                                    {index + 1}. {step.title}
-                                  </span>
-                                  {typeof step.durationSec === "number" && (
-                                    <span className="text-[10px] text-white/28">{step.durationSec}s</span>
-                                  )}
-                                </div>
-                                {(step.description || step.beatGoal) && (
-                                  <p className="mt-1 text-[10px] leading-relaxed text-white/30">
-                                    {step.description ?? step.beatGoal}
-                                  </p>
-                                )}
-                                <p className="mt-1 text-[10px] text-white/24">
-                                  Best with {stepShotLabel} + {stepMotionLabel}
-                                </p>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Movement */}
-                    <div>
-                      <p className="text-[9px] text-white/22 font-mono uppercase tracking-widest mb-2">Motion Style</p>
-                      <div className="flex flex-col gap-1.5">
-                        {movementTemplates.map((t) => (
-                          <button
-                            key={t.id}
-                            onClick={() => setVideoMovement(t.id)}
-                            className={cn(
-                              "px-3 py-2 rounded-lg text-[11px] text-left transition-all border",
-                              videoMovement === t.id
-                                ? "bg-brand-accent/12 border-brand-accent/35 text-brand-accent font-medium"
-                                : "bg-white/[0.03] border-white/[0.07] text-white/38 hover:bg-white/[0.06] hover:text-white/65",
-                            )}
-                          >
-                            {t.title}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {videoError && (
-                      <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-[11px] text-red-200">
-                        {videoError}
-                      </div>
-                    )}
-
-                    {videoResults.length > 0 && (
-                      <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-3 space-y-2">
-                        <p className="text-[11px] font-medium text-emerald-200">
-                          {videoResults.length > 1 ? "Flow clips ready" : "Video ready"}
-                        </p>
-                        <div className="space-y-3">
-                          {videoResults.map((result, index) => (
-                            <div key={result.id} className="space-y-2">
-                              <div className="flex items-center justify-between gap-3">
-                                <p className="text-[10px] text-emerald-50/90">
-                                  {index + 1}. {result.title}
-                                </p>
-                                {result.stepTitle && (
-                                  <span className="text-[10px] text-emerald-100/70">{result.stepTitle}</span>
-                                )}
-                              </div>
-                              <div className="rounded-lg overflow-hidden border border-white/10 bg-black">
-                                <video src={result.videoUrl} controls playsInline className="w-full max-h-48 object-contain" />
-                              </div>
-                              <a
-                                href={result.videoUrl}
-                                download={result.fileName}
-                                className="inline-flex items-center gap-1.5 text-[11px] text-emerald-100 hover:text-white"
-                              >
-                                <Download size={11} />
-                                Download clip
-                              </a>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Footer */}
-                  <div className="px-5 pt-3 pb-5 border-t border-white/[0.06] shrink-0">
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-[10px] text-white/28 font-mono">Cost</span>
-                      <span className="flex items-center gap-1 text-[11px] font-semibold text-white/60 font-mono">
-                        <Zap size={10} className="text-yellow-400/70" />
-                        {selectedFlowTokenCost} tokens
-                      </span>
-                    </div>
-                    <button
-                      onClick={handleCreateVideo}
-                      disabled={isCreatingVideo || !videoCard}
-                      className={cn(
-                        "w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold transition-all",
-                        isCreatingVideo
-                          ? "bg-white/[0.05] text-white/22 cursor-not-allowed"
-                          : "bg-gradient-to-r from-brand-accent to-violet-400 text-white hover:opacity-90 shadow-[0_4px_24px_rgba(139,92,246,0.35)]",
-                      )}
-                    >
-                      {isCreatingVideo ? (
-                        <>
-                          <div className="w-3.5 h-3.5 rounded-full border-[1.5px] border-white/20 border-t-white animate-spin" />
-                          {selectedFlowClipCount > 1 ? "Creating flow..." : "Creating..."}
-                        </>
-                      ) : (
-                        <>
-                          <Film size={14} />
-                          {selectedFlowClipCount > 1 ? `Create ${selectedFlowClipCount}-Clip Flow` : "Create Video"}
-                        </>
-                      )}
-                    </button>
-                  </div>
+                  ) : (
+                    <p className="text-[11px] text-white/40">
+                      Start generation to render clip cards directly on the canvas.
+                    </p>
+                  )}
                 </div>
+              )}
+                </div>
+
+                <div className="px-4 py-3 border-t border-white/[0.06]">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-[10px] text-white/28 font-mono">Cost</span>
+                <span className="flex items-center gap-1 text-[11px] font-semibold text-white/60 font-mono">
+                  <Zap size={10} className="text-yellow-400/70" />
+                  {selectedVideoTokenCost} tokens
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={videoWizardStep === 1}
+                  onClick={() => setVideoWizardStep((prev) => (prev > 1 ? ((prev - 1) as 1 | 2 | 3 | 4) : prev))}
+                  className="h-9 px-3 rounded-lg border border-white/[0.1] text-xs text-white/55 hover:text-white hover:bg-white/[0.06] disabled:opacity-30"
+                >
+                  Back
+                </button>
+                {videoWizardStep < 4 ? (
+                  <button
+                    type="button"
+                    onClick={() => setVideoWizardStep((prev) => (prev < 4 ? ((prev + 1) as 1 | 2 | 3 | 4) : prev))}
+                    className="flex-1 h-9 rounded-lg bg-white/[0.08] hover:bg-white/[0.14] text-xs text-white/85"
+                  >
+                    Next
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleCreateVideo}
+                    disabled={isCreatingVideo || !videoCard}
+                    className={cn(
+                      "flex-1 h-9 flex items-center justify-center gap-2 rounded-lg text-xs font-semibold transition-all",
+                      isCreatingVideo
+                        ? "bg-white/[0.05] text-white/22 cursor-not-allowed"
+                        : "bg-gradient-to-r from-brand-accent to-violet-400 text-white hover:opacity-90",
+                    )}
+                  >
+                    {isCreatingVideo ? "Creating..." : "Create Video"}
+                  </button>
+                )}
+              </div>
+                </div>
+              </div>
+            </div>
               </div>
             </motion.div>
           </>

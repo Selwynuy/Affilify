@@ -5,15 +5,20 @@ const createClient = vi.hoisted(() => vi.fn())
 const createAdminClient = vi.hoisted(() => vi.fn())
 const getTokenBalance = vi.hoisted(() => vi.fn())
 const deductTokens = vi.hoisted(() => vi.fn())
+const syncSubscriptionTokenAccrual = vi.hoisted(() => vi.fn())
 const rateLimit = vi.hoisted(() => vi.fn())
 const verifySameOrigin = vi.hoisted(() => vi.fn())
 const getMarketplaceTemplateDefaults = vi.hoisted(() => vi.fn())
 const getPublishedMarketplaceTemplateById = vi.hoisted(() => vi.fn())
 const getTemplateConfigValue = vi.hoisted(() => vi.fn())
+const getGoogleVendorCostUsd = vi.hoisted(() => vi.fn())
+const recordVendorCostEvent = vi.hoisted(() => vi.fn())
+const assertStorageCapacity = vi.hoisted(() => vi.fn())
+const resolveProjectThumbnailUrl = vi.hoisted(() => vi.fn())
 
 vi.mock('@/lib/supabase/server', () => ({ createClient }))
 vi.mock('@/lib/supabase/admin', () => ({ createAdminClient }))
-vi.mock('@/lib/billing/tokens', () => ({ deductTokens, getTokenBalance }))
+vi.mock('@/lib/billing/tokens', () => ({ deductTokens, getTokenBalance, syncSubscriptionTokenAccrual }))
 vi.mock('@/lib/db-rate-limit', () => ({ rateLimit }))
 vi.mock('@/lib/security', async () => {
   const actual = await vi.importActual<typeof import('@/lib/security')>('@/lib/security')
@@ -23,6 +28,17 @@ vi.mock('@/lib/data/marketplace-templates', () => ({
   getMarketplaceTemplateDefaults,
   getPublishedMarketplaceTemplateById,
   getTemplateConfigValue,
+}))
+vi.mock('@/lib/analytics/profitability', () => ({
+  getGoogleVendorCostUsd,
+  recordVendorCostEvent,
+}))
+vi.mock('@/lib/storage/quota', () => ({
+  StorageLimitError: class StorageLimitError extends Error {},
+  assertStorageCapacity,
+}))
+vi.mock('@/lib/projects/thumbnail', () => ({
+  resolveProjectThumbnailUrl,
 }))
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }))
 
@@ -140,5 +156,37 @@ describe('POST /api/generate', () => {
     expect(chunks.some(c => c.type === 'progress')).toBe(true)
     expect(chunks.some(c => c.type === 'image')).toBe(true)
     expect(chunks.at(-1)?.type).toBe('done')
+  })
+
+  it('tells Gemini to make wearable products worn by default instead of hand-held', async () => {
+    verifySameOrigin.mockReturnValue(null)
+    createClient.mockResolvedValue({ auth: { getUser: vi.fn(async () => ({ data: { user: { id: 'u1' } } })) } })
+    createAdminClient.mockReturnValue(adminMock())
+    rateLimit.mockResolvedValue({ allowed: true, resetAt: Date.now() + 1_000 })
+    getTokenBalance.mockResolvedValue(1000)
+    deductTokens.mockResolvedValue(true)
+    getMarketplaceTemplateDefaults.mockResolvedValue({ shotTypeTemplateId: 'cam_1' })
+    getPublishedMarketplaceTemplateById.mockResolvedValue({})
+    getTemplateConfigValue.mockReturnValue('eye level')
+
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      candidates: [{ content: { parts: [{ inlineData: { mimeType: 'image/png', data: Buffer.from('img').toString('base64') } }] } }],
+    }), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const res = await POST(new Request('http://localhost/api/generate', {
+      method: 'POST',
+      body: JSON.stringify({ projectId: '550e8400-e29b-41d4-a716-446655440000' }),
+    }) as never)
+
+    expect(res.status).toBe(200)
+
+    const requestBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))
+    const prompt = requestBody.contents[0].parts.at(-1).text as string
+
+    expect(prompt).toContain('If a product is wearable, the model must wear it on the correct body part by default.')
+    expect(prompt).toContain("Do not stage wearable products as hand-held items, carried props, or products floating beside the model unless the user's final instruction explicitly asks for that presentation.")
+    expect(prompt).toContain('If the attached product image shows shoes or any other wearable item, the model must still be wearing that item even when it is outside the final frame.')
+    expect(prompt).toContain('Never turn an off-frame wearable product into a hand-held item, carried prop, or separate staged object just because that body part is cropped out.')
   })
 })
