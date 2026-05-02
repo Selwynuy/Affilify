@@ -25,21 +25,21 @@ export function IntroSection() {
         <div className="hidden lg:flex flex-col gap-4 shrink-0 w-44">
           <Image
             src="/Introduction Section/1.png"
-            alt=""
+            alt="AI-generated fashion model wearing a styled outfit"
             width={144}
             height={208}
             className="w-36 h-52 rounded-2xl object-cover ml-4"
           />
           <Image
             src="/Introduction Section/2.png"
-            alt=""
+            alt="AI-generated fashion model in editorial pose"
             width={128}
             height={176}
             className="w-32 h-44 rounded-2xl object-cover"
           />
           <Image
             src="/Introduction Section/3.png"
-            alt=""
+            alt="AI-generated model showcasing a casual product look"
             width={112}
             height={144}
             className="w-28 h-36 rounded-2xl object-cover ml-6"
@@ -83,21 +83,21 @@ export function IntroSection() {
         <div className="hidden lg:flex flex-col gap-4 shrink-0 w-44 items-end">
           <Image
             src="/Introduction Section/4.png"
-            alt=""
+            alt="AI-generated model showcasing a streetwear outfit"
             width={144}
             height={224}
             className="w-36 h-56 rounded-2xl object-cover mr-4"
           />
           <Image
             src="/Introduction Section/5.png"
-            alt=""
+            alt="AI-generated model wearing accessories"
             width={112}
             height={160}
             className="w-28 h-40 rounded-2xl object-cover"
           />
           <Image
             src="/Introduction Section/6.png"
-            alt=""
+            alt="AI-generated model in a luxury product look"
             width={128}
             height={176}
             className="w-32 h-44 rounded-2xl object-cover mr-6"

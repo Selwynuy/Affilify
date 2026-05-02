@@ -32,7 +32,7 @@ function CarouselRow({ direction }: { direction: "left" | "right" }) {
           >
             <Image
               src={src}
-              alt={`Model ${(i % CAROUSEL_IMAGES.length) + 1}`}
+              alt={`Genetrify AI fashion model sample ${(i % CAROUSEL_IMAGES.length) + 1}`}
               fill
               sizes="(max-width: 640px) 256px, (max-width: 768px) 288px, 320px"
               className="object-cover"
