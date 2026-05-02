@@ -9,6 +9,8 @@ import {
   buildBackgroundConfigFromTemplate,
 } from '@/lib/preferences'
 import { isUuid, sanitizeText, verifySameOrigin } from '@/lib/security'
+import { rateLimit } from '@/lib/db-rate-limit'
+import { RATE_LIMITS } from '@/lib/rate-limit-policy'
 
 export async function GET() {
   const supabase = await createClient()
@@ -52,6 +54,9 @@ export async function POST(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const rl = await rateLimit(`preferences:user:${user.id}`, RATE_LIMITS.preferences)
+  if (!rl.allowed) return NextResponse.json({ error: 'Too many requests.' }, { status: 429 })
 
   const body = await req.json()
 

@@ -3,6 +3,8 @@ import { verifyAdmin } from '@/lib/admin/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { TicketStatus } from '@/lib/types/support'
 import { isUuid, sanitizeText, verifySameOrigin } from '@/lib/security'
+import { rateLimit } from '@/lib/db-rate-limit'
+import { RATE_LIMITS } from '@/lib/rate-limit-policy'
 
 // GET — ticket detail + messages (admin)
 export async function GET(
@@ -52,6 +54,9 @@ export async function PATCH(
   if (!isUuid(id)) return NextResponse.json({ error: 'Invalid ticket id' }, { status: 400 })
   const user = await verifyAdmin()
   if (!user) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  const rl = await rateLimit(`admin-tickets:user:${user.id}`, RATE_LIMITS.adminMutate)
+  if (!rl.allowed) return NextResponse.json({ error: 'Too many requests.' }, { status: 429 })
 
   const payload = await req.json()
   const status = sanitizeText(payload?.status, { maxLength: 20 })

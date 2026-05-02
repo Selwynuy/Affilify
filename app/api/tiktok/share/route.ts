@@ -9,6 +9,8 @@ import {
   uploadVideoToTikTok,
 } from '@/lib/tiktok'
 import { isSafeHttpUrl, isUuid, parseInteger, sanitizeText, verifySameOrigin } from '@/lib/security'
+import { rateLimit } from '@/lib/db-rate-limit'
+import { RATE_LIMITS } from '@/lib/rate-limit-policy'
 
 function getShareErrorStatus(message: string) {
   const normalized = message.toLowerCase()
@@ -39,6 +41,9 @@ export async function POST(req: NextRequest) {
     } = await supabase.auth.getUser()
 
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const rl = await rateLimit(`tiktok-share:user:${user.id}`, RATE_LIMITS.tiktokShare)
+    if (!rl.allowed) return NextResponse.json({ error: 'Too many requests.' }, { status: 429 })
 
     const payload = await req.json()
     const storageFileId = isUuid(payload?.storageFileId) ? payload.storageFileId : null

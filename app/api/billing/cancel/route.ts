@@ -14,6 +14,8 @@ import { createClient } from '@/lib/supabase/server'
 import { getBillingPaymentForUser, updateBillingPaymentStatus } from '@/lib/billing/payments'
 import { logger } from '@/lib/logger'
 import { isUuid, verifySameOrigin } from '@/lib/security'
+import { rateLimit } from '@/lib/db-rate-limit'
+import { RATE_LIMITS } from '@/lib/rate-limit-policy'
 
 export async function POST(req: NextRequest) {
   const originError = verifySameOrigin(req)
@@ -22,6 +24,9 @@ export async function POST(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const rl = await rateLimit(`billing-cancel:user:${user.id}`, RATE_LIMITS.billingCancel)
+  if (!rl.allowed) return NextResponse.json({ error: 'Too many requests.' }, { status: 429 })
 
   const body = await req.json()
   const intentId = typeof body?.intentId === 'string' ? body.intentId.trim() : ''

@@ -1,13 +1,20 @@
 import { describe, expect, it, vi } from 'vitest'
 
 const createClient = vi.hoisted(() => vi.fn())
+const rateLimit = vi.hoisted(() => vi.fn(async () => ({ allowed: true, resetAt: Date.now() + 1000, remaining: 99 })))
+const headersFn = vi.hoisted(() => vi.fn(async () => ({
+  get: (_key: string) => null,
+})))
 
 vi.mock('@/lib/supabase/server', () => ({ createClient }))
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
 vi.mock('next/navigation', () => ({ redirect: vi.fn() }))
+vi.mock('next/headers', () => ({ headers: headersFn }))
+vi.mock('@/lib/db-rate-limit', () => ({ rateLimit }))
 vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: vi.fn() }))
 vi.mock('@/lib/email/resend', () => ({ sendEmail: vi.fn() }))
 vi.mock('@/lib/email/templates/welcome', () => ({ welcomeEmail: vi.fn(() => ({ subject: 'Welcome', html: '<p>x</p>' })) }))
+vi.mock('@/lib/logger', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }))
 
 import { forgotPassword, resetPassword } from './auth'
 

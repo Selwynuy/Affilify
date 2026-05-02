@@ -3,6 +3,8 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { resolveProjectThumbnailUrl } from '@/lib/projects/thumbnail'
 import { isUuid, sanitizeText, verifySameOrigin } from '@/lib/security'
+import { rateLimit } from '@/lib/db-rate-limit'
+import { RATE_LIMITS } from '@/lib/rate-limit-policy'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -64,6 +66,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  const rl = await rateLimit(`projects:user:${user.id}`, RATE_LIMITS.projectsWrite)
+  if (!rl.allowed) return NextResponse.json({ error: 'Too many requests.' }, { status: 429 })
+
   const body = await req.json()
   const updates: Record<string, unknown> = {}
 
@@ -124,6 +129,9 @@ export async function DELETE(req: NextRequest, { params }: Params) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const rl = await rateLimit(`projects:user:${user.id}`, RATE_LIMITS.projectsWrite)
+  if (!rl.allowed) return NextResponse.json({ error: 'Too many requests.' }, { status: 429 })
 
   const admin = createAdminClient()
 

@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/server'
 import { sendEmail } from '@/lib/email/resend'
 import { welcomeEmail } from '@/lib/email/templates/welcome'
 import { rateLimit } from '@/lib/db-rate-limit'
+import { RATE_LIMITS } from '@/lib/rate-limit-policy'
 import { logger } from '@/lib/logger'
 
 export async function login(formData: FormData) {
@@ -99,6 +100,17 @@ export async function logout() {
 }
 
 export async function forgotPassword(formData: FormData): Promise<{ error?: string; success?: boolean }> {
+  const headersList = await headers()
+  const ip = headersList.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
+
+  // Rate-limit IP before any DB or email work — this is unauthenticated.
+  const rl = await rateLimit(`forgot:ip:${ip}`, RATE_LIMITS.authForgotPassword)
+  if (!rl.allowed) {
+    // Still return success to prevent enumeration: rate-limit hit looks
+    // identical to "no such email" from the caller's perspective.
+    return { success: true }
+  }
+
   const email = (formData.get('email') as string).trim().toLowerCase()
   if (!email) return { error: 'Email is required.' }
 

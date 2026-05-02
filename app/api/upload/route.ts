@@ -22,6 +22,8 @@ import {
   verifySameOrigin,
 } from '@/lib/security'
 import { StorageLimitError, assertStorageCapacity } from '@/lib/storage/quota'
+import { rateLimit } from '@/lib/db-rate-limit'
+import { RATE_LIMITS } from '@/lib/rate-limit-policy'
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024
 const MAX_PRODUCT_FILES = 5
@@ -83,6 +85,9 @@ export async function POST(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const rl = await rateLimit(`upload:user:${user.id}`, RATE_LIMITS.upload)
+  if (!rl.allowed) return NextResponse.json({ error: 'Too many requests.' }, { status: 429 })
 
   const admin = createAdminClient()
   const formData = await req.formData()

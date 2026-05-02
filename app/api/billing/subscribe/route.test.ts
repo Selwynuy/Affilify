@@ -7,11 +7,13 @@ const createAdminClient = vi.hoisted(() => vi.fn())
 const getBillingControls = vi.hoisted(() => vi.fn())
 const createSubscription = vi.hoisted(() => vi.fn())
 const verifySameOrigin = vi.hoisted(() => vi.fn())
+const rateLimit = vi.hoisted(() => vi.fn(async () => ({ allowed: true, resetAt: Date.now() + 1000, remaining: 99 })))
 
 vi.mock('@/lib/supabase/server', () => ({ createClient }))
 vi.mock('@/lib/supabase/admin', () => ({ createAdminClient }))
 vi.mock('@/lib/billing/launch-control', () => ({ getBillingControls }))
 vi.mock('@/lib/billing/paymongo', () => ({ createSubscription }))
+vi.mock('@/lib/db-rate-limit', () => ({ rateLimit }))
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), info: vi.fn(), warn: vi.fn() } }))
 vi.mock('@/lib/security', async () => {
   const actual = await vi.importActual<typeof import('@/lib/security')>('@/lib/security')

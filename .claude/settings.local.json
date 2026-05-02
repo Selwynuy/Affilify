@@ -41,7 +41,9 @@
       "Bash(grep:*)",
       "Bash(find /d/Projects/Genetrify/e2e -name \"*.spec.ts\" -exec wc -l {} \\\\;)",
       "Bash(awk '{sum+=$1} END {print \"Total e2e lines:\", sum}')",
-      "Bash(npm uninstall:*)"
+      "Bash(npm uninstall:*)",
+      "Bash(powershell *)",
+      "Bash(Select-Object -First 3)"
     ],
     "deny": [
       "Bash(rm -rf:*)",
@@ -52,5 +54,9 @@
       "Bash(ssh:*)",
       "Bash(> /dev/:*)"
     ]
-  }
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "shadcn"
+  ]
 }

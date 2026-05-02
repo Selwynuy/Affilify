@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { isUuid, sanitizeText, verifySameOrigin } from '@/lib/security'
 import { rateLimit } from '@/lib/db-rate-limit'
+import { RATE_LIMITS } from '@/lib/rate-limit-policy'
 
 // GET /api/support/tickets/[id] — ticket detail + messages
 export async function GET(
@@ -49,8 +50,7 @@ export async function POST(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  // Rate limit: 20 replies per user per minute
-  const rl = await rateLimit(`support-reply:${user.id}`, { limit: 20, windowMs: 60_000 })
+  const rl = await rateLimit(`support-reply:${user.id}`, RATE_LIMITS.supportReply)
   if (!rl.allowed) {
     return NextResponse.json(
       { error: 'Too many replies. Please wait before sending another.' },
