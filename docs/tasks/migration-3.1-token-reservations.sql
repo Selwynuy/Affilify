@@ -25,7 +25,13 @@
 -- Apply manually via Supabase migration runner.
 -- =====================================================================
 
-create type if not exists token_reservation_status as enum ('active', 'committed', 'released', 'expired');
+-- Postgres has no `create type if not exists`, so we guard with a DO block.
+do $$
+begin
+    if not exists (select 1 from pg_type where typname = 'token_reservation_status') then
+        create type token_reservation_status as enum ('active', 'committed', 'released', 'expired');
+    end if;
+end$$;
 
 create table if not exists token_reservations (
     id            uuid primary key default gen_random_uuid(),
