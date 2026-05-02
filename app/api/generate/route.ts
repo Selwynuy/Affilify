@@ -18,6 +18,7 @@ import { StorageLimitError, assertStorageCapacity } from '@/lib/storage/quota'
 const GEMINI_MODEL = 'gemini-3.1-flash-image-preview'
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`
 const IMAGE_COUNT = 1
+const GEMINI_TIMEOUT_MS = 60_000
 
 function buildPrompt(
   productCount: number,
@@ -229,6 +230,8 @@ export async function POST(req: NextRequest) {
         // Tell client we're starting this image
         controller.enqueue(encode({ type: 'progress', index: i, total: IMAGE_COUNT }))
 
+        const abortController = new AbortController()
+        const timeoutHandle = setTimeout(() => abortController.abort(), GEMINI_TIMEOUT_MS)
         try {
           const res = await fetch(GEMINI_URL, {
             method: 'POST',
@@ -240,12 +243,13 @@ export async function POST(req: NextRequest) {
               contents: [{ role: 'user', parts }],
               generationConfig: { responseModalities: ['IMAGE', 'TEXT'] },
             }),
+            signal: abortController.signal,
           })
 
           if (!res.ok) {
             const err = await res.text()
             logger.error('Gemini call failed', { userId: user.id, projectId, index: i }, new Error(err))
-            controller.enqueue(encode({ type: 'image_error', index: i, error: 'Generation failed for this image' }))
+            controller.enqueue(encode({ type: 'image_error', index: i, code: 'gemini_failed', error: 'Generation failed for this image' }))
             continue
           }
 
@@ -334,8 +338,16 @@ export async function POST(req: NextRequest) {
             }))
           }
         } catch (e) {
-          logger.error('Gemini call threw', { userId: user.id, projectId, index: i }, e)
-          controller.enqueue(encode({ type: 'image_error', index: i, error: 'Unexpected error' }))
+          const isAbort = e instanceof Error && (e.name === 'AbortError' || abortController.signal.aborted)
+          if (isAbort) {
+            logger.warn('Gemini call timed out', { userId: user.id, projectId, index: i, timeoutMs: GEMINI_TIMEOUT_MS })
+            controller.enqueue(encode({ type: 'image_error', index: i, code: 'timeout', error: 'Generation timed out. Please try again.' }))
+          } else {
+            logger.error('Gemini call threw', { userId: user.id, projectId, index: i }, e)
+            controller.enqueue(encode({ type: 'image_error', index: i, code: 'unexpected', error: 'Unexpected error' }))
+          }
+        } finally {
+          clearTimeout(timeoutHandle)
         }
       }
 
