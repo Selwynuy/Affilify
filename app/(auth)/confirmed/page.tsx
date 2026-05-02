@@ -1,4 +1,12 @@
 import Link from 'next/link'
+import { pageMetadata } from '@/lib/seo'
+
+export const metadata = pageMetadata({
+  path: '/confirmed',
+  title: 'Email confirmed',
+  description: 'Your Genetrify account is now active.',
+  noIndex: true,
+})
 
 export default function ConfirmedPage() {
   return (

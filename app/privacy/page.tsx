@@ -1,12 +1,12 @@
-import type { Metadata } from "next";
-
 import { LegalPage } from "@/components/landing/legal-page";
+import { pageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
-  title: "Privacy Policy | Genetrify",
+export const metadata = pageMetadata({
+  path: "/privacy",
+  title: "Privacy Policy",
   description:
     "Privacy Policy for genetrify.com by Genetrify Information Technology Services.",
-};
+});
 
 const sections = [
   {

@@ -1,5 +1,12 @@
 import Link from 'next/link'
 import { LoginForm } from '@/components/auth/login-form'
+import { pageMetadata } from '@/lib/seo'
+
+export const metadata = pageMetadata({
+  path: '/login',
+  title: 'Sign in',
+  description: 'Sign in to Genetrify to keep generating fashion model photography and TikTok-ready videos.',
+})
 
 export default async function LoginPage(props: PageProps<'/login'>) {
   const { error } = await props.searchParams

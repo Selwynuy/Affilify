@@ -1,3 +1,12 @@
+import { pageMetadata } from '@/lib/seo'
+
+export const metadata = pageMetadata({
+  path: '/check-email',
+  title: 'Check your email',
+  description: 'Confirm your email to finish creating your Genetrify account.',
+  noIndex: true,
+})
+
 export default async function CheckEmailPage(props: PageProps<'/check-email'>) {
   const { email } = await props.searchParams
   const displayEmail = typeof email === 'string' ? email : ''

@@ -1,5 +1,12 @@
 import Link from 'next/link'
 import { ForgotPasswordForm } from '@/components/auth/forgot-password-form'
+import { pageMetadata } from '@/lib/seo'
+
+export const metadata = pageMetadata({
+  path: '/forgot-password',
+  title: 'Reset your password',
+  description: 'Send yourself a Genetrify password reset link.',
+})
 
 export default function ForgotPasswordPage() {
   return (

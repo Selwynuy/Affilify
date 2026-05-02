@@ -1,5 +1,12 @@
 import Link from 'next/link'
 import { SignupForm } from '@/components/auth/signup-form'
+import { pageMetadata } from '@/lib/seo'
+
+export const metadata = pageMetadata({
+  path: '/signup',
+  title: 'Create your account',
+  description: 'Create a free Genetrify account and start generating AI fashion model photography and TikTok-ready videos.',
+})
 
 export default function SignupPage() {
   return (

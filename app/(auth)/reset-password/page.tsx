@@ -1,4 +1,12 @@
 import { ResetPasswordForm } from '@/components/auth/reset-password-form'
+import { pageMetadata } from '@/lib/seo'
+
+export const metadata = pageMetadata({
+  path: '/reset-password',
+  title: 'Set a new password',
+  description: 'Set a new password for your Genetrify account.',
+  noIndex: true,
+})
 
 export default function ResetPasswordPage() {
   return (

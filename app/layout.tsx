@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Bebas_Neue, Geist_Mono, Poppins } from "next/font/google";
 import { Toaster } from "@/components/ui/toaster";
+import { SITE_URL } from "@/lib/seo";
 import "./globals.css";
 
 const poppins = Poppins({
@@ -21,27 +22,29 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://genetrify.com"),
+  metadataBase: new URL(SITE_URL),
   title: {
-    default: "Genetrify | AI Affiliate Video Generator",
+    default: "Genetrify | AI Fashion Model Photography & TikTok Video",
     template: "%s | Genetrify",
   },
-  description: "Generate TikTok-style affiliate videos in under 2 minutes.",
-  alternates: {
-    canonical: "/",
-  },
+  description:
+    "Generate photorealistic AI fashion model photography from your product images and turn them into TikTok-ready videos in minutes.",
+  alternates: { canonical: "/" },
   openGraph: {
-    title: "Genetrify | AI Affiliate Video Generator",
-    description: "Generate TikTok-style affiliate videos in under 2 minutes.",
-    url: "https://genetrify.com",
+    title: "Genetrify | AI Fashion Model Photography & TikTok Video",
+    description:
+      "Generate photorealistic AI fashion model photography from your product images and turn them into TikTok-ready videos in minutes.",
+    url: SITE_URL,
     siteName: "Genetrify",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Genetrify | AI Affiliate Video Generator",
-    description: "Generate TikTok-style affiliate videos in under 2 minutes.",
+    title: "Genetrify | AI Fashion Model Photography & TikTok Video",
+    description:
+      "Generate photorealistic AI fashion model photography from your product images and turn them into TikTok-ready videos in minutes.",
   },
+  robots: { index: true, follow: true },
 };
 
 export default function RootLayout({
