@@ -9,7 +9,11 @@ const getTokenBalance = vi.hoisted(() => vi.fn())
 vi.mock('@/lib/supabase/server', () => ({ createClient }))
 vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: vi.fn() }))
 vi.mock('@/lib/db-rate-limit', () => ({ rateLimit }))
-vi.mock('@/lib/billing/tokens', () => ({ deductTokens: vi.fn(), getTokenBalance }))
+vi.mock('@/lib/billing/tokens', () => ({
+  deductTokens: vi.fn(),
+  getTokenBalance,
+  syncSubscriptionTokenAccrual: vi.fn(),
+}))
 vi.mock('@/lib/security', async () => {
   const actual = await vi.importActual<typeof import('@/lib/security')>('@/lib/security')
   return { ...actual, verifySameOrigin }

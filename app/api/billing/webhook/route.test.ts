@@ -1,14 +1,32 @@
 import { describe, expect, it, vi } from 'vitest'
 
 const verifyWebhookSignature = vi.hoisted(() => vi.fn())
+const getSubscription = vi.hoisted(() => vi.fn())
 const finalizeBillingPayment = vi.hoisted(() => vi.fn())
 const updateBillingPaymentStatus = vi.hoisted(() => vi.fn())
+const syncSubscriptionTokenAccrual = vi.hoisted(() => vi.fn())
+const createAdminClient = vi.hoisted(() => vi.fn())
 
-vi.mock('@/lib/billing/paymongo', () => ({ verifyWebhookSignature }))
+vi.mock('@/lib/billing/paymongo', () => ({ verifyWebhookSignature, getSubscription }))
 vi.mock('@/lib/billing/payments', () => ({ finalizeBillingPayment, updateBillingPaymentStatus }))
+vi.mock('@/lib/billing/tokens', () => ({ syncSubscriptionTokenAccrual }))
+vi.mock('@/lib/supabase/admin', () => ({ createAdminClient }))
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }))
+
+// The route calls createAdminClient() unconditionally for every event,
+// even when (as in payment.paid/payment.failed) the admin client is not
+// actually used inside the case branch. Provide a no-op stub.
+function stubAdmin() {
+  createAdminClient.mockReturnValue({
+    from: vi.fn(() => ({
+      select: vi.fn(() => ({ eq: vi.fn(() => ({ single: vi.fn(async () => ({ data: null, error: null })) })) })),
+      update: vi.fn(() => ({ eq: vi.fn(async () => ({ data: null, error: null })) })),
+      upsert: vi.fn(async () => ({ data: null, error: null })),
+    })),
+  })
+}
 
 import { POST } from './route'
 
@@ -33,6 +51,7 @@ describe('POST /api/billing/webhook', () => {
   })
 
   it('handles payment.paid and finalizes credits', async () => {
+    stubAdmin()
     verifyWebhookSignature.mockReturnValue(true)
     finalizeBillingPayment.mockResolvedValue({ record: { user_id: 'u1', tokens: 150 } })
     const req = new Request('http://localhost/api/billing/webhook', {
@@ -57,6 +76,7 @@ describe('POST /api/billing/webhook', () => {
   })
 
   it('handles payment.failed and marks failed status', async () => {
+    stubAdmin()
     verifyWebhookSignature.mockReturnValue(true)
     const req = new Request('http://localhost/api/billing/webhook', {
       method: 'POST',
