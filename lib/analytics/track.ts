@@ -71,6 +71,6 @@ export async function track(event: AnalyticsEvent, options: TrackOptions = {}): 
       }
     }
   } catch (err) {
-    logger.warn('Analytics track threw', { event }, err)
+    logger.error('Analytics track threw', { event }, err)
   }
 }

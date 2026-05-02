@@ -169,7 +169,7 @@ describe('POST /api/generate', () => {
     getPublishedMarketplaceTemplateById.mockResolvedValue({})
     getTemplateConfigValue.mockReturnValue('eye level')
 
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+    const fetchMock = vi.fn(async (_url: string | URL | Request, _init?: RequestInit) => new Response(JSON.stringify({
       candidates: [{ content: { parts: [{ inlineData: { mimeType: 'image/png', data: Buffer.from('img').toString('base64') } }] } }],
     }), { status: 200 }))
     vi.stubGlobal('fetch', fetchMock)
