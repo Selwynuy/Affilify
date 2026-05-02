@@ -6,6 +6,20 @@
 > Priority legend: **P0** (blocking quality) · **P1** (high impact) · **P2** (medium) · **P3** (nice to have).
 > Effort legend: **S** (≤ 1 day) · **M** (2–4 days) · **L** (1–2 weeks) · **XL** (> 2 weeks).
 
+## Progress snapshot — 2026-05-02
+
+| Status | Tasks |
+|---|---|
+| ✅ Fully done | 2.4, 4.1, 9.1, 9.2 |
+| ✅ Partially done (lib/migration shipped, wiring deferred) | 3.1, 6.1, 8.1, X.2 |
+| ⏳ Not started | 1.x, 2.1, 2.2, 2.3, 3.2, 3.3, 4.2, 4.3, 5.1, 5.2, 5.3, 5.4, 6.2, 6.3, 7.x, 8.2, X.1, X.3 |
+
+**Test status:** 117/117 passing (29/29 files). Pre-existing baseline failures from before this batch were also resolved in `app/api/billing/webhook/route.test.ts` and `app/api/user-models/generate/route.test.ts` (mock-config fixes only, no production code changes).
+
+**Migrations awaiting manual apply:** none — both shipped migrations (`docs/tasks/migration-3.1-token-reservations.sql`, `docs/tasks/migration-8.1-analytics-events.sql`) have been applied to Supabase as of 2026-05-02.
+
+**Cron not yet scheduled:** `release_expired_token_reservations()` (see Task 3.1).
+
 ---
 
 ## Epic 1 — Studio Onboarding & First-Generation Experience
@@ -176,7 +190,7 @@
 
 **Acceptance criteria:**
 - [x] No code path can deduct without a successful image insert. — guaranteed by `commit_token_reservation` writing ledger only on `active → committed` transition.
-- [x] No code path can leave a reservation orphaned > 6 min. — `release_expired_token_reservations()` cron entrypoint provided; scheduling deferred.
+- [ ] No code path can leave a reservation orphaned > 6 min. — RPC `release_expired_token_reservations()` exists, but the recurring schedule is NOT yet wired (pg_cron / Vercel cron). Mark complete only after scheduling.
 
 ---
 
@@ -229,7 +243,7 @@
 - [x] `app/robots.test.ts`: 4 invariants — root allow, disallow coverage, sitemap link, host declaration.
 
 **Acceptance criteria:**
-- [x] Both files served from production with correct `Content-Type` (Next.js MetadataRoute handles this).
+- [x] Both routes implemented; Next.js MetadataRoute serves them with correct `Content-Type`. Production verification still pending a deploy.
 
 ---
 
@@ -325,16 +339,20 @@
 
 ---
 
-### Task 5.4 — Lift body text contrast to ≥ 4.5:1
+### Task 5.4 — Lift body text contrast to ≥ 4.5:1 ⚠ PARTIAL (PricingSection only, via Task 9.2)
 **Priority:** P1 · **Effort:** S
 **Why:** Pricing section uses `text-brand-text/25`, `/30`, `/40`, `/45` on dark — likely fails WCAG AA.
 
+**Resolution (2026-05-02):** Task 9.2 lifted the pricing-section opacities (`/25–/45` → `/65–/85`) and the `test/pricing-section.test.ts` invariant locks them. The rest of the audit (other landing sections, dashboard, billing) is still open.
+
 **Scope:**
-- [ ] Audit all opacity utilities below `/60` on body text.
+- [x] PricingSection opacity utilities ≥ `/65` (covered by Task 9.2).
+- [ ] Audit all opacity utilities below `/60` on body text in the rest of the app (other landing sections, dashboard, billing).
 - [ ] Replace with ≥ `/70` for body, ≥ `/55` for non-essential meta only.
 - [ ] Define semantic tokens: `--text-primary`, `--text-secondary`, `--text-muted` with verified contrast.
 
 **Tests:**
+- [x] `test/pricing-section.test.ts`: invariant — no `text-brand-text/{25,30,40,45}` survives in PricingSection.
 - [ ] `tests/a11y/contrast.test.ts`: parse computed styles for sample landing/pricing text; assert luminance ratio ≥ 4.5 vs background.
 - [ ] `tests/e2e/a11y-axe.spec.ts`: extend axe run to landing — fail on `color-contrast` violations.
 
@@ -554,18 +572,18 @@
 ## Suggested Sequencing
 
 **Sprint 1 (week 1–2): Stop the bleeding (P1 quick + safety)**
-- [ ] 2.4 AbortController
-- [ ] 4.1 Sitemap/robots
+- [x] 2.4 AbortController
+- [x] 4.1 Sitemap/robots
 - [ ] 5.1 Aria-labels
-- [ ] 5.4 Contrast
+- [~] 5.4 Contrast — partial (PricingSection done via 9.2; rest open)
 - [ ] X.1 Axe
-- [ ] X.2 Bundle gate
+- [x] X.2 Bundle gate (warn-only; flip to enforce once a CI workflow exists)
 
 **Sprint 2 (week 3–4): Conversion + integrity**
 - [ ] 1.1 Simple mode
-- [ ] 3.1 Reserve/commit
+- [~] 3.1 Reserve/commit — migration applied + lib + tests; route wiring + cron schedule deferred
 - [ ] 2.2 Stream URLs
-- [ ] 8.1 Analytics
+- [~] 8.1 Analytics — adapter + migration applied; per-event emission + view deferred
 
 **Sprint 3 (week 5–6): SEO + performance**
 - [ ] 4.2 JSON-LD
@@ -574,10 +592,14 @@
 - [ ] 2.3 RSC landing
 
 **Sprint 4 (week 7+): Growth + retention**
-- [ ] 6.1 Outcome framing
+- [~] 6.1 Outcome framing — helper shipped; UI wiring deferred
 - [ ] 6.2 Watermark
 - [ ] 7.1 Tranche emails
 - [ ] 8.2 Quality KPIs
+
+**Out-of-sequence completions (P3 done early)**
+- [x] 9.1 Dead nav redirects (was already absent in repo; CLAUDE.md was stale)
+- [x] 9.2 Single anchor pricing badge + PricingSection contrast lift
 
 ---
 
