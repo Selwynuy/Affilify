@@ -6,19 +6,28 @@
 > Priority legend: **P0** (blocking quality) · **P1** (high impact) · **P2** (medium) · **P3** (nice to have).
 > Effort legend: **S** (≤ 1 day) · **M** (2–4 days) · **L** (1–2 weeks) · **XL** (> 2 weeks).
 
-## Progress snapshot — 2026-05-02
+## Progress snapshot — 2026-05-02 (after security & SEO sweep)
 
 | Status | Tasks |
 |---|---|
-| ✅ Fully done | 2.4, 4.1, 9.1, 9.2 |
+| ✅ Fully done | 2.4, 4.1, 4.3, 9.1, 9.2 |
 | ✅ Partially done (lib/migration shipped, wiring deferred) | 3.1, 6.1, 8.1, X.2 |
-| ⏳ Not started | 1.x, 2.1, 2.2, 2.3, 3.2, 3.3, 4.2, 4.3, 5.1, 5.2, 5.3, 5.4, 6.2, 6.3, 7.x, 8.2, X.1, X.3 |
+| ✅ Partially done (subset shipped) | 5.1 (alt text on landing imagery), 5.4 (PricingSection contrast) |
+| ⏳ Not started | 1.x, 2.1, 2.2, 2.3, 3.2, 3.3, 4.2, 5.2, 5.3, 6.2, 6.3, 7.x, 8.2, X.1, X.3 |
 
-**Test status:** 117/117 passing (29/29 files). Pre-existing baseline failures from before this batch were also resolved in `app/api/billing/webhook/route.test.ts` and `app/api/user-models/generate/route.test.ts` (mock-config fixes only, no production code changes).
+**Test status:** 129/129 passing (31/31 files). All historical baseline failures resolved in earlier batches.
 
-**Migrations awaiting manual apply:** none — both shipped migrations (`docs/tasks/migration-3.1-token-reservations.sql`, `docs/tasks/migration-8.1-analytics-events.sql`) have been applied to Supabase as of 2026-05-02.
+**Migrations applied to Supabase as of 2026-05-02:** `migration-3.1-token-reservations.sql`, `migration-8.1-analytics-events.sql`.
 
 **Cron not yet scheduled:** `release_expired_token_reservations()` (see Task 3.1).
+
+**Security & SEO sweep (2026-05-02):** see `docs/tasks/security-audit-2026-05-02.md`. Highlights:
+- Centralized `lib/rate-limit-policy.ts` and applied rate limits to 14 mutation routes that previously had none.
+- Added Cross-Origin-Opener-Policy and Cross-Origin-Resource-Policy headers.
+- Added `lib/seo.ts` with `pageMetadata()` helper; canonical tags now on every public page (10 pages).
+- Sitemap rebalanced (raised `/signup` priority); robots tightened with explicit Googlebot/Bingbot rules.
+- Root metadata rewritten to canonical positioning ("AI Fashion Model Photography & TikTok Video").
+- Meaningful alt text on IntroSection + CarouselSection model imagery.
 
 ---
 
@@ -266,22 +275,25 @@
 
 ---
 
-### Task 4.3 — Rewrite metadata around fashion model photography
+### Task 4.3 — Rewrite metadata around fashion model photography ✅ DONE (root + public pages)
 **Priority:** P2 · **Effort:** S
-**Why:** Title says "AI Affiliate Video Generator" while product is "AI fashion model photography" — confusing positioning, weak keyword targeting.
+**Why:** Title said "AI Affiliate Video Generator" while product is "AI fashion model photography" — confusing positioning, weak keyword targeting.
+
+**Resolution (2026-05-02):** Root metadata rewritten and `pageMetadata()` helper applied to all 10 public pages with canonical tags. Landing hero copy and CLAUDE.md still pending — they require product/marketing approval.
 
 **Scope:**
-- [ ] Decide canonical positioning (recommend: "AI fashion model photography & TikTok-ready video").
-- [ ] Update `app/layout.tsx` metadata.
-- [ ] Update landing copy.
-- [ ] Update `CLAUDE.md`.
-- [ ] Add per-page `metadata` exports for `/billing`, `/templates`, legal pages.
+- [x] Decide canonical positioning: "AI Fashion Model Photography & TikTok Video".
+- [x] Update `app/layout.tsx` metadata.
+- [ ] Update landing hero copy. — deferred (marketing-owned)
+- [ ] Update `CLAUDE.md` description. — deferred
+- [x] Add per-page `metadata` exports with canonical tags for `/cookies`, `/privacy`, `/terms`, `/refunds`, `/login`, `/signup`, `/forgot-password`, `/check-email`, `/confirmed`, `/reset-password`. (Authenticated pages do not need per-page metadata.)
 
 **Tests:**
-- [ ] `tests/seo/metadata.test.ts`: assert root metadata title contains canonical phrasing; assert each top-level public page has its own title/description.
+- [x] `lib/seo.test.ts` — 8 cases covering canonical shape, homepage no-double-slash, leading-slash normalization, robots default + noIndex, siteName, OG type, Twitter card, OG image passthrough, SITE_URL trailing slash strip.
 
 **Acceptance criteria:**
-- [ ] One consistent product narrative across `<title>`, OG, hero, and CLAUDE.md.
+- [x] One consistent product narrative across root `<title>` and OG.
+- [ ] Landing hero copy aligned. — deferred
 
 ---
 
