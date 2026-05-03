@@ -104,10 +104,10 @@ export function FaqSection() {
             Questions
           </h2>
           <a
-            href="mailto:support@genetrify.com"
+            href="#top"
             className="inline-flex items-center gap-2 w-fit border border-white/12 hover:border-white/25 text-brand-text text-[13px] font-semibold px-5 py-2.5 rounded-full transition-all duration-200 hover:bg-white/4"
           >
-            Ask your question
+            Still have questions? Join the waitlist
           </a>
         </div>
 

@@ -1,9 +1,228 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, Users, ShoppingBag, Video } from "lucide-react";
+import { ArrowRight, Check, Play } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useInView } from "../hooks/useInView";
+
+// ── Step 02 mockup: tilted product collage ──────────────────────────────────
+function ProductCollage() {
+  const cards = [
+    {
+      src: "/Introduction Section/1.png",
+      label: "shirt-01.jpg",
+      tilt: -8,
+      x: -8,
+      y: -4,
+      z: 4,
+    },
+    {
+      src: "/Introduction Section/4.png",
+      label: "jacket-02.jpg",
+      tilt: 6,
+      x: 18,
+      y: 8,
+      z: 3,
+    },
+    {
+      src: "/Introduction Section/2.png",
+      label: "denim-03.jpg",
+      tilt: -4,
+      x: -14,
+      y: 22,
+      z: 2,
+    },
+    {
+      src: "/Introduction Section/5.png",
+      label: "sneakers-04.jpg",
+      tilt: 10,
+      x: 12,
+      y: 32,
+      z: 1,
+    },
+  ];
+
+  return (
+    <div className="absolute inset-0 flex items-center justify-center">
+      {/* Soft purple glow behind stack */}
+      <div className="absolute inset-x-8 top-1/4 h-2/3 rounded-full bg-brand-accent/15 blur-3xl" />
+
+      <div className="relative w-full h-full">
+        {cards.map((c) => (
+          <div
+            key={c.label}
+            className="absolute left-1/2 top-1/2 w-[68%] aspect-3/4 rounded-2xl overflow-hidden border border-white/10 bg-brand-surface shadow-[0_30px_60px_-12px_rgba(0,0,0,0.7)]"
+            style={{
+              transform: `translate(-50%, -50%) translate(${c.x}%, ${c.y}%) rotate(${c.tilt}deg)`,
+              zIndex: c.z,
+            }}
+          >
+            <Image
+              src={c.src}
+              alt=""
+              fill
+              sizes="(max-width: 768px) 50vw, 280px"
+              className="object-cover"
+              draggable={false}
+            />
+            {/* Filename chip — bottom-left */}
+            <div className="absolute bottom-2 left-2 right-2 flex items-center gap-1.5">
+              <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-black/70 backdrop-blur-sm border border-white/10">
+                <Check className="w-2.5 h-2.5 text-brand-accent shrink-0" />
+                <span className="text-[9px] font-mono text-white/85 truncate">
+                  {c.label}
+                </span>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Step 01 mockup: avatar/template card fan ────────────────────────────────
+function AvatarFan() {
+  const cards = [
+    {
+      src: "/Homepage Carousel/3.png",
+      tag: "Streetwear",
+      tilt: -12,
+      x: -32,
+      y: 4,
+      z: 1,
+      active: false,
+    },
+    {
+      src: "/Homepage Carousel/1.png",
+      tag: "Editorial",
+      tilt: 0,
+      x: 0,
+      y: -4,
+      z: 3,
+      active: true,
+    },
+    {
+      src: "/Homepage Carousel/5.png",
+      tag: "Studio",
+      tilt: 12,
+      x: 32,
+      y: 4,
+      z: 1,
+      active: false,
+    },
+  ];
+
+  return (
+    <div className="absolute inset-0 flex items-center justify-center">
+      {/* Soft purple glow */}
+      <div className="absolute inset-x-8 top-1/4 h-2/3 rounded-full bg-brand-accent/15 blur-3xl" />
+
+      <div className="relative w-full h-full">
+        {cards.map((c) => (
+          <div
+            key={c.tag}
+            className={cn(
+              "absolute left-1/2 top-1/2 w-[58%] aspect-3/4 rounded-2xl overflow-hidden bg-brand-surface transition-transform",
+              c.active
+                ? "border-2 border-brand-accent shadow-[0_0_40px_rgba(139,92,246,0.45),0_30px_60px_-12px_rgba(0,0,0,0.7)]"
+                : "border border-white/10 shadow-[0_24px_48px_-12px_rgba(0,0,0,0.6)] opacity-80",
+            )}
+            style={{
+              transform: `translate(-50%, -50%) translate(${c.x}%, ${c.y}%) rotate(${c.tilt}deg) scale(${c.active ? 1.05 : 0.95})`,
+              zIndex: c.z,
+            }}
+          >
+            <Image
+              src={c.src}
+              alt=""
+              fill
+              sizes="(max-width: 768px) 50vw, 280px"
+              className="object-cover"
+              draggable={false}
+            />
+            {/* Tag chip */}
+            <div className="absolute top-2 left-2">
+              <span className="text-[9px] font-mono uppercase tracking-widest text-white/85 bg-black/65 backdrop-blur-sm border border-white/10 px-1.5 py-0.5 rounded-md">
+                {c.tag}
+              </span>
+            </div>
+            {/* Active badge */}
+            {c.active && (
+              <div className="absolute inset-x-2 bottom-2 flex items-center justify-center gap-1 rounded-md py-1 bg-brand-accent text-brand-bg text-[9px] font-bold uppercase tracking-widest">
+                <Check className="w-2.5 h-2.5" /> Active
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Step 03 mockup: image → video phone stack ───────────────────────────────
+function ImageToVideoStack() {
+  return (
+    <div className="absolute inset-0 flex items-center justify-center">
+      {/* Soft purple glow */}
+      <div className="absolute inset-x-8 top-1/4 h-2/3 rounded-full bg-brand-accent/15 blur-3xl" />
+
+      <div className="relative w-full h-full">
+        {/* Background — generated image card (4:5 portrait) */}
+        <div
+          className="absolute left-1/2 top-1/2 w-[55%] aspect-4/5 rounded-2xl overflow-hidden border border-white/10 bg-brand-surface shadow-[0_30px_60px_-12px_rgba(0,0,0,0.7)]"
+          style={{
+            transform: "translate(-50%, -50%) translate(-22%, -6%) rotate(-4deg)",
+            zIndex: 1,
+          }}
+        >
+          <Image
+            src="/Homepage Carousel/2.png"
+            alt=""
+            fill
+            sizes="(max-width: 768px) 50vw, 260px"
+            className="object-cover"
+            draggable={false}
+          />
+          <div className="absolute top-2 left-2">
+            <span className="text-[9px] font-mono uppercase tracking-widest text-white/85 bg-black/65 backdrop-blur-sm border border-white/10 px-1.5 py-0.5 rounded-md">
+              Image
+            </span>
+          </div>
+        </div>
+
+        {/* Foreground — phone-shaped video card (9:16) */}
+        <div
+          className="absolute left-1/2 top-1/2 h-[78%] aspect-[9/16] rounded-[28px] overflow-hidden border-[3px] border-white/15 bg-brand-surface shadow-[0_40px_80px_-16px_rgba(0,0,0,0.8),0_0_40px_rgba(139,92,246,0.25)]"
+          style={{
+            transform: "translate(-50%, -50%) translate(28%, 4%) rotate(5deg)",
+            zIndex: 2,
+          }}
+        >
+          <Image
+            src="/Homepage Carousel/6.png"
+            alt=""
+            fill
+            sizes="(max-width: 768px) 40vw, 220px"
+            className="object-cover"
+            draggable={false}
+          />
+          {/* Play button overlay */}
+          <div className="absolute inset-0 flex items-center justify-center bg-black/15">
+            <div className="w-14 h-14 rounded-full bg-white/95 flex items-center justify-center shadow-[0_8px_24px_rgba(0,0,0,0.5)]">
+              <Play className="w-6 h-6 text-black fill-black ml-0.5" />
+            </div>
+          </div>
+          {/* TikTok-ready chip */}
+          <div className="absolute inset-x-3 bottom-3 flex items-center justify-center gap-1 rounded-md py-1 bg-black/70 backdrop-blur-sm border border-white/10 text-[9px] font-bold uppercase tracking-widest text-white/90">
+            9:16 · TikTok ready
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function HowItWorksSections() {
   const { ref: ref1, inView: inView1 } = useInView();
@@ -55,12 +274,9 @@ export function HowItWorksSections() {
             </Link>
           </div>
           <div className="relative">
-            <div className="w-full aspect-4/5 rounded-3xl overflow-hidden bg-brand-surface">
-              <div className="absolute inset-0 bg-linear-to-br from-brand-accent/10 to-brand-bg/80 flex items-center justify-center">
-                <Users className="w-16 h-16 text-white/20" />
-              </div>
+            <div className="relative w-full aspect-square md:aspect-[5/4]">
+              <AvatarFan />
             </div>
-            <div className="absolute -bottom-4 -left-4 w-24 h-32 rounded-2xl bg-brand-accent/20 border border-brand-accent/20" />
           </div>
         </div>
       </section>
@@ -79,12 +295,9 @@ export function HowItWorksSections() {
           )}
         >
           <div className="relative order-2 md:order-1">
-            <div className="w-full aspect-4/5 rounded-3xl overflow-hidden bg-[#2e3a48]">
-              <div className="absolute inset-0 bg-linear-to-br from-brand-surface to-brand-bg/90 flex items-center justify-center">
-                <ShoppingBag className="w-16 h-16 text-white/20" />
-              </div>
+            <div className="relative w-full aspect-square md:aspect-[5/4]">
+              <ProductCollage />
             </div>
-            <div className="absolute -top-4 -right-4 w-20 h-28 rounded-2xl bg-brand-surface border border-white/8" />
           </div>
           <div className="flex flex-col gap-5 order-1 md:order-2">
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-text/40">
@@ -159,12 +372,9 @@ export function HowItWorksSections() {
             </Link>
           </div>
           <div className="relative">
-            <div className="w-full aspect-4/5 rounded-3xl overflow-hidden bg-brand-surface">
-              <div className="absolute inset-0 bg-linear-to-br from-brand-accent/15 to-brand-bg/80 flex items-center justify-center">
-                <Video className="w-16 h-16 text-white/20" />
-              </div>
+            <div className="relative w-full aspect-square md:aspect-[5/4]">
+              <ImageToVideoStack />
             </div>
-            <div className="absolute -bottom-4 -right-4 w-24 h-32 rounded-2xl bg-[#2e3a48] border border-white/8" />
           </div>
         </div>
       </section>

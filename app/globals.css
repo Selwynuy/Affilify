@@ -168,7 +168,8 @@
   scrollbar-color: rgba(139, 92, 246, 0.35) transparent;
 }
 .scrollbar-brand::-webkit-scrollbar {
-  width: 4px;
+  width: 6px;
+  height: 6px;
 }
 .scrollbar-brand::-webkit-scrollbar-track {
   background: transparent;
@@ -179,6 +180,9 @@
 }
 .scrollbar-brand::-webkit-scrollbar-thumb:hover {
   background: rgba(139, 92, 246, 0.6);
+}
+.scrollbar-brand::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -1,150 +1,192 @@
 "use client";
 
 import Link from "next/link";
-import { Zap } from "lucide-react";
+import { Zap, Check, Sparkles, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useInView } from "../hooks/useInView";
 
-const STAGGERED_MODELS = [
-  { id: "starter", name: "Starter", price: "PHP 1,099", tokens: "4,000", cadence: "133-134 tokens released daily", popular: true },
-  { id: "growth", name: "Growth", price: "PHP 2,199", tokens: "9,500", cadence: "316-317 tokens released daily", popular: false },
-  { id: "pro", name: "Pro", price: "PHP 4,999", tokens: "22,000", cadence: "733-734 tokens released daily", popular: false },
+// ── Pricing display data ─────────────────────────────────────────────────────
+// Token releases are computed from `tokensPerMonth / 30` per the actual
+// algorithm in lib/billing/tokens.ts (`getTrancheAmount`):
+//   base = floor(tokens / 30); first (tokens mod 30) days get base + 1.
+// Storage / rollover / model tier mirror lib/data/plans.ts (source of truth).
+const PLANS_DISPLAY = [
+  {
+    id: "starter",
+    name: "Starter",
+    price: "PHP 1,099",
+    tokens: "4,000",
+    popular: false,
+    features: [
+      "4,000 tokens / month",
+      "~133 tokens released daily",
+      "~100 short video runs / month",
+      "Standard models (Hailuo Fast, Wan 2.1)",
+      "3 GB storage",
+      "No token rollover",
+    ],
+  },
+  {
+    id: "growth",
+    name: "Growth",
+    price: "PHP 2,199",
+    tokens: "9,500",
+    popular: true,
+    features: [
+      "9,500 tokens / month",
+      "~316 tokens released daily",
+      "~197 full video runs / month",
+      "Standard + Pro models",
+      "10 GB storage",
+      "30-day token rollover",
+      "Everything in Starter",
+    ],
+  },
+  {
+    id: "pro",
+    name: "Pro",
+    price: "PHP 4,999",
+    tokens: "22,000",
+    popular: false,
+    features: [
+      "22,000 tokens / month",
+      "~733 tokens released daily",
+      "~458 full video runs / month",
+      "Standard + Pro models",
+      "15 GB storage",
+      "30-day token rollover",
+      "Everything in Growth",
+    ],
+  },
 ];
 
-const PACKS_DISPLAY = [
-  { id: "spark", name: "Spark", price: "PHP 99", tokens: "200", bestRate: false },
-  { id: "trial", name: "Trial", price: "PHP 249", tokens: "520", bestRate: false },
-  { id: "basic", name: "Basic", price: "PHP 649", tokens: "1,500", bestRate: false },
-  { id: "creator", name: "Creator", price: "PHP 1,499", tokens: "4,000", bestRate: false },
-  { id: "studio", name: "Studio", price: "PHP 3,299", tokens: "10,000", bestRate: true },
-];
+function SparkHero() {
+  return (
+    <div className="relative overflow-hidden rounded-2xl border border-brand-accent/30 bg-linear-to-br from-brand-accent/12 via-brand-accent/[0.04] to-transparent p-6 md:p-7 mb-8">
+      {/* Decorative glow */}
+      <div className="absolute -top-16 -right-16 w-64 h-64 rounded-full bg-brand-accent/15 blur-3xl pointer-events-none" />
+
+      <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-5">
+        <div className="flex items-start md:items-center gap-4">
+          <div className="shrink-0 w-12 h-12 rounded-xl bg-brand-accent/20 border border-brand-accent/40 flex items-center justify-center">
+            <Sparkles className="w-5 h-5 text-brand-accent" />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-accent">
+                Special launch offer
+              </span>
+              <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-brand-accent text-brand-bg">
+                New
+              </span>
+            </div>
+            <p className="text-[24px] md:text-[28px] font-black tracking-[-0.02em] text-brand-text leading-tight">
+              Start with only{" "}
+              <span className="text-brand-accent">PHP 99</span>
+            </p>
+            <p className="text-[13px] text-brand-text/65 mt-1">
+              200 tokens · one-time · no commitment · perfect for trying things out
+            </p>
+          </div>
+        </div>
+
+        <Link
+          href="#top"
+          className="shrink-0 inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-brand-accent text-brand-bg text-[13px] font-bold uppercase tracking-wider hover:bg-brand-accent-hover transition-all duration-200 whitespace-nowrap"
+        >
+          Join waitlist
+          <ArrowRight className="w-3.5 h-3.5" />
+        </Link>
+      </div>
+    </div>
+  );
+}
 
 function PricingGrid() {
   return (
     <>
-      <div className="space-y-5 mb-8">
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-[11px] font-black uppercase tracking-[0.15em] text-brand-text/75">
-            Staggered Model
-          </p>
-          <p className="text-[11px] text-brand-text/65">
-            Monthly billing · tokens released daily
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {STAGGERED_MODELS.map((plan) => (
-            <div
-              key={plan.id}
-              className={cn(
-                "relative flex flex-col rounded-2xl border p-5 text-left transition-all duration-300",
-                plan.popular
-                  ? "border-brand-accent/40 bg-brand-accent/5 ring-1 ring-brand-accent/20"
-                  : "border-white/[0.07] bg-brand-surface hover:border-white/13 hover:bg-brand-surface/80",
-              )}
-            >
-              {plan.popular && (
-                <div
-                  data-badge="anchor"
-                  className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full border border-brand-accent/40 bg-brand-accent/15 text-[10px] font-semibold text-brand-accent whitespace-nowrap tracking-wide uppercase"
-                >
-                  Launch Pick
-                </div>
-              )}
-
-              <p className="text-[11px] font-black uppercase tracking-[0.15em] text-brand-text/80 mb-3">
-                {plan.name}
-              </p>
-              <span className="text-[26px] sm:text-[30px] font-black tracking-[-0.03em] text-brand-text leading-none">
-                {plan.price}
-              </span>
-              <p className="text-[12px] text-brand-text/70 mt-1 mb-4">monthly</p>
-
-              <div className="space-y-2 mt-auto">
-                <div className="flex items-center gap-1.5">
-                  <Zap className="w-3 h-3 text-brand-accent shrink-0" />
-                  <span className="text-[13px] font-semibold text-brand-text/85">
-                    {plan.tokens} tokens / month
-                  </span>
-                </div>
-                <p className="text-[12px] leading-relaxed text-brand-text/70">
-                  {plan.cadence}
-                </p>
-              </div>
-
-              <Link
-                href="/signup"
-                className={cn(
-                  "flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-[13px] font-bold uppercase tracking-wider transition-all duration-200 mt-4",
-                  plan.popular
-                    ? "bg-brand-accent text-brand-bg hover:bg-brand-accent-hover"
-                    : "bg-white/4 hover:bg-white/8 border border-white/8 text-brand-text",
-                )}
-              >
-                Start plan
-              </Link>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="h-px bg-white/8 mb-8" />
+      <SparkHero />
 
       <div className="flex items-center justify-between gap-3 mb-5">
         <p className="text-[11px] font-black uppercase tracking-[0.15em] text-brand-text/75">
-          Token Top-Ups
+          Monthly Plans
         </p>
         <p className="text-[11px] text-brand-text/65">
-          One-time QRPH purchases
+          Tokens released daily · cancel anytime
         </p>
       </div>
 
-      <div
-        data-testid="pricing-packs"
-        className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4"
-      >
-        {PACKS_DISPLAY.map((pack) => (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {PLANS_DISPLAY.map((plan) => (
           <div
-            key={pack.id}
-            data-pack-id={pack.id}
-            className="relative flex flex-col rounded-2xl border p-5 text-left transition-all duration-300 border-white/[0.07] bg-brand-surface hover:border-white/13 hover:bg-brand-surface/80"
+            key={plan.id}
+            className={cn(
+              "relative flex flex-col rounded-2xl border p-6 text-left transition-all duration-300",
+              plan.popular
+                ? "border-brand-accent/40 bg-brand-accent/5 ring-1 ring-brand-accent/20"
+                : "border-white/[0.07] bg-brand-surface hover:border-white/13 hover:bg-brand-surface/80",
+            )}
           >
-            <p className="text-[11px] font-black uppercase tracking-[0.15em] text-brand-text/75 mb-3">
-              {pack.name}
-            </p>
-            <span className="text-[26px] sm:text-[30px] font-black tracking-[-0.03em] text-brand-text leading-none">
-              {pack.price}
-            </span>
-            <p className="text-[12px] text-brand-text/70 mt-1 mb-4">one-time</p>
-
-            <div className="flex items-center gap-1.5 mt-auto">
-              <Zap className="w-3 h-3 text-brand-accent shrink-0" />
-              <span className="text-[13px] font-semibold text-brand-text/85">
-                {pack.tokens} tokens
-              </span>
-            </div>
-
-            {pack.bestRate && (
-              <p
-                data-badge="rate-note"
-                className="text-[10px] text-brand-accent/90 mt-1 font-semibold uppercase tracking-wider"
-              >
-                Best per-token rate
-              </p>
+            {plan.popular && (
+              <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full border border-brand-accent/40 bg-brand-accent/15 text-[10px] font-semibold text-brand-accent whitespace-nowrap tracking-wide uppercase">
+                Most Popular
+              </div>
             )}
 
+            <div className="mb-5">
+              <p className="text-[11px] font-black uppercase tracking-[0.15em] text-brand-text/75 mb-3">
+                {plan.name}
+              </p>
+              <div className="flex items-baseline gap-1">
+                <span className="text-[28px] sm:text-[36px] font-black tracking-[-0.03em] text-brand-text leading-none">
+                  {plan.price}
+                </span>
+              </div>
+              <p className="text-[12px] text-brand-text/65 mt-1">per month</p>
+              <div className="mt-3 flex items-center gap-2">
+                <Zap className="w-3 h-3 text-brand-accent shrink-0" />
+                <span className="text-xs text-brand-text/85 font-semibold">
+                  {plan.tokens} tokens / month
+                </span>
+              </div>
+            </div>
+
+            <ul className="space-y-2.5 flex-1 mb-6 border-t border-white/6 pt-5 mt-2">
+              {plan.features.map((f) => (
+                <li
+                  key={f}
+                  className="flex items-start gap-2.5 text-[13px] text-brand-text/70"
+                >
+                  <Check
+                    className={cn(
+                      "w-3.5 h-3.5 shrink-0 mt-0.5",
+                      plan.popular ? "text-brand-accent" : "text-brand-text/50",
+                    )}
+                  />
+                  {f}
+                </li>
+              ))}
+            </ul>
+
             <Link
-              href="/signup"
-              className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-[13px] font-bold uppercase tracking-wider transition-all duration-200 mt-4 bg-white/4 hover:bg-white/8 border border-white/8 text-brand-text"
+              href="#top"
+              className={cn(
+                "flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-[13px] font-bold uppercase tracking-wider transition-all duration-200",
+                plan.popular
+                  ? "bg-brand-accent text-brand-bg hover:bg-brand-accent-hover"
+                  : "bg-white/4 hover:bg-white/8 border border-white/8 text-brand-text",
+              )}
             >
-              Get top-up
+              Join waitlist
             </Link>
           </div>
         ))}
       </div>
 
-      <p className="text-xs text-brand-text/65 mt-8">
-        Staggered models bill monthly and release tokens daily. Top-ups remain one-time via PayMongo QRPH.
+      <p className="text-xs text-brand-text/65 mt-8 text-center">
+        Genetrify is in early access — join the waitlist and we&apos;ll email
+        you the moment plans go live. Payments via PayMongo QRPH (GCash, Maya,
+        major PH banks).
       </p>
     </>
   );
@@ -177,13 +219,13 @@ export function PricingSection() {
             letterSpacing: "-0.01em",
           }}
         >
-          Pick your plan,
+          Start with ₱99,
           <br />
-          then scale with top-ups.
+          scale when ready.
         </h2>
         <p className="text-[15px] text-brand-text/60 max-w-lg mb-12 leading-relaxed">
-          Start with a staggered model for controlled monthly access, then use
-          one-time top-ups only when you need extra volume.
+          Try Spark for one-time use, or pick a monthly plan when you&apos;re
+          ready to ship content consistently.
         </p>
         <PricingGrid />
       </div>

@@ -1,12 +1,114 @@
 "use client";
 
-import Link from "next/link";
-import { Sparkles, Play, ArrowRight, ArrowDown, Users } from "lucide-react";
+import { useState } from "react";
+import { Sparkles, Play, ArrowRight, ArrowDown, CheckCircle2, Loader2 } from "lucide-react";
+
+function WaitlistInline() {
+  const [email, setEmail] = useState("");
+  const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [message, setMessage] = useState<string | null>(null);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (status === "loading") return;
+    setStatus("loading");
+    setMessage(null);
+
+    try {
+      const res = await fetch("/api/waitlist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, source: "landing_hero" }),
+      });
+      const data = (await res.json()) as { ok?: boolean; alreadyOnList?: boolean; error?: string };
+
+      if (!res.ok || !data.ok) {
+        setStatus("error");
+        setMessage(data.error ?? "Something went wrong. Please try again.");
+        return;
+      }
+
+      setStatus("success");
+      setMessage(
+        data.alreadyOnList
+          ? "You're already on the list — we'll be in touch soon."
+          : "You're in. We'll email you the moment Genetrify is ready.",
+      );
+    } catch {
+      setStatus("error");
+      setMessage("Network error. Please try again.");
+    }
+  }
+
+  if (status === "success") {
+    return (
+      <div className="w-full max-w-md mx-auto rounded-full border border-brand-accent/40 bg-brand-accent/10 px-5 py-3.5 flex items-center justify-center gap-2.5">
+        <CheckCircle2 className="w-4 h-4 text-brand-accent shrink-0" />
+        <span className="text-[14px] font-semibold text-[#12111a] text-center">
+          {message}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-full max-w-md mx-auto flex flex-col gap-2">
+      <form
+        onSubmit={handleSubmit}
+        className="flex flex-col sm:flex-row items-stretch gap-2 p-1.5 rounded-full bg-white border border-black/10 shadow-xl shadow-purple-200/50"
+      >
+        <label htmlFor="hero-waitlist-email" className="sr-only">
+          Email address
+        </label>
+        <input
+          id="hero-waitlist-email"
+          type="email"
+          inputMode="email"
+          autoComplete="email"
+          required
+          disabled={status === "loading"}
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@email.com"
+          className="flex-1 min-w-0 bg-transparent px-4 py-2.5 text-[15px] text-[#12111a] placeholder:text-[#12111a]/30 outline-none rounded-full"
+        />
+        <button
+          type="submit"
+          disabled={status === "loading"}
+          className="inline-flex items-center justify-center gap-2 bg-brand-accent text-[#120f1c] hover:bg-brand-accent-hover disabled:opacity-60 disabled:cursor-not-allowed font-bold px-6 py-2.5 rounded-full text-[14px] transition-all duration-200 whitespace-nowrap"
+        >
+          {status === "loading" ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Joining…
+            </>
+          ) : (
+            <>
+              Join waitlist
+              <ArrowRight className="w-4 h-4" />
+            </>
+          )}
+        </button>
+      </form>
+
+      {status === "error" && message ? (
+        <p className="text-[12px] text-red-600 px-2 text-center" role="alert">
+          {message}
+        </p>
+      ) : (
+        <p className="text-[12px] text-[#12111a]/45 text-center">
+          No spam · one launch email · unsubscribe anytime
+        </p>
+      )}
+    </div>
+  );
+}
 
 export function HeroSection() {
   return (
     <section
-      className="relative min-h-screen flex items-center overflow-hidden"
+      id="top"
+      className="relative min-h-screen flex items-center overflow-hidden scroll-mt-0"
       style={{ background: "#f5f3ff" }}
     >
       {/* Radial glow */}
@@ -14,103 +116,44 @@ export function HeroSection() {
         className="absolute inset-0 z-0 pointer-events-none"
         style={{
           background:
-            "radial-gradient(ellipse 80% 60% at 62% 40%, rgba(139,92,246,0.18), transparent 70%)",
+            "radial-gradient(ellipse 70% 60% at 50% 45%, rgba(139,92,246,0.22), transparent 70%)",
         }}
       />
 
-      <div className="relative z-20 max-w-7xl mx-auto px-4 sm:px-6 md:px-10 pt-20 pb-16 w-full grid grid-cols-1 md:grid-cols-2 gap-10 md:gap-16 items-center min-h-100svh">
-        {/* Left  text */}
-        <div className="flex flex-col gap-6">
-          <div className="inline-flex items-center gap-2 border border-brand-accent/30 bg-brand-accent/10 rounded-full px-3 py-1 text-[11px] font-semibold text-brand-accent uppercase tracking-widest w-fit">
-            <Sparkles className="w-3 h-3" />
-            AI Product Studio
-          </div>
-
-          <h1
-            className="text-[58px] sm:text-[72px] md:text-[80px] font-black leading-[0.85] tracking-[-0.01em] text-[#12111a]"
-            style={{ fontFamily: "'Bebas Neue', 'Arial Black', sans-serif" }}
-          >
-            Build Your
-            <br />
-            Model.
-            <br />
-            Dress It.
-            <br />
-            <span className="text-brand-accent">Film It.</span>
-          </h1>
-
-          <p
-            className="text-[17px] leading-relaxed max-w-100"
-            style={{ color: "rgba(18,17,26,0.52)" }}
-          >
-            Upload your face. Add your products. Genetrify generates a custom AI
-            model that looks like you wearing your exact products and turns it
-            into a video. No studio. No shoots. Just content.
-          </p>
-
-          <div className="flex flex-col sm:flex-row items-start gap-3 mt-2">
-            <Link
-              href="/signup"
-              className="inline-flex items-center gap-2 bg-brand-accent text-[#120f1c] hover:bg-brand-accent-hover font-bold px-7 py-3.5 rounded-full text-[15px] transition-all duration-200 shadow-lg shadow-brand-accent/25"
-            >
-              Start for free
-              <ArrowRight className="w-4 h-4" />
-            </Link>
-            <a
-              href="#how-it-works"
-              className="inline-flex items-center gap-2 border border-black/15 bg-black/[0.04] hover:bg-black/[0.08] hover:border-black/25 text-[#12111a]/80 font-semibold px-7 py-3.5 rounded-full text-[15px] transition-all duration-200"
-            >
-              <Play className="w-3.5 h-3.5" />
-              See how it works
-            </a>
-          </div>
+      <div className="relative z-20 max-w-3xl mx-auto px-4 sm:px-6 md:px-10 pt-24 pb-20 w-full flex flex-col items-center text-center gap-7 min-h-100svh justify-center">
+        <div className="inline-flex items-center gap-2 border border-brand-accent/30 bg-brand-accent/10 rounded-full px-3 py-1 text-[11px] font-semibold text-brand-accent uppercase tracking-widest">
+          <Sparkles className="w-3 h-3" />
+          Now in early access · join the waitlist
         </div>
 
-        {/* Right  model card */}
-        <div className="relative flex justify-center md:justify-end">
-          <div
-            className="absolute inset-y-[8%] left-1/2 w-[85%] -translate-x-1/2 rounded-full blur-3xl pointer-events-none"
-            style={{
-              background:
-                "radial-gradient(circle at center, rgba(139,92,246,0.25), transparent 60%)",
-            }}
-          />
-          <div className="relative w-full max-w-70 sm:max-w-90 aspect-3/4 rounded-3xl overflow-hidden shadow-xl shadow-purple-200/60 bg-[#ddd6f7]">
-            <div
-              className="absolute inset-0"
-              style={{
-                background: "linear-gradient(to bottom, #e9e4f8, #d4caf0)",
-              }}
-            />
-            <div
-              className="absolute inset-0 flex flex-col items-center justify-center gap-2"
-              style={{ color: "rgba(100,80,160,0.35)" }}
-            >
-              <Users className="w-12 h-12" />
-              <span className="text-xs font-semibold uppercase tracking-widest">
-                Your AI Model
-              </span>
-            </div>
-            {/* Floating badge */}
-            <div className="absolute bottom-4 left-4 right-4 bg-white/90 backdrop-blur-sm rounded-2xl p-3 flex items-center gap-3 border border-black/8">
-              <div className="w-9 h-9 rounded-xl bg-brand-accent/15 flex items-center justify-center shrink-0">
-                <Sparkles className="w-4 h-4 text-brand-accent" />
-              </div>
-              <div>
-                <p className="text-[12px] font-bold text-gray-800">
-                  AI-generated model
-                </p>
-                <p className="text-[11px] text-gray-500">
-                  Using your face + product
-                </p>
-              </div>
-            </div>
-          </div>
+        <h1
+          className="text-[60px] sm:text-[84px] md:text-[100px] font-black leading-[0.85] tracking-[-0.01em] text-[#12111a]"
+          style={{ fontFamily: "'Bebas Neue', 'Arial Black', sans-serif" }}
+        >
+          Build Your Model.
+          <br />
+          Dress It.{" "}
+          <span className="text-brand-accent">Film It.</span>
+        </h1>
 
-          {/* Floating mini cards */}
-          <div className="absolute -left-4 top-12 w-20 aspect-9/16 rounded-2xl bg-brand-accent/20 shadow-md shadow-purple-200/40" />
-          <div className="absolute -right-2 bottom-20 w-16 aspect-9/16 rounded-2xl bg-white shadow-lg border border-black/8" />
-        </div>
+        <p
+          className="text-[17px] sm:text-[18px] leading-relaxed max-w-2xl"
+          style={{ color: "rgba(18,17,26,0.55)" }}
+        >
+          Upload your face. Add your products. Genetrify generates a custom AI
+          model that looks like you wearing your exact products and turns it
+          into a video. No studio. No shoots. Just content.
+        </p>
+
+        <WaitlistInline />
+
+        <a
+          href="#how-it-works"
+          className="inline-flex items-center gap-2 text-[14px] font-semibold text-[#12111a]/60 hover:text-[#12111a] transition-colors mt-1"
+        >
+          <Play className="w-3.5 h-3.5" />
+          See how it works
+        </a>
       </div>
 
       {/* Fade-to-dark transition at bottom of hero */}
