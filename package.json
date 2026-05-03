@@ -16,7 +16,8 @@
     "verify:replicate-versions": "node scripts/verify-replicate-model-versions.mjs",
     "bundle:check": "node scripts/check-bundle-size.mjs",
     "bundle:enforce": "node scripts/check-bundle-size.mjs --enforce",
-    "bundle:update": "node scripts/check-bundle-size.mjs --update"
+    "bundle:update": "node scripts/check-bundle-size.mjs --update",
+    "docs:pdf": "node scripts/build-pdf.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",
