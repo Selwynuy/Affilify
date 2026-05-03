@@ -1,6 +1,5 @@
 'use client'
 
-import Link from 'next/link'
 import { useState, useTransition, useEffect, useRef, type ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 import { CREDIT_PACKS, PLANS } from '@/lib/data/plans'
@@ -335,6 +334,41 @@ export function BillingPageClient({ initialData }: { initialData: BalanceData })
     })
   }
 
+  function handleStartPlan(planId: PlanId) {
+    if (billingControls && !billingControls.subscriptionsEnabled) {
+      notify.error({
+        title: 'Plans unavailable',
+        description: billingControls.subscriptionMessage ?? 'Plans are temporarily unavailable.',
+      })
+      return
+    }
+
+    setActionPending(`plan-${planId}`)
+    startTransition(async () => {
+      const res = await fetch('/api/billing/plan-checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ planId }),
+      })
+      const json = await res.json()
+      if (json.qrCode) {
+        setQrData({
+          qrCode: json.qrCode,
+          intentId: json.intentId,
+          tokens: json.tokens,
+          amountCentavos: json.amountCentavos,
+          packName: `${json.planName} plan (30 days)`,
+        })
+      } else {
+        notify.error({
+          title: 'Checkout failed',
+          description: json.error ?? 'Failed to start plan checkout. Please try again.',
+        })
+      }
+      setActionPending(null)
+    })
+  }
+
   function handleCancelPlan() {
     setActionPending('cancel-plan')
     startTransition(async () => {
@@ -367,6 +401,17 @@ export function BillingPageClient({ initialData }: { initialData: BalanceData })
   const activePlanId = subscription?.status === 'active' ? planId : null
   const hasActiveSubscription = Boolean(activePlanId)
   const nextBillingDate = formatBillingDate(subscription?.currentPeriodEnd ?? null)
+
+  // For Path B (manual renewal via QRPH), surface a "Renew now" CTA when
+  // the current period ends within a week so users can buy the next month.
+  const daysUntilPeriodEnd = (() => {
+    const end = subscription?.currentPeriodEnd
+    if (!end) return null
+    const ms = new Date(end).getTime() - Date.now()
+    if (Number.isNaN(ms)) return null
+    return Math.ceil(ms / (24 * 60 * 60 * 1000))
+  })()
+  const renewalDueSoon = daysUntilPeriodEnd != null && daysUntilPeriodEnd <= 7
 
   return (
     <div className="w-full space-y-14 pb-4">
@@ -537,7 +582,16 @@ export function BillingPageClient({ initialData }: { initialData: BalanceData })
                   </ul>
 
                   <div className="mt-8 border-t border-white/[0.08] pt-6">
-                    {isCurrentPlan ? (
+                    {isCurrentPlan && renewalDueSoon ? (
+                      <Button
+                        type="button"
+                        disabled={isPending || actionPending === `plan-${plan.id}` || subsOff}
+                        onClick={() => handleStartPlan(plan.id)}
+                        className="h-11 w-full rounded-lg bg-brand-accent text-brand-bg text-sm font-bold uppercase tracking-wider hover:bg-brand-accent-hover disabled:opacity-60 disabled:cursor-not-allowed"
+                      >
+                        {actionPending === `plan-${plan.id}` ? 'Loading…' : 'Renew now'}
+                      </Button>
+                    ) : isCurrentPlan ? (
                       <Button
                         disabled
                         className="h-11 w-full rounded-lg border border-white/[0.1] bg-white/[0.05] text-sm font-medium text-brand-text/45"
@@ -552,19 +606,25 @@ export function BillingPageClient({ initialData }: { initialData: BalanceData })
                         One active plan only
                       </Button>
                     ) : (
-                      <Link
-                        href="/support"
+                      <Button
+                        type="button"
+                        disabled={isPending || actionPending === `plan-${plan.id}` || subsOff}
+                        onClick={() => handleStartPlan(plan.id)}
                         className={cn(
-                          'flex h-11 w-full items-center justify-center rounded-lg text-sm font-medium transition-colors',
+                          'h-11 w-full rounded-lg text-sm font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed',
                           subsOff
-                            ? 'pointer-events-none border border-white/[0.08] bg-transparent text-brand-text/30'
+                            ? 'border border-white/[0.08] bg-transparent text-brand-text/30'
                             : ctaFeatured
                               ? 'bg-brand-accent text-brand-bg hover:bg-brand-accent-hover'
                               : 'border border-white/[0.1] bg-white/[0.06] text-brand-text hover:border-brand-accent/35 hover:bg-brand-accent/10',
                         )}
                       >
-                        {subsOff ? 'Unavailable' : 'Get started'}
-                      </Link>
+                        {actionPending === `plan-${plan.id}`
+                          ? 'Loading…'
+                          : subsOff
+                            ? 'Unavailable'
+                            : 'Start plan'}
+                      </Button>
                     )}
                   </div>
                 </div>
@@ -575,7 +635,7 @@ export function BillingPageClient({ initialData }: { initialData: BalanceData })
 
         {!hasActiveSubscription && (
           <p className="text-center text-xs text-brand-text/35">
-            Plans bill monthly with daily token releases. Checkout is completed via support while card billing is finalized.
+            Pay once via QRPH for 30 days of access. Tokens release daily. No auto-renewal — renew when ready.
           </p>
         )}
       </section>

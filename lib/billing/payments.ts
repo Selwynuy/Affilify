@@ -14,6 +14,9 @@ export interface BillingPaymentRecord {
   paymongo_payment_intent_id: string
   paymongo_payment_id: string | null
   status: 'awaiting_payment' | 'paid' | 'credited' | 'expired' | 'failed'
+  kind: 'topup' | 'plan_period'
+  plan_id: string | null
+  period_months: number
   paid_at: string | null
   credited_at: string | null
   email_sent_at: string | null
@@ -29,6 +32,9 @@ interface CreateBillingPaymentInput {
   tokens: number
   amountCentavos: number
   paymentIntentId: string
+  kind?: 'topup' | 'plan_period'
+  planId?: string | null
+  periodMonths?: number
 }
 
 interface CompleteBillingPaymentResult {
@@ -40,6 +46,9 @@ interface CompleteBillingPaymentResult {
   pack_id: string
   pack_name: string
   new_balance: number
+  kind: 'topup' | 'plan_period'
+  plan_id: string | null
+  period_months: number
 }
 
 function formatPHP(centavos: number): string {
@@ -56,6 +65,9 @@ export async function createBillingPayment(input: CreateBillingPaymentInput): Pr
     tokens: input.tokens,
     amount_centavos: input.amountCentavos,
     paymongo_payment_intent_id: input.paymentIntentId,
+    kind: input.kind ?? 'topup',
+    plan_id: input.planId ?? null,
+    period_months: input.periodMonths ?? 1,
   })
 
   if (error) throw new Error(error.message)
@@ -112,7 +124,12 @@ export async function finalizeBillingPayment(
   intentId: string,
   paymentId?: string | null,
   paidAt?: string | null,
-): Promise<{ paid: boolean; balance: number; record: BillingPaymentRecord | null }> {
+): Promise<{
+  paid: boolean
+  balance: number
+  record: BillingPaymentRecord | null
+  result: CompleteBillingPaymentResult
+}> {
   const admin = createAdminClient()
   const { data, error } = await admin.rpc('complete_billing_payment', {
     p_payment_intent_id: intentId,
@@ -128,7 +145,9 @@ export async function finalizeBillingPayment(
   const record = await getBillingPaymentByIntentId(intentId)
   if (!record) throw new Error(`Billing payment record missing after completion for ${intentId}`)
 
-  if (!record.email_sent_at) {
+  // Top-up confirmation email only fires for one-shot pack purchases.
+  // Plan-period activations get a different email sent from the webhook.
+  if (!record.email_sent_at && row.kind === 'topup') {
     try {
       const tpl = topupConfirmedEmail({
         email: row.email,
@@ -156,5 +175,6 @@ export async function finalizeBillingPayment(
     paid: true,
     balance: row.new_balance,
     record,
+    result: row,
   }
 }

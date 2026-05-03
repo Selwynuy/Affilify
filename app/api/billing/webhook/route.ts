@@ -189,13 +189,68 @@ export async function POST(req: NextRequest) {
       }
 
       const paidAt = toIsoFromUnix(payment.attributes.paid_at)
-      const result = await finalizeBillingPayment(intentId, payment.id, paidAt)
+      const finalized = await finalizeBillingPayment(intentId, payment.id, paidAt)
+      const { record, result } = finalized
+
+      // Branch by payment kind. Top-ups credit tokens directly inside the
+      // SQL function. Plan periods activate a subscription row + start the
+      // daily token release schedule via syncSubscriptionTokenAccrual.
+      if (result.kind === 'plan_period' && record?.user_id) {
+        const planId = parsePlanId(result.plan_id ?? undefined)
+        if (!planId) {
+          logger.error('plan_period payment has invalid plan_id', {
+            intentId,
+            paymentId: payment.id,
+            plan_id: result.plan_id,
+          })
+          break
+        }
+
+        const periodStart = paidAt ?? new Date().toISOString()
+        const periodMonths = Math.max(1, result.period_months ?? 1)
+        // Extend from the existing period_end if it's still in the future
+        // (renewal stacking); otherwise from now.
+        const { data: currentSub } = await admin
+          .from('subscriptions')
+          .select('current_period_end, status, plan_id')
+          .eq('user_id', record.user_id)
+          .maybeSingle()
+
+        const currentEndIso = currentSub?.current_period_end ?? null
+        const currentEndMs = currentEndIso ? new Date(currentEndIso).getTime() : 0
+        const baseMs = currentEndMs > Date.now() ? currentEndMs : new Date(periodStart).getTime()
+        const periodEndMs = baseMs + periodMonths * 30 * 24 * 60 * 60 * 1000
+        const periodEnd = new Date(periodEndMs).toISOString()
+
+        await admin.from('subscriptions').upsert({
+          user_id: record.user_id,
+          plan_id: planId,
+          status: 'active',
+          billing_interval: 'monthly',
+          current_period_start: periodStart,
+          current_period_end: periodEnd,
+          cancel_at_period_end: false,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'user_id' })
+
+        // Kick off daily token release for today's tranche.
+        await syncSubscriptionTokenAccrual(record.user_id)
+
+        logger.info('payment.paid: plan period activated', {
+          intentId,
+          paymentId: payment.id,
+          userId: record.user_id,
+          planId,
+          periodEnd,
+        })
+        break
+      }
 
       logger.info('payment.paid: credit pack tokens granted', {
         intentId,
         paymentId: payment.id,
-        userId: result.record?.user_id,
-        tokens: result.record?.tokens,
+        userId: record?.user_id,
+        tokens: record?.tokens,
       })
       break
     }

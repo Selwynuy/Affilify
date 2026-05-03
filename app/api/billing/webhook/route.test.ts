@@ -53,7 +53,10 @@ describe('POST /api/billing/webhook', () => {
   it('handles payment.paid and finalizes credits', async () => {
     stubAdmin()
     verifyWebhookSignature.mockReturnValue(true)
-    finalizeBillingPayment.mockResolvedValue({ record: { user_id: 'u1', tokens: 150 } })
+    finalizeBillingPayment.mockResolvedValue({
+      record: { user_id: 'u1', tokens: 150 },
+      result: { kind: 'topup', plan_id: null, period_months: 1 },
+    })
     const req = new Request('http://localhost/api/billing/webhook', {
       method: 'POST',
       headers: { 'paymongo-signature': 'ok' },
