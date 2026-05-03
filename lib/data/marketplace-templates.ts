@@ -15,6 +15,7 @@ function normalizeTemplateCategory(category: string): TemplateCategory {
     || category === 'shot_type'
     || category === 'motion_style'
     || category === 'video_flow'
+    || category === 'workflow_template'
     || category === 'other'
   ) {
     return category
@@ -54,8 +55,14 @@ export async function getPublishedMarketplaceTemplateGroups(): Promise<Marketpla
     shot_type: [],
     motion_style: [],
     video_flow: [],
+    workflow_template: [],
     other: [],
   })
+}
+
+export async function getPublishedWorkflowTemplates(): Promise<MarketplaceTemplate[]> {
+  const groups = await getPublishedMarketplaceTemplateGroups()
+  return groups.workflow_template
 }
 
 export async function getPublishedMarketplaceTemplateById(id: string | null | undefined) {

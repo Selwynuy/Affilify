@@ -1,7 +1,7 @@
 // Types for the staff-managed template marketplace.
 // Config is stored as JSONB and varies per category — kept extensible via index signature.
 
-export type TemplateCategory = 'shot_type' | 'motion_style' | 'video_flow' | 'avatar' | 'background' | 'other'
+export type TemplateCategory = 'shot_type' | 'motion_style' | 'video_flow' | 'avatar' | 'background' | 'workflow_template' | 'other'
 export type TemplateStatus   = 'draft' | 'published' | 'archived'
 
 export interface VideoFlowStepConfig {
@@ -13,6 +13,27 @@ export interface VideoFlowStepConfig {
   motionStyleTemplateId?: string
   promptFragment?: string
   durationSec?: number
+}
+
+/** Workflow templates: pre-wired studio graph layouts. The slot list defines
+ *  the product input nodes; the rest of the graph (avatar, scene, prompt,
+ *  generate, result) is intrinsic to the UI. */
+export type WorkflowSlotRole =
+  | 'top'
+  | 'bottom'
+  | 'shoes'
+  | 'accessory'
+  | 'bag'
+  | 'hero'
+  | 'other'
+
+export interface WorkflowSlotConfig {
+  role: WorkflowSlotRole
+  label: string
+  /** Grid coordinates for the slot column (x) and row (y) — pure layout hints. */
+  x: number
+  y: number
+  required?: boolean
 }
 
 /**
@@ -54,6 +75,10 @@ export interface TemplateConfig {
   roomAesthetic?: string
   roomColors?: string
   roomElements?: string
+  /** Workflow templates: pre-wired studio graph layout */
+  layoutVersion?: number
+  defaultPrompt?: string
+  slots?: WorkflowSlotConfig[]
   /** Catch-all for future or category-specific fields */
   [key: string]: unknown
 }
