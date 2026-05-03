@@ -4,11 +4,19 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { sendEmail } from '@/lib/email/resend'
 import { welcomeEmail } from '@/lib/email/templates/welcome'
 import { rateLimit } from '@/lib/db-rate-limit'
 import { RATE_LIMITS } from '@/lib/rate-limit-policy'
 import { logger } from '@/lib/logger'
+import { isWaitlistMode } from '@/lib/waitlist-mode'
+import { grantStarterTokens } from '@/lib/billing/tokens'
+
+// Beta tester starter grant. Image-only — video generation stays gated behind
+// a paid topup or subscription (see /api/export). Sized to give testers
+// enough runway for ~30 image generations without burning the API budget.
+const BETA_STARTER_TOKENS = 250
 
 export async function login(formData: FormData) {
   const headersList = await headers()
@@ -50,6 +58,8 @@ export async function signup(formData: FormData) {
   const email = (formData.get('email') as string).trim().toLowerCase()
   const password = formData.get('password') as string
   const confirm = formData.get('confirm') as string
+  const inviteTokenRaw = formData.get('inviteToken')
+  const inviteToken = typeof inviteTokenRaw === 'string' ? inviteTokenRaw.trim() : ''
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
 
   if (!email) {
@@ -60,6 +70,41 @@ export async function signup(formData: FormData) {
   }
   if (password !== confirm) {
     return { error: 'Passwords do not match.' }
+  }
+
+  // ── Waitlist gate ───────────────────────────────────────────────────────
+  // When WAITLIST_MODE is on, only invited users can sign up. Validate the
+  // invite token BEFORE creating the account — and bind the account to the
+  // exact email on the invite (no reusing someone else's invite).
+  let inviteRowId: string | null = null
+  if (isWaitlistMode()) {
+    if (!inviteToken) {
+      return { error: 'Genetrify is currently invite-only. Join the waitlist to be notified when access opens.' }
+    }
+    if (!/^[a-f0-9]{16,}$/i.test(inviteToken)) {
+      return { error: 'Invalid invite link.' }
+    }
+
+    const admin = createAdminClient()
+    const { data: inviteRow } = await admin
+      .from('waitlist')
+      .select('id, email, claimed_at, invite_expires_at')
+      .eq('invite_token', inviteToken)
+      .maybeSingle()
+
+    if (!inviteRow) return { error: 'Invite not found or has been revoked.' }
+    if (inviteRow.claimed_at) return { error: 'This invite has already been used.' }
+    if (
+      inviteRow.invite_expires_at &&
+      new Date(inviteRow.invite_expires_at).getTime() < Date.now()
+    ) {
+      return { error: 'This invite has expired. Please request a new one.' }
+    }
+    if (inviteRow.email.toLowerCase() !== email) {
+      return { error: 'This invite was issued to a different email address.' }
+    }
+
+    inviteRowId = inviteRow.id as string
   }
 
   // signUp returns an obfuscated session when the email is already taken
@@ -77,6 +122,40 @@ export async function signup(formData: FormData) {
     // Never reveal whether an email already exists
     logger.warn('signup error (suppressed from user)', { error: error.message })
     redirect(`/check-email?email=${encodeURIComponent(email)}`)
+  }
+
+  const newUserId = data.user?.id ?? null
+
+  // Consume the invite — even if no immediate session, the account exists
+  // so the invite is now spent. Fire-and-forget; failure to mark consumed
+  // shouldn't block the user from logging in.
+  if (inviteRowId) {
+    try {
+      const admin = createAdminClient()
+      await admin
+        .from('waitlist')
+        .update({
+          claimed_at: new Date().toISOString(),
+          claimed_user_id: newUserId,
+        })
+        .eq('id', inviteRowId)
+    } catch (err) {
+      logger.error('Failed to mark waitlist invite as claimed', { inviteRowId, email }, err)
+    }
+
+    // Beta starter grant. Tied to the invite row id so the same invite can
+    // never grant twice (grantStarterTokens is also idempotent on description).
+    if (newUserId) {
+      try {
+        await grantStarterTokens(
+          newUserId,
+          BETA_STARTER_TOKENS,
+          `Beta starter grant — invite ${inviteRowId}`,
+        )
+      } catch (err) {
+        logger.error('Failed to grant beta starter tokens', { newUserId, inviteRowId }, err)
+      }
+    }
   }
 
   // Send welcome email (fire-and-forget — never block signup on email failure)

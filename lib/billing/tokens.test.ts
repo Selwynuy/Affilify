@@ -172,6 +172,108 @@ describe('billing token accrual', () => {
     }))
   })
 
+  it('grantStarterTokens inserts once with kind=image_only and is idempotent', async () => {
+    const insert = vi.fn(async (_payload: unknown) => ({ error: null }))
+    let granted = false
+
+    createAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table !== 'token_ledger') throw new Error(`Unexpected table ${table}`)
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                eq: vi.fn(() => ({
+                  maybeSingle: vi.fn(async () => ({
+                    data: granted ? { user_id: 'u1' } : null,
+                  })),
+                })),
+              })),
+            })),
+          })),
+          insert: vi.fn(async (payload: unknown) => {
+            granted = true
+            return insert(payload)
+          }),
+        }
+      }),
+    })
+
+    const { grantStarterTokens } = await import('./tokens')
+    await grantStarterTokens('u1', 1000, 'Beta starter grant — invite abc')
+    await grantStarterTokens('u1', 1000, 'Beta starter grant — invite abc')
+
+    expect(insert).toHaveBeenCalledTimes(1)
+    expect(insert).toHaveBeenCalledWith(expect.objectContaining({
+      user_id: 'u1',
+      amount: 1000,
+      type: 'grant',
+      description: 'Beta starter grant — invite abc',
+      kind: 'image_only',
+    }))
+  })
+
+  it('getVideoEligibleBalance excludes image_only rows', async () => {
+    const eqKind = vi.fn(async () => ({
+      data: [{ amount: 200 }, { amount: 800 }, { amount: -50 }],
+    }))
+    const eqUser = vi.fn(() => ({ eq: eqKind }))
+    const select = vi.fn(() => ({ eq: eqUser }))
+
+    createAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table !== 'token_ledger') throw new Error(`Unexpected table ${table}`)
+        return { select }
+      }),
+    })
+
+    const { getVideoEligibleBalance } = await import('./tokens')
+    expect(await getVideoEligibleBalance('u1')).toBe(950)
+    expect(eqUser).toHaveBeenCalledWith('user_id', 'u1')
+    expect(eqKind).toHaveBeenCalledWith('kind', 'general')
+  })
+
+  it('hasUserPaid returns true when a credited billing payment exists', async () => {
+    const eqStatus = vi.fn(() => ({
+      limit: vi.fn(() => ({
+        maybeSingle: vi.fn(async () => ({ data: { id: 'pay-1' } })),
+      })),
+    }))
+    const eqUser = vi.fn(() => ({ eq: eqStatus }))
+    const select = vi.fn(() => ({ eq: eqUser }))
+
+    createAdminClient.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table !== 'billing_payments') throw new Error(`Unexpected table ${table}`)
+        return { select }
+      }),
+    })
+
+    const { hasUserPaid } = await import('./tokens')
+    expect(await hasUserPaid('u1')).toBe(true)
+    expect(eqUser).toHaveBeenCalledWith('user_id', 'u1')
+    expect(eqStatus).toHaveBeenCalledWith('status', 'credited')
+  })
+
+  it('hasUserPaid returns false when no credited payment exists', async () => {
+    createAdminClient.mockReturnValue({
+      from: vi.fn(() => ({
+        select: vi.fn(() => ({
+          eq: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              limit: vi.fn(() => ({
+                maybeSingle: vi.fn(async () => ({ data: null })),
+              })),
+            })),
+          })),
+        })),
+      })),
+    })
+
+    const { hasUserPaid } = await import('./tokens')
+    expect(await hasUserPaid('u1')).toBe(false)
+  })
+
   it('does not grant duplicate or backfilled tokens when sync runs twice on the same day', async () => {
     vi.setSystemTime(new Date('2026-04-15T12:00:00.000Z'))
 

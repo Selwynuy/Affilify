@@ -93,6 +93,72 @@ export async function deductTokens(
   return Boolean(data)
 }
 
+/**
+ * Beta starter grant. Idempotent — guards against double-granting if signup
+ * is retried. Always written with kind='image_only' so video_gen can never
+ * draw from these tokens (enforced at both the API gate and the SQL RPC).
+ */
+export async function grantStarterTokens(
+  userId: string,
+  amount: number,
+  description: string,
+): Promise<void> {
+  const admin = createAdminClient()
+
+  const { data: existing } = await admin
+    .from('token_ledger')
+    .select('user_id')
+    .eq('user_id', userId)
+    .eq('type', 'grant')
+    .eq('description', description)
+    .maybeSingle()
+
+  if (existing) return
+
+  await admin.from('token_ledger').insert({
+    user_id: userId,
+    amount,
+    type: 'grant',
+    description,
+    kind: 'image_only',
+  })
+}
+
+/**
+ * Returns the balance a user can spend on video generation. Excludes
+ * image_only rows (the beta starter grant) so free testers cannot animate
+ * even if their raw balance looks sufficient.
+ */
+export async function getVideoEligibleBalance(userId: string): Promise<number> {
+  const admin = createAdminClient()
+  const { data } = await admin
+    .from('token_ledger')
+    .select('amount')
+    .eq('user_id', userId)
+    .eq('kind', 'general')
+
+  if (!data) return 0
+  return data.reduce((sum, row) => sum + row.amount, 0)
+}
+
+/**
+ * True if the user has ever completed a paid transaction (topup OR plan period).
+ * Used to gate video generation: free beta testers cannot run video gen until
+ * they pay at least once.
+ */
+export async function hasUserPaid(userId: string): Promise<boolean> {
+  const admin = createAdminClient()
+  const { data } = await admin
+    .from('billing_payments')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('status', 'credited')
+    .limit(1)
+    .maybeSingle()
+
+  return Boolean(data)
+}
+
 /** Legacy helper kept for compatibility with older webhook code paths. */
 export async function grantMonthlyTokens(userId: string, planId: PlanId): Promise<void> {
   const plan = getPlan(planId)

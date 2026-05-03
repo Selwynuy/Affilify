@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { deductTokens, getTokenBalance, getUserPlanId, refundTokens, syncSubscriptionTokenAccrual } from '@/lib/billing/tokens'
+import { deductTokens, getUserPlanId, getVideoEligibleBalance, refundTokens, syncSubscriptionTokenAccrual } from '@/lib/billing/tokens'
 import { getAvailableModels, VIDEO_MODELS } from '@/lib/data/plans'
 import { logger } from '@/lib/logger'
 import { rateLimit } from '@/lib/db-rate-limit'
@@ -268,6 +268,16 @@ export async function POST(req: NextRequest) {
     })
   }
 
+  // ── Beta video gate ──────────────────────────────────────────────────────
+  // Video generation can only be funded by topup tokens or subscription
+  // grants — never by the free beta starter grant (which is kind='image_only'
+  // in the ledger). The single getVideoEligibleBalance check covers both the
+  // "free tester" case (balance = 0) and the "paid user with insufficient
+  // tokens" case. Belt-and-suspenders: the consume_tokens RPC also refuses
+  // video_gen draws against image_only rows.
+  const planId = await getUserPlanId(user.id)
+  const eligibleBalance = await getVideoEligibleBalance(user.id)
+
   const body = await req.json()
   const projectId = isUuid(body?.projectId) ? body.projectId : null
   const imageIds = Array.isArray(body?.imageIds)
@@ -288,7 +298,6 @@ export async function POST(req: NextRequest) {
   }
 
   await syncSubscriptionTokenAccrual(user.id)
-  const planId = await getUserPlanId(user.id)
   const availableModels = planId ? getAvailableModels(planId) : [VIDEO_MODELS[0]]
   const videoModel = availableModels.find((m) => m.id === videoModelId) ?? availableModels[0]
 
@@ -304,11 +313,18 @@ export async function POST(req: NextRequest) {
   const tokenCostPerVideo = getVideoGenerationTokenCost(videoModel, selectedSettings)
   const totalTokensNeeded = tokenCostPerVideo * imageIds.length
 
-  // Check balance upfront — one DB read before we touch anything
-  const balance = await getTokenBalance(user.id)
-  if (balance < totalTokensNeeded) {
+  // Eligible-balance check. eligibleBalance was fetched earlier (before the
+  // payload was parsed) so we can also produce the correct error message:
+  // zero eligible = beta tester who never paid; non-zero but short = paying
+  // user who needs to top up further.
+  if (eligibleBalance < totalTokensNeeded) {
+    if (eligibleBalance <= 0) {
+      return new Response(JSON.stringify({
+        error: 'Video generation is unlocked after your first top-up (₱99). Image generation stays free during the beta.',
+      }), { status: 402 })
+    }
     return new Response(JSON.stringify({
-      error: `Insufficient tokens. This generation costs ${totalTokensNeeded} tokens but you only have ${balance}.`,
+      error: `Insufficient video tokens. This generation costs ${totalTokensNeeded} tokens but you only have ${eligibleBalance} that can be spent on video.`,
     }), { status: 402 })
   }
 
