@@ -5,6 +5,7 @@ import { deductTokens, getTokenBalance, syncSubscriptionTokenAccrual } from '@/l
 import { TOKEN_COSTS } from '@/lib/data/plans'
 import { logger } from '@/lib/logger'
 import { rateLimit } from '@/lib/db-rate-limit'
+import { RATE_LIMITS } from '@/lib/rate-limit-policy'
 import { getGoogleVendorCostUsd, recordVendorCostEvent } from '@/lib/analytics/profitability'
 import {
   getMarketplaceTemplateDefaults,
@@ -20,6 +21,38 @@ const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GE
 const IMAGE_COUNT = 1
 const GEMINI_TIMEOUT_MS = 60_000
 
+const VALID_PRODUCT_ROLES = new Set([
+  'top',
+  'bottom',
+  'shoes',
+  'accessory',
+  'bag',
+  'hero',
+  'other',
+])
+
+function sanitizeProductRoles(input: unknown, expectedLength: number): string[] {
+  if (!Array.isArray(input)) return []
+  const out: string[] = []
+  for (let i = 0; i < expectedLength; i++) {
+    const raw = input[i]
+    if (typeof raw === 'string' && VALID_PRODUCT_ROLES.has(raw)) {
+      out.push(raw)
+    } else {
+      out.push('')
+    }
+  }
+  return out
+}
+
+function buildProductRoleLine(roles: string[]): string | null {
+  const labelled = roles
+    .map((role, i) => (role ? `image ${i + 1} = ${role}` : null))
+    .filter((s): s is string => s !== null)
+  if (labelled.length === 0) return null
+  return `Product image roles: ${labelled.join(', ')}. Use each product on the body part its role indicates.`
+}
+
 function buildPrompt(
   productCount: number,
   productDescription: string,
@@ -27,6 +60,7 @@ function buildPrompt(
   roomAesthetic: string,
   roomColors: string,
   roomElements: string,
+  productRoles: string[] = [],
 ): string {
   const lines: string[] = []
   const hasUserPrompt = productDescription.trim().length > 0
@@ -79,6 +113,11 @@ function buildPrompt(
     lines.push(`Combine the attached product images into one coherent outfit on the avatar accurately and naturally.`)
   }
 
+  const roleLine = buildProductRoleLine(productRoles)
+  if (roleLine) {
+    lines.push(roleLine)
+  }
+
   if (productDescription) {
     lines.push(`User's final instruction: ${productDescription}.`)
     lines.push(`Treat the user's final instruction as authoritative for camera, framing, pose, background cleanup, staging, and composition.`)
@@ -109,8 +148,8 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
 
-  // Rate limit: 10 generations per user per minute
-  const rl = await rateLimit(`generate:${user.id}`, { limit: 10, windowMs: 60_000 })
+  // Rate limit per centralised policy (generate)
+  const rl = await rateLimit(`generate:user:${user.id}`, RATE_LIMITS.generate)
   if (!rl.allowed) {
     logger.warn('Rate limit hit on /api/generate', { userId: user.id })
     return new Response(JSON.stringify({ error: 'Too many requests. Please wait before generating again.' }), {
@@ -123,6 +162,7 @@ export async function POST(req: NextRequest) {
   const projectId = isUuid(body?.projectId) ? body.projectId : null
   const productDescription = sanitizeText(body?.productDescription, { maxLength: 500, allowNewlines: true })
   const cameraTemplateId = isUuid(body?.cameraTemplateId) ? body.cameraTemplateId : null
+  const rawProductRoles = body?.productRoles
   if (!projectId) return new Response(JSON.stringify({ error: 'projectId required' }), { status: 400 })
 
   // Token check
@@ -208,6 +248,7 @@ export async function POST(req: NextRequest) {
   }
 
   // 4. Prompt last — exactly as a user would type it after attaching images
+  const productRoles = sanitizeProductRoles(rawProductRoles, validProductRows.length)
   const prompt = buildPrompt(
     validProductRows.length,
     productDescription || '',
@@ -215,6 +256,7 @@ export async function POST(req: NextRequest) {
     sanitizeText(roomAesthetic, { maxLength: 120 }) || '',
     sanitizeText(roomColors, { maxLength: 160 }) || '',
     sanitizeText(roomElements, { maxLength: 260 }) || '',
+    productRoles,
   )
   parts.push({ text: prompt })
 

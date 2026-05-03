@@ -189,4 +189,92 @@ describe('POST /api/generate', () => {
     expect(prompt).toContain('If the attached product image shows shoes or any other wearable item, the model must still be wearing that item even when it is outside the final frame.')
     expect(prompt).toContain('Never turn an off-frame wearable product into a hand-held item, carried prop, or separate staged object just because that body part is cropped out.')
   })
+
+  it('appends product role labels when productRoles is supplied', async () => {
+    verifySameOrigin.mockReturnValue(null)
+    createClient.mockResolvedValue({ auth: { getUser: vi.fn(async () => ({ data: { user: { id: 'u1' } } })) } })
+    createAdminClient.mockReturnValue(adminMock())
+    rateLimit.mockResolvedValue({ allowed: true, resetAt: Date.now() + 1_000 })
+    getTokenBalance.mockResolvedValue(1000)
+    deductTokens.mockResolvedValue(true)
+    getMarketplaceTemplateDefaults.mockResolvedValue({ shotTypeTemplateId: 'cam_1' })
+    getPublishedMarketplaceTemplateById.mockResolvedValue({})
+    getTemplateConfigValue.mockReturnValue('eye level')
+
+    const fetchMock = vi.fn(async (_url: string | URL | Request, _init?: RequestInit) => new Response(JSON.stringify({
+      candidates: [{ content: { parts: [{ inlineData: { mimeType: 'image/png', data: Buffer.from('img').toString('base64') } }] } }],
+    }), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const res = await POST(new Request('http://localhost/api/generate', {
+      method: 'POST',
+      body: JSON.stringify({
+        projectId: '550e8400-e29b-41d4-a716-446655440000',
+        productRoles: ['top'],
+      }),
+    }) as never)
+
+    expect(res.status).toBe(200)
+    const requestBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))
+    const prompt = requestBody.contents[0].parts.at(-1).text as string
+    expect(prompt).toContain('Product image roles: image 1 = top')
+  })
+
+  it('omits the role label line when productRoles is not provided', async () => {
+    verifySameOrigin.mockReturnValue(null)
+    createClient.mockResolvedValue({ auth: { getUser: vi.fn(async () => ({ data: { user: { id: 'u1' } } })) } })
+    createAdminClient.mockReturnValue(adminMock())
+    rateLimit.mockResolvedValue({ allowed: true, resetAt: Date.now() + 1_000 })
+    getTokenBalance.mockResolvedValue(1000)
+    deductTokens.mockResolvedValue(true)
+    getMarketplaceTemplateDefaults.mockResolvedValue({ shotTypeTemplateId: 'cam_1' })
+    getPublishedMarketplaceTemplateById.mockResolvedValue({})
+    getTemplateConfigValue.mockReturnValue('eye level')
+
+    const fetchMock = vi.fn(async (_url: string | URL | Request, _init?: RequestInit) => new Response(JSON.stringify({
+      candidates: [{ content: { parts: [{ inlineData: { mimeType: 'image/png', data: Buffer.from('img').toString('base64') } }] } }],
+    }), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const res = await POST(new Request('http://localhost/api/generate', {
+      method: 'POST',
+      body: JSON.stringify({ projectId: '550e8400-e29b-41d4-a716-446655440000' }),
+    }) as never)
+
+    expect(res.status).toBe(200)
+    const requestBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))
+    const prompt = requestBody.contents[0].parts.at(-1).text as string
+    expect(prompt).not.toContain('Product image roles:')
+  })
+
+  it('rejects unknown product role values silently (does not crash, does not emit unknown role)', async () => {
+    verifySameOrigin.mockReturnValue(null)
+    createClient.mockResolvedValue({ auth: { getUser: vi.fn(async () => ({ data: { user: { id: 'u1' } } })) } })
+    createAdminClient.mockReturnValue(adminMock())
+    rateLimit.mockResolvedValue({ allowed: true, resetAt: Date.now() + 1_000 })
+    getTokenBalance.mockResolvedValue(1000)
+    deductTokens.mockResolvedValue(true)
+    getMarketplaceTemplateDefaults.mockResolvedValue({ shotTypeTemplateId: 'cam_1' })
+    getPublishedMarketplaceTemplateById.mockResolvedValue({})
+    getTemplateConfigValue.mockReturnValue('eye level')
+
+    const fetchMock = vi.fn(async (_url: string | URL | Request, _init?: RequestInit) => new Response(JSON.stringify({
+      candidates: [{ content: { parts: [{ inlineData: { mimeType: 'image/png', data: Buffer.from('img').toString('base64') } }] } }],
+    }), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const res = await POST(new Request('http://localhost/api/generate', {
+      method: 'POST',
+      body: JSON.stringify({
+        projectId: '550e8400-e29b-41d4-a716-446655440000',
+        productRoles: ['<script>alert(1)</script>'],
+      }),
+    }) as never)
+
+    expect(res.status).toBe(200)
+    const requestBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))
+    const prompt = requestBody.contents[0].parts.at(-1).text as string
+    expect(prompt).not.toContain('script')
+    expect(prompt).not.toContain('Product image roles:')
+  })
 })
