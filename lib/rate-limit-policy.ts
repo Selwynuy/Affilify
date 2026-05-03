@@ -25,6 +25,7 @@ export const RATE_LIMITS = {
   // ── Studio mutations (cheap, but abusable) ────────────────────────
   upload:              { limit: 20, windowMs: 60_000 },
   preferences:         { limit: 30, windowMs: 60_000 },
+  workflowTemplatesRead: { limit: 60, windowMs: 60_000 },
   foldersWrite:        { limit: 30, windowMs: 60_000 },
   projectsWrite:       { limit: 30, windowMs: 60_000 },
   projectsDuplicate:   { limit: 10, windowMs: 60_000 },
@@ -48,6 +49,9 @@ export const RATE_LIMITS = {
 
   // ── Admin (defence-in-depth even though auth-gated) ───────────────
   adminMutate:         { limit: 30, windowMs: 60_000 },
+
+  // ── Marketing / public ────────────────────────────────────────────
+  waitlistSignup:      { limit:  5, windowMs: 60 * 60_000 },   // 5/IP/hr
 } as const
 
 export type RateLimitName = keyof typeof RATE_LIMITS

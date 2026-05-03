@@ -26,4 +26,10 @@ describe('RATE_LIMITS policy', () => {
     expect(RATE_LIMITS.authSignup.windowMs).toBeGreaterThanOrEqual(60 * 60_000)
     expect(RATE_LIMITS.authSignup.limit).toBeLessThanOrEqual(10)
   })
+
+  it('declares a workflowTemplatesRead policy with a sensible read limit', () => {
+    expect(RATE_LIMITS.workflowTemplatesRead).toBeDefined()
+    expect(RATE_LIMITS.workflowTemplatesRead.limit).toBeGreaterThanOrEqual(30)
+    expect(RATE_LIMITS.workflowTemplatesRead.windowMs).toBe(60_000)
+  })
 })

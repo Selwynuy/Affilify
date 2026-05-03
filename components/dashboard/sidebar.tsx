@@ -5,12 +5,13 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { logout } from '@/app/actions/auth'
 import { cn } from '@/lib/utils'
-import { LayoutDashboard, LogOut, PanelLeftClose, PanelLeftOpen, Menu, X, Wand2, CreditCard, Zap, MessageCircle, FolderOpen } from 'lucide-react'
+import { LayoutDashboard, LogOut, PanelLeftClose, PanelLeftOpen, Menu, X, Wand2, CreditCard, Zap, MessageCircle, FolderOpen, Workflow } from 'lucide-react'
 import { useTokens } from '@/lib/context/token-context'
 import { BrandLogo } from '@/components/brand-logo'
 
 const NAV_LINKS = [
-  { href: '/dashboard', label: 'Studio', icon: LayoutDashboard },
+  { href: '/studio', label: 'Studio', icon: Workflow },
+  { href: '/dashboard', label: 'Advanced', icon: LayoutDashboard },
   { href: '/projects', label: 'Projects', icon: FolderOpen },
   { href: '/templates', label: 'Templates', icon: Wand2 },
   { href: '/billing', label: 'Billing', icon: CreditCard },
