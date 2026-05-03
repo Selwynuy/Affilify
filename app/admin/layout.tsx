@@ -9,6 +9,7 @@ import type { AdminNavItem } from './_components/admin-nav'
 
 const ADMIN_NAV: AdminNavItem[] = [
   { href: '/admin', label: 'Overview', icon: 'overview' },
+  { href: '/admin/waitlist', label: 'Waitlist', icon: 'waitlist' },
   { href: '/admin/templates', label: 'Templates', icon: 'templates' },
   { href: '/admin/tickets', label: 'Tickets', icon: 'tickets' },
   { href: '/admin/users', label: 'Users', icon: 'users' },

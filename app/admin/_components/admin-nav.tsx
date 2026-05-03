@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Layers, MessageCircle, Users } from 'lucide-react'
+import { LayoutDashboard, Layers, MessageCircle, Users, Mail } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const ICONS = {
@@ -10,6 +10,7 @@ const ICONS = {
   templates: Layers,
   tickets: MessageCircle,
   users: Users,
+  waitlist: Mail,
 } as const
 
 export interface AdminNavItem {
