@@ -1,7 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { logger } from '@/lib/logger'
 
-export type VendorProvider = 'google' | 'replicate'
+export type VendorProvider = 'google' | 'replicate' | 'byteplus'
 export type VendorOperation = 'image_gen' | 'model_gen' | 'video_gen'
 
 function readOptionalUsd(value: string | undefined) {

@@ -83,8 +83,8 @@ test('export API returns 4xx not 5xx for all bad anonymous requests', async ({ r
       projectId: '11111111-1111-1111-1111-111111111111',
       imageIds: ['22222222-2222-2222-2222-222222222222'],
       motionPrompt: 'walk forward confidently',
-      videoModelId: 'wan-480p',
-      duration: 5,
+      videoModelId: 'seedance-2-fast',
+      duration: 6,
     },
     // Invalid model ID
     {

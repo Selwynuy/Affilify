@@ -43,7 +43,19 @@
       "Bash(awk '{sum+=$1} END {print \"Total e2e lines:\", sum}')",
       "Bash(npm uninstall:*)",
       "Bash(powershell *)",
-      "Bash(Select-Object -First 3)"
+      "Bash(Select-Object -First 3)",
+      "Bash(git push *)",
+      "Bash(dir *)",
+      "WebFetch(domain:kling.ai)",
+      "WebFetch(domain:platform.minimax.io)",
+      "WebFetch(domain:www.veo3ai.io)",
+      "WebFetch(domain:klingapi.com)",
+      "WebFetch(domain:www.alibabacloud.com)",
+      "WebFetch(domain:artificialanalysis.ai)",
+      "WebFetch(domain:docs.byteplus.com)",
+      "WebFetch(domain:fal.ai)",
+      "WebFetch(domain:www.nxcode.io)",
+      "WebFetch(domain:help.apiyi.com)"
     ],
     "deny": [
       "Bash(rm -rf:*)",

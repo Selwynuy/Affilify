@@ -75,7 +75,7 @@ export function WorkflowCanvas({
   const [videoStatus, setVideoStatus] = useState<VideoStatus>('idle')
   const [videoUrl, setVideoUrl] = useState<string | null>(null)
   const [videoError, setVideoError] = useState<string | null>(null)
-  const [videoModelId, setVideoModelId] = useState<string>(VIDEO_MODELS[0]?.id ?? 'hailuo-fast')
+  const [videoModelId, setVideoModelId] = useState<string>(VIDEO_MODELS[0]?.id ?? 'seedance-2-fast')
   const [showVideoPanel, setShowVideoPanel] = useState(false)
 
   useEffect(() => {

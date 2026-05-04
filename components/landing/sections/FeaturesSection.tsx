@@ -118,8 +118,8 @@ function CategoryCycler() {
 }
 
 const BENTO_TIERS = [
-  { name: "Standard", desc: "Hailuo Fast Wan 2.1" },
-  { name: "Pro", desc: "Higher fidelity output" },
+  { name: "Standard", desc: "Kling Turbo · Seedance Fast" },
+  { name: "Pro", desc: "Seedance 2.0 Pro" },
   { name: "Elite", desc: "Cinematic AI video" },
 ];
 

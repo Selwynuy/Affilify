@@ -50,22 +50,17 @@ function createProfile(settings: VideoGenerationSettings, vendorPriceUsd: number
 
 function getProfilesForModelId(modelId: string): VideoGenerationProfile[] {
   switch (modelId) {
-    case 'hailuo-fast':
-      return [
-        createProfile({ duration: 6, resolution: '768p' }, 0.19),
-        createProfile({ duration: 10, resolution: '768p' }, 0.32),
-        createProfile({ duration: 6, resolution: '1080p' }, 0.33),
-      ]
-    case 'wan-480p':
-      return [3, 5, 8].map((duration) =>
-        createProfile({ duration, resolution: '480p' }, duration * 0.09),
+    case 'seedance-2-fast':
+      // BytePlus direct: ~$0.074/s @ 720p. Token cost lifted to 120 to keep
+      // ~30% gross margin after PayMongo fee + ~5% failure refund rate.
+      return [4, 6, 8].map((duration) =>
+        createProfile({ duration, resolution: '720p' }, duration * 0.074),
       )
-    case 'hailuo':
-      return [
-        createProfile({ duration: 6, resolution: '768p' }, 0.28),
-        createProfile({ duration: 10, resolution: '768p' }, 0.56),
-        createProfile({ duration: 6, resolution: '1080p' }, 0.49),
-      ]
+    case 'seedance-2-pro':
+      // BytePlus direct: ~$0.14/s @ 720p. Token cost lifted to 220.
+      return [4, 6, 8, 10].map((duration) =>
+        createProfile({ duration, resolution: '720p' }, duration * 0.14),
+      )
     case 'kling-turbo':
       return [5, 10].map((duration) =>
         createProfile({ duration }, duration * 0.07),
@@ -176,12 +171,10 @@ export function getVideoGenerationProfiles(model: VideoModel): VideoGenerationPr
 
 export function getDefaultVideoGenerationSettings(model: VideoModel): VideoGenerationSettings {
   switch (model.id) {
-    case 'hailuo-fast':
-      return { duration: 6, resolution: '768p' }
-    case 'wan-480p':
-      return { duration: 5, resolution: '480p' }
-    case 'hailuo':
-      return { duration: 6, resolution: '768p' }
+    case 'seedance-2-fast':
+      return { duration: 6, resolution: '720p' }
+    case 'seedance-2-pro':
+      return { duration: 6, resolution: '720p' }
     case 'kling-turbo':
       return { duration: 5 }
     case 'kling-v3':

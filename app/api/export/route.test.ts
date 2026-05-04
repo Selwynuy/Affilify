@@ -105,7 +105,7 @@ describe('POST /api/export', () => {
         projectId: VALID_UUID,
         imageIds: [VALID_IMAGE_UUID],
         motionPrompt: 'walk by the camera',
-        videoModelId: 'hailuo-fast',
+        videoModelId: 'seedance-2-fast',
       }),
     })
     const res = await POST(req)

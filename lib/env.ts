@@ -3,7 +3,8 @@
  * Import this in instrumentation.ts or any server entrypoint.
  *
  * Deployment notes for video export (`app/api/export/route.ts`):
- * - `REPLICATE_API_KEY` — Replicate predictions API
+ * - `REPLICATE_API_KEY` — Replicate predictions API (Kling, Veo)
+ * - `BYTE_PLUS` — BytePlus ModelArk API key (Seedance 2.0 Fast/Pro)
  * - `SUPABASE_SERVICE_ROLE_KEY` — admin client: signed URLs for source frames,
  *   `project_videos` / `storage_files` writes, upload to `videos` bucket
  */
@@ -14,6 +15,7 @@ const REQUIRED_VARS = [
   'SUPABASE_SERVICE_ROLE_KEY',
   'GOOGLE_AI_STUDIO_KEY',
   'REPLICATE_API_KEY',
+  'BYTE_PLUS',
   'NEXT_PUBLIC_APP_URL',
   'PAYMONGO_SECRET_KEY',
   'PAYMONGO_WEBHOOK_SECRET',

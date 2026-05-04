@@ -14,9 +14,10 @@ import { isWaitlistMode } from '@/lib/waitlist-mode'
 import { grantStarterTokens } from '@/lib/billing/tokens'
 
 // Beta tester starter grant. Image-only — video generation stays gated behind
-// a paid topup or subscription (see /api/export). Sized to give testers
-// enough runway for ~30 image generations without burning the API budget.
-const BETA_STARTER_TOKENS = 250
+// a paid topup or subscription (see /api/export). Sized for ~12 image gens
+// (8 tokens each) — enough to evaluate quality, not enough to make the
+// ₱99 Spark pack feel redundant for users who want to make videos.
+const BETA_STARTER_TOKENS = 100
 
 export async function login(formData: FormData) {
   const headersList = await headers()

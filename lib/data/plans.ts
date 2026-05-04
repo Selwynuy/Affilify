@@ -13,8 +13,8 @@ export const PLANS: Plan[] = [
     features: [
       '4,000 tokens/month',
       'Released daily in 30 tranches during launch',
-      '~100 Hailuo Fast 6s runs',
-      'Standard models (Hailuo Fast, Wan 2.1)',
+      '~33 Seedance Fast 6s runs',
+      'Standard models (Kling Turbo, Seedance Fast)',
       '3 GB storage',
       'No rollover',
     ],
@@ -30,8 +30,8 @@ export const PLANS: Plan[] = [
     paymongoMonthlyPlanId: process.env.PAYMONGO_PLAN_GROWTH ?? '',
     features: [
       '9,500 tokens/month',
-      '~197 full video runs',
-      'Standard + Pro models',
+      '~43 Seedance Pro 6s runs',
+      'Standard + Pro models (adds Seedance 2.0 Pro)',
       '10 GB storage',
       '30-day token rollover',
       'Everything in Starter',
@@ -48,7 +48,7 @@ export const PLANS: Plan[] = [
     paymongoMonthlyPlanId: process.env.PAYMONGO_PLAN_PRO ?? '',
     features: [
       '22,000 tokens/month',
-      '~458 full video runs',
+      '~100 Seedance Pro 6s runs',
       'Standard + Pro models',
       '15 GB storage',
       '30-day token rollover',
@@ -66,8 +66,8 @@ export const PLANS: Plan[] = [
     paymongoMonthlyPlanId: process.env.PAYMONGO_PLAN_BUSINESS ?? '',
     features: [
       '60,000 tokens/month',
-      '~1,250 full video runs',
-      'All models including Elite',
+      '~272 Seedance Pro 6s runs',
+      'All models including Pro tiers',
       '50 GB storage',
       '60-day token rollover',
       'Priority queue',
@@ -91,13 +91,19 @@ export const TOKEN_COSTS = {
   model_gen: 20,   // Gemini standalone model photo generation
 } as const
 
-// Free tokens granted to every new user on signup
-export const SIGNUP_FREE_TOKENS = 300
+// Free tokens granted to every new user on signup. Image-only — written
+// with kind='image_only' in token_ledger so the export route's eligible
+// balance check refuses video generation funded by this grant. Sized for
+// ~12 image gens (8 tokens each) — enough to evaluate quality, not enough
+// to make the ₱99 pack feel redundant.
+export const SIGNUP_FREE_TOKENS = 100
 
 const BILLING_SMOKE_PACK_ENABLED = process.env.NEXT_PUBLIC_ENABLE_BILLING_SMOKE_PACK === 'true'
 
-// Credit packs — one-time QRPH purchases (no subscription required)
-// Priced at a premium vs subscriptions: packs = convenience, subs = volume discount
+// Credit packs — one-time QRPH/GCash purchases (no subscription required).
+// Priced at a premium vs subscriptions: packs = convenience, subs = volume.
+// Spark (₱99) is the entry-tier marketing hook — 200 tokens covers one
+// Seedance Fast video (120) plus ~10 image refinements (80 ÷ 8 each).
 const BASE_CREDIT_PACKS: CreditPack[] = [
   { id: 'spark',   name: 'Spark',   tokens: 200,   priceCentavos: 9900   }, // ₱99   — ₱0.495/token
   { id: 'trial',   name: 'Trial',   tokens: 520,   priceCentavos: 24900  }, // ₱249  — ₱0.479/token
@@ -124,52 +130,41 @@ export function getCreditPack(id: string): CreditPack | undefined {
 // Video models — ordered cheapest to most expensive
 export const VIDEO_MODELS: VideoModel[] = [
   {
-    id: 'hailuo-fast',
-    name: 'Hailuo Fast',
-    replicateSlug: 'minimax/hailuo-2.3-fast',
-    replicateVersion: 'c92f075dfd04541f1c1913a9689f778ecf76bfec3dd9fdfe19903a86e07f2cdc',
-    tokenCost: 40,
-    qualityLabel: 'Standard',
-    minPlanId: 'starter',
-    description: 'Fast image-to-video with 768p and 1080p output options.',
-    allowedDurations: [6, 10],
-    defaultDuration: 6,
-  },
-  {
-    id: 'wan-480p',
-    name: 'Wan 2.1',
-    replicateSlug: 'wavespeedai/wan-2.1-i2v-480p',
-    replicateVersion: 'e2870aa4965fd9ddfd87c16a3c8ab952c18e745e63f3f3b123c2dc8b538ad2b5',
-    tokenCost: 55,
-    qualityLabel: 'Standard',
-    minPlanId: 'starter',
-    description: 'Smooth motion at 480p. Reliable and consistent results.',
-    allowedDurations: [3, 5, 8],
-    defaultDuration: 5,
-  },
-  {
-    id: 'hailuo',
-    name: 'Hailuo 2.3',
-    replicateSlug: 'minimax/hailuo-2.3',
-    replicateVersion: '23a02633b5a44780345a59d4d43f8bd510efa239c56f08f29639ff24fa6615e1',
-    tokenCost: 60,
-    qualityLabel: 'Pro',
-    minPlanId: 'growth',
-    description: 'High-fidelity image-to-video with 768p and 1080p output options.',
-    allowedDurations: [6, 10],
-    defaultDuration: 6,
-  },
-  {
     id: 'kling-turbo',
     name: 'Kling v2.5 Turbo',
+    provider: 'replicate',
     replicateSlug: 'kwaivgi/kling-v2.5-turbo-pro',
     replicateVersion: 'a3ccc39250a72749ced345996ec06d96d1d032b1a1369f45f3b9f654324036b5',
-    tokenCost: 75,
-    qualityLabel: 'Pro',
-    minPlanId: 'growth',
-    description: "Top quality-per-dollar. Kling's best mid-tier model at 1080p.",
+    tokenCost: 100,
+    qualityLabel: 'Standard',
+    minPlanId: 'starter',
+    description: "Cinematic motion and natural fabric drape. Kling's mid-tier at 1080p.",
     allowedDurations: [5, 10],
     defaultDuration: 5,
+  },
+  {
+    id: 'seedance-2-fast',
+    name: 'Seedance 2.0 Fast',
+    provider: 'byteplus',
+    byteplusModelKey: 'seedance-fast',
+    tokenCost: 120,
+    qualityLabel: 'Standard',
+    minPlanId: 'starter',
+    description: 'Top-ranked image-to-video with native audio sync. Best price-per-quality.',
+    allowedDurations: [4, 6, 8],
+    defaultDuration: 6,
+  },
+  {
+    id: 'seedance-2-pro',
+    name: 'Seedance 2.0 Pro',
+    provider: 'byteplus',
+    byteplusModelKey: 'seedance-pro',
+    tokenCost: 220,
+    qualityLabel: 'Pro',
+    minPlanId: 'growth',
+    description: 'Premium quality with multimodal references and synchronized audio.',
+    allowedDurations: [4, 6, 8, 10],
+    defaultDuration: 6,
   },
 ]
 

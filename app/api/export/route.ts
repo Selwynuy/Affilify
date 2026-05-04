@@ -11,10 +11,14 @@ import { getVideoGenerationProfile, getVideoGenerationTokenCost, normalizeVideoG
 import { recordVendorCostEvent } from '@/lib/analytics/profitability'
 import { isUuid, parseInteger, sanitizeText, verifySameOrigin } from '@/lib/security'
 import { assertStorageCapacity } from '@/lib/storage/quota'
+import {
+  BYTEPLUS_OUTPUT_HOSTS,
+  BytePlusRateLimitError,
+  pollBytePlusTask,
+  submitBytePlusTask,
+} from '@/lib/video/byteplus'
 
 const REPLICATE_API_KEY = process.env.REPLICATE_API_KEY
-
-const WAN_FPS = 16
 
 // How long we wait for a Replicate prediction before giving up (ms).
 // Replicate's own timeout on long predictions is around 30 minutes;
@@ -27,12 +31,15 @@ export const maxDuration = 300
 export const dynamic = 'force-dynamic'
 const POLL_INTERVAL_MS = 5_000
 
-// Replicate hosts from which we allow downloading generated video output.
-// Prevents SSRF if Replicate ever returns a tampered URL.
-const REPLICATE_OUTPUT_HOSTS = [
+// Hosts from which we allow downloading generated video output. Combined
+// list covers Replicate (Kling, Veo) and BytePlus (Seedance) — both providers
+// return temporary URLs from these CDNs and we must validate before fetch
+// to prevent SSRF if either provider returns a tampered URL.
+const ALLOWED_OUTPUT_HOSTS = [
   'replicate.delivery',
   'pbxt.replicate.delivery',
   'storage.googleapis.com',
+  ...BYTEPLUS_OUTPUT_HOSTS,
 ]
 
 function buildReplicateInput(
@@ -42,22 +49,6 @@ function buildReplicateInput(
   settings: VideoGenerationSettings,
 ): Record<string, unknown> {
   switch (videoModel.id) {
-    case 'wan-480p':
-      return {
-        image: imageUrl,
-        prompt,
-        num_frames: settings.duration * WAN_FPS,
-        frames_per_second: WAN_FPS,
-        max_area: '480x832',
-      }
-    case 'hailuo-fast':
-    case 'hailuo':
-      return {
-        first_frame_image: imageUrl,
-        prompt,
-        duration: settings.duration,
-        resolution: settings.resolution,
-      }
     case 'kling-turbo':
       return {
         start_image: imageUrl,
@@ -108,6 +99,9 @@ async function submitPrediction(
   settings: VideoGenerationSettings,
 ): Promise<string> {
   if (!REPLICATE_API_KEY) throw new Error('REPLICATE_API_KEY is not configured')
+  if (!videoModel.replicateVersion) {
+    throw new Error(`Replicate version not configured for model ${videoModel.id}`)
+  }
 
   const res = await fetch('https://api.replicate.com/v1/predictions', {
     method: 'POST',
@@ -135,6 +129,45 @@ async function submitPrediction(
   if (!prediction.id) throw new Error('No prediction ID returned from Replicate')
 
   return prediction.id
+}
+
+/**
+ * Provider-agnostic submit. Returns a job id (Replicate prediction id OR
+ * BytePlus task id) the caller will pass back to pollGeneration().
+ */
+async function submitGeneration(
+  imageUrl: string,
+  prompt: string,
+  videoModel: VideoModel,
+  settings: VideoGenerationSettings,
+): Promise<string> {
+  if (videoModel.provider === 'byteplus') {
+    if (!videoModel.byteplusModelKey) {
+      throw new Error(`BytePlus model key not configured for ${videoModel.id}`)
+    }
+    try {
+      return await submitBytePlusTask({
+        modelKey: videoModel.byteplusModelKey,
+        imageUrl,
+        prompt,
+        duration: settings.duration,
+        resolution: settings.resolution,
+      })
+    } catch (err) {
+      if (err instanceof BytePlusRateLimitError) {
+        throw new RateLimitError(err.message)
+      }
+      throw err
+    }
+  }
+  return submitPrediction(imageUrl, prompt, videoModel, settings)
+}
+
+async function pollGeneration(jobId: string, videoModel: VideoModel): Promise<string> {
+  if (videoModel.provider === 'byteplus') {
+    return pollBytePlusTask(jobId)
+  }
+  return pollPrediction(jobId)
 }
 
 /**
@@ -185,29 +218,30 @@ async function pollPrediction(predictionId: string): Promise<string> {
  * Returns the permanent storage path (within the 'videos' bucket).
  */
 async function archiveVideoToStorage(
-  replicateUrl: string,
+  sourceUrl: string,
   userId: string,
   projectId: string,
   index: number,
 ): Promise<{ storagePath: string; publicUrl: string }> {
-  // Validate the URL is from a known Replicate host (SSRF guard)
+  // Validate the URL is from an allowed provider host (SSRF guard).
+  // Covers both Replicate (Kling, Veo) and BytePlus (Seedance) CDNs.
   let parsed: URL
   try {
-    parsed = new URL(replicateUrl)
+    parsed = new URL(sourceUrl)
   } catch {
-    throw new Error('Invalid video URL returned from Replicate')
+    throw new Error('Invalid video URL returned from provider')
   }
 
-  const isKnownHost = REPLICATE_OUTPUT_HOSTS.some(
+  const isKnownHost = ALLOWED_OUTPUT_HOSTS.some(
     (host) => parsed.hostname === host || parsed.hostname.endsWith(`.${host}`),
   )
   if (!isKnownHost) {
-    throw new Error(`Unexpected video host from Replicate: ${parsed.hostname}`)
+    throw new Error(`Unexpected video host from provider: ${parsed.hostname}`)
   }
 
-  const downloadRes = await fetch(replicateUrl)
+  const downloadRes = await fetch(sourceUrl)
   if (!downloadRes.ok) {
-    throw new Error(`Failed to download video from Replicate (${downloadRes.status})`)
+    throw new Error(`Failed to download video from provider (${downloadRes.status})`)
   }
 
   const videoBuffer = await downloadRes.arrayBuffer()
@@ -217,7 +251,7 @@ async function archiveVideoToStorage(
   const ftyp = String.fromCharCode(header[4], header[5], header[6], header[7])
   const isValidMp4 = ftyp === 'ftyp' || ftyp === 'free' || ftyp === 'mdat' || ftyp === 'moov'
   if (!isValidMp4) {
-    throw new Error('Replicate returned a file that does not appear to be a valid MP4')
+    throw new Error('Provider returned a file that does not appear to be a valid MP4')
   }
 
   await assertStorageCapacity(createAdminClient(), userId, videoBuffer.byteLength)
@@ -399,11 +433,13 @@ export async function POST(req: NextRequest) {
           const { data: signed } = await admin.storage.from('generated').createSignedUrl(sourcePath, 60 * 30)
           if (!signed?.signedUrl) throw new Error('Failed to create signed URL for source image')
 
-          // ── Step 3: Submit prediction to Replicate (returns immediately) ───
-          predictionId = await submitPrediction(signed.signedUrl, motionPrompt, videoModel, selectedSettings)
+          // ── Step 3: Submit to provider (Replicate or BytePlus) ─────────────
+          predictionId = await submitGeneration(signed.signedUrl, motionPrompt, videoModel, selectedSettings)
 
-          // Persist the prediction ID immediately so we can track it even if
-          // the function crashes during the poll phase.
+          // Persist the job id immediately so we can track it even if the
+          // function crashes during the poll phase. Column is named
+          // replicate_prediction_id for legacy reasons but holds any
+          // provider job id.
           await admin.from('project_videos').insert({
             project_id: projectId,
             user_id: user.id,
@@ -413,17 +449,17 @@ export async function POST(req: NextRequest) {
             url: '',
           })
 
-          logger.info('Replicate prediction submitted', {
-            userId: user.id, projectId, predictionId, model: videoModel.id, index: i,
+          logger.info('Video generation submitted', {
+            userId: user.id, projectId, predictionId, provider: videoModel.provider, model: videoModel.id, index: i,
           })
 
-          // ── Step 4: Poll until Replicate finishes ──────────────────────────
-          const replicateUrl = await pollPrediction(predictionId)
+          // ── Step 4: Poll until provider finishes ───────────────────────────
+          const providerVideoUrl = await pollGeneration(predictionId, videoModel)
 
           // ── Step 5: Archive video to Supabase Storage immediately ──────────
-          // Replicate deletes outputs after 1 hour — we must copy it now.
+          // Provider URLs are temporary (Replicate ~1h, BytePlus ~24h) — copy now.
           const { storagePath, publicUrl } = await archiveVideoToStorage(
-            replicateUrl,
+            providerVideoUrl,
             user.id,
             projectId,
             i,
@@ -443,7 +479,7 @@ export async function POST(req: NextRequest) {
           await recordVendorCostEvent({
             userId: user.id,
             projectId,
-            provider: 'replicate',
+            provider: videoModel.provider,
             operation: 'video_gen',
             model: videoModel.id,
             tokensCharged: tokenCostPerVideo,

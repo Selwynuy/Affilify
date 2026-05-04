@@ -20,8 +20,8 @@ const PLANS_DISPLAY = [
     features: [
       "4,000 tokens / month",
       "~133 tokens released daily",
-      "~100 short video runs / month",
-      "Standard models (Hailuo Fast, Wan 2.1)",
+      "~33 Seedance Fast video runs / month",
+      "Standard models (Kling Turbo, Seedance 2.0 Fast)",
       "3 GB storage",
       "No token rollover",
     ],
@@ -35,8 +35,8 @@ const PLANS_DISPLAY = [
     features: [
       "9,500 tokens / month",
       "~316 tokens released daily",
-      "~197 full video runs / month",
-      "Standard + Pro models",
+      "~43 Seedance Pro video runs / month",
+      "Standard + Pro models (adds Seedance 2.0 Pro)",
       "10 GB storage",
       "30-day token rollover",
       "Everything in Starter",
@@ -51,7 +51,7 @@ const PLANS_DISPLAY = [
     features: [
       "22,000 tokens / month",
       "~733 tokens released daily",
-      "~458 full video runs / month",
+      "~100 Seedance Pro video runs / month",
       "Standard + Pro models",
       "15 GB storage",
       "30-day token rollover",
@@ -85,7 +85,7 @@ function SparkHero() {
               <span className="text-brand-accent">PHP 99</span>
             </p>
             <p className="text-[13px] text-brand-text/65 mt-1">
-              200 tokens · one-time · no commitment · perfect for trying things out
+              200 tokens · 1 AI fashion video + 10 image drafts · one-time, no commitment
             </p>
           </div>
         </div>

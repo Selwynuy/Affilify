@@ -44,11 +44,18 @@ export interface TokenBalance {
   remaining: number
 }
 
+export type VideoProvider = 'replicate' | 'byteplus'
+
 export interface VideoModel {
   id: string
   name: string
-  replicateSlug: string
-  replicateVersion: string
+  provider: VideoProvider
+  /** Replicate slug — only required when provider === 'replicate' */
+  replicateSlug?: string
+  /** Replicate version pin — only required when provider === 'replicate' */
+  replicateVersion?: string
+  /** BytePlus model key — only required when provider === 'byteplus' */
+  byteplusModelKey?: 'seedance-fast' | 'seedance-pro'
   tokenCost: number
   qualityLabel: string
   minPlanId: PlanId
